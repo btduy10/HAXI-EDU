@@ -41,8 +41,8 @@ export function ChangePasswordForm({ forced }: { forced: boolean }) {
         <CardTitle>Đổi mật khẩu</CardTitle>
         <CardDescription>
           {forced
-            ? "Bạn đang dùng mật khẩu tạm. Hãy đặt mật khẩu mới để tiếp tục."
-            : "Tối thiểu 10 ký tự, có cả chữ và số."}
+            ? "Bạn đang dùng mật khẩu tạm. Hãy đặt mật khẩu mới (tối thiểu 8 ký tự, có cả chữ và số) để tiếp tục."
+            : "Tối thiểu 8 ký tự, có cả chữ và số."}
         </CardDescription>
       </CardHeader>
       <CardContent>

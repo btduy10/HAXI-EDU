@@ -93,7 +93,7 @@ export const leaveInput = z.object({
 
 export const password = z
   .string({ error: "Bắt buộc nhập" })
-  .min(10, "Mật khẩu tối thiểu 10 ký tự")
+  .min(8, "Mật khẩu tối thiểu 8 ký tự")
   .max(128, "Mật khẩu tối đa 128 ký tự")
   .refine((v) => /[A-Za-z]/.test(v) && /\d/.test(v), "Mật khẩu phải có cả chữ và số");
 

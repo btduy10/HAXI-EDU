@@ -29,7 +29,7 @@ npm run dev                   # http://localhost:3000
 | `gv.lan` | Giáo viên | Dạy lớp RB-CB01 |
 | `gv.minh` | Giáo viên | Dạy lớp RB-NC01 |
 
-Mật khẩu tạm là giá trị `SEED_DEFAULT_PASSWORD` trong `.env` (mặc định `Haxi@2026`). Lần đăng nhập đầu **bắt buộc đổi mật khẩu** (tối thiểu 10 ký tự, có chữ và số).
+Mật khẩu tạm là giá trị `SEED_DEFAULT_PASSWORD` trong `.env` (mặc định `Haxi@2026`). Lần đăng nhập đầu **bắt buộc đổi mật khẩu** (tối thiểu 8 ký tự, có chữ và số).
 
 Dữ liệu mẫu: 2 lớp (mỗi lớp 2 buổi/tuần, đã sinh buổi học; các buổi cũ hơn 7 ngày đã điểm danh và ghi sao sẵn), 15 học viên, 2 phòng, 3 ca học, 5 cấp bậc, tiêu chí sao, 15 avatar, 3 loại quà và mốc quà cho từng khóa. Với CSDL đã có dữ liệu, chạy lại `npm run db:seed` chỉ bổ sung kho avatar còn thiếu.
 

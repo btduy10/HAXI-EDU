@@ -16,7 +16,7 @@ import { requirePageUser } from "@/server/session";
 
 export const metadata: Metadata = { title: "Tài khoản" };
 
-const PASSWORD_HINT = "Mật khẩu tạm, tối thiểu 10 ký tự gồm chữ và số. Người dùng phải đổi ở lần đăng nhập đầu.";
+const PASSWORD_HINT = "Mật khẩu tạm, tối thiểu 8 ký tự gồm chữ và số. Người dùng phải đổi ở lần đăng nhập đầu.";
 
 export default async function AccountsPage() {
   const user = await requirePageUser("admin");

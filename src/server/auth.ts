@@ -14,7 +14,7 @@ const LOCK_MINUTES = Number(process.env.LOGIN_LOCK_MINUTES ?? 15);
 // Cookie Secure ở production; FORCE_HTTPS=false chỉ để thử bản build qua HTTP trên máy.
 const isProd = process.env.NODE_ENV === "production" && process.env.FORCE_HTTPS !== "false";
 
-export const PASSWORD_MIN_LENGTH = 10;
+export const PASSWORD_MIN_LENGTH = 8;
 
 function bodyUsername(body: unknown): string | null {
   const value = (body as { username?: unknown } | undefined)?.username;
