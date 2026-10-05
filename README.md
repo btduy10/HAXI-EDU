@@ -26,8 +26,8 @@ npm run dev                   # http://localhost:3000
 | Tên đăng nhập | Vai trò | Ghi chú |
 |---|---|---|
 | `admin` | Quản trị | Sau khi đổi mật khẩu phải thiết lập xác thực hai lớp (TOTP) |
-| `gv.lan` | Giáo viên | Dạy lớp RB-CB01 |
-| `gv.minh` | Giáo viên | Dạy lớp RB-NC01 |
+
+Seed chỉ tạo sẵn tài khoản `admin`. Tài khoản giáo viên do Admin tạo và chỉnh sửa trên giao diện, ở trang **Tài khoản** (thêm, sửa, đặt lại mật khẩu, khóa/mở khóa), gắn với giáo viên mẫu GV01, GV02 hoặc giáo viên bạn tự thêm. Biến `SEED_DEMO_ACCOUNTS=true` chỉ dùng cho kiểm thử tự động để có sẵn `gv.lan`, `gv.minh`.
 
 Mật khẩu tạm là giá trị `SEED_DEFAULT_PASSWORD` trong `.env` (mặc định `Haxi@2026`). Lần đăng nhập đầu **bắt buộc đổi mật khẩu** (tối thiểu 8 ký tự, có chữ và số).
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { normalizeDate, validateImportRows } from "@/domain/student-import";
-import { accountInput, classInput, password, studentInput, timeSlotInput } from "@/lib/validation/entities";
+import { accountInput, classInput, password, studentInput, teacherInput, timeSlotInput } from "@/lib/validation/entities";
 import { consumeToken, resetRateLimits } from "@/server/rate-limit";
 
 describe("xác thực dữ liệu vào", () => {
@@ -19,6 +19,12 @@ describe("xác thực dữ liệu vào", () => {
     const base = { code: "L1", name: "Lớp", courseId: "3f2b1c9e-8a47-4c1d-9b2e-5d6f7a8b9c0d", maxSize: 5 };
     expect(classInput.safeParse({ ...base, startDate: "2026-03-01", endDate: "2026-01-01" }).success).toBe(false);
     expect(classInput.safeParse({ ...base, startDate: "2026-01-01", endDate: "2026-03-01" }).success).toBe(true);
+    // Mã lớp là văn bản tự do: có khoảng trắng, dấu tiếng Việt đều được; chỉ không được để trống.
+    const dates = { startDate: "2026-01-01", endDate: "2026-03-01" };
+    expect(classInput.parse({ ...base, ...dates, code: "  RB -  S7 " }).code).toBe("RB - S7");
+    expect(classInput.parse({ ...base, ...dates, code: "Lớp sáng T7" }).code).toBe("Lớp sáng T7");
+    expect(classInput.safeParse({ ...base, ...dates, code: "   " }).success).toBe(false);
+    expect(teacherInput.parse({ code: " GV - Lan ", fullName: "Lan", phone: "", email: "" }).code).toBe("GV - Lan");
   });
 
   it("mật khẩu và tài khoản", () => {

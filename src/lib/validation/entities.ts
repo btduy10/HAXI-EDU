@@ -14,8 +14,11 @@ import {
   timeOfDay,
 } from "./common";
 
+// Mã lớp, mã giáo viên là văn bản tự do (vd. "RB - S7"), chỉ gộp khoảng trắng thừa; không ép chữ hoa hay bộ ký tự.
+const freeCode = reqText(30).transform((v) => v.replace(/\s+/g, " "));
+
 export const teacherInput = z.object({
-  code,
+  code: freeCode,
   fullName: reqText(100),
   phone: optPhone,
   email: optEmail,
@@ -64,7 +67,7 @@ export const holidayInput = z.object({
 
 export const classInput = z
   .object({
-    code,
+    code: freeCode,
     name: reqText(100),
     courseId: id,
     defaultRoomId: optId,

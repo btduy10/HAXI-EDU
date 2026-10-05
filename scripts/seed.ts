@@ -37,10 +37,16 @@ async function main() {
       ])
       .returning();
 
+    // Chỉ tạo sẵn tài khoản admin. Tài khoản giáo viên do Admin tạo và chỉnh trên giao diện (trang Tài khoản).
+    // SEED_DEMO_ACCOUNTS=true chỉ dùng cho kiểm thử tự động (E2E) để có sẵn gv.lan, gv.minh.
     const accounts = [
-      { username: "admin", name: "Quản trị viên", role: "admin" as const, teacherId: null },
-      { username: "gv.lan", name: "Nguyễn Thị Lan", role: "teacher" as const, teacherId: t1!.id },
-      { username: "gv.minh", name: "Trần Văn Minh", role: "teacher" as const, teacherId: t2!.id },
+      { username: "admin", name: "Quản trị viên", role: "admin" as const, teacherId: null as string | null },
+      ...(process.env.SEED_DEMO_ACCOUNTS === "true"
+        ? [
+            { username: "gv.lan", name: "Nguyễn Thị Lan", role: "teacher" as const, teacherId: t1!.id },
+            { username: "gv.minh", name: "Trần Văn Minh", role: "teacher" as const, teacherId: t2!.id },
+          ]
+        : []),
     ];
     for (const a of accounts) {
       const id = randomUUID();
@@ -209,7 +215,7 @@ async function main() {
   }
 
   console.log("Đã tạo dữ liệu mẫu.");
-  console.log("Tài khoản demo: admin, gv.lan, gv.minh — mật khẩu tạm lấy từ SEED_DEFAULT_PASSWORD.");
+  console.log("Đã tạo tài khoản admin — mật khẩu tạm lấy từ SEED_DEFAULT_PASSWORD. Tài khoản giáo viên: Admin tạo ở trang Tài khoản.");
   await closeDb();
 }
 
