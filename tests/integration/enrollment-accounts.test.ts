@@ -90,6 +90,55 @@ describe("tài khoản", () => {
     expect(unlocked!.lockedUntil).toBeNull();
   });
 
+  it("sửa tài khoản: đổi tên đăng nhập, vai trò, GV gắn kèm; có nhật ký và thu hồi phiên", async () => {
+    await db.insert(session).values({ id: "s3", token: "t3", userId: f.actorB.userId, expiresAt: new Date(Date.now() + 3600_000) });
+    const base = { id: f.actorB.userId, username: "gv.b", name: "Giáo viên B", role: "teacher" as const, teacherId: f.teacherB.id };
+
+    // Chỉ đổi tên hiển thị: không đăng xuất.
+    await accounts.updateAccount(f.admin, { ...base, name: "Cô B" });
+    expect(await db.select().from(session).where(eq(session.userId, f.actorB.userId))).toHaveLength(1);
+
+    await accounts.updateAccount(f.admin, { ...base, name: "Cô B", username: "co.b" });
+    const [renamed] = await db.select().from(user).where(eq(user.id, f.actorB.userId));
+    expect(renamed).toMatchObject({ username: "co.b", email: "co.b@haxi.local", name: "Cô B", role: "teacher", teacherId: f.teacherB.id });
+    expect(await db.select().from(session).where(eq(session.userId, f.actorB.userId))).toEqual([]);
+
+    // Lên quản trị thì bỏ gắn giáo viên; hạ lại GV phải gắn giáo viên chưa có tài khoản.
+    await accounts.updateAccount(f.admin, { ...base, username: "co.b", role: "admin", teacherId: f.teacherB.id });
+    expect((await db.select().from(user).where(eq(user.id, f.actorB.userId)))[0]).toMatchObject({ role: "admin", teacherId: null });
+    await expect(accounts.updateAccount(f.admin, { ...base, username: "co.b", teacherId: f.teacherA.id })).rejects.toMatchObject({
+      code: "CONFLICT",
+      fieldErrors: { teacherId: expect.any(String) },
+    });
+    await accounts.updateAccount(f.admin, { ...base, username: "co.b" });
+
+    const logs = await db.select().from(auditLogs).where(eq(auditLogs.action, "account_updated"));
+    expect(logs).toHaveLength(4);
+    expect(logs.some((l) => (l.oldValue as { username: string }).username === "gv.b" && (l.newValue as { username: string }).username === "co.b")).toBe(true);
+  });
+
+  it("sửa tài khoản: chặn trùng tên, tự đổi vai trò, mất quản trị viên cuối, và người không phải Admin", async () => {
+    const self = { id: f.admin.userId, username: "admin", name: "Quản trị", role: "admin" as const, teacherId: null };
+    await expect(accounts.updateAccount(f.admin, { ...self, role: "teacher", teacherId: f.teacherA.id })).rejects.toMatchObject({ code: "CONFLICT" });
+    await expect(accounts.updateAccount(f.admin, { ...self, username: "gv.a" })).rejects.toMatchObject({
+      code: "CONFLICT",
+      fieldErrors: { username: expect.any(String) },
+    });
+    await expect(accounts.updateAccount(f.actorA, { ...self, name: "Chiếm quyền" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(
+      accounts.updateAccount(f.actorA, { id: f.actorA.userId, username: "gv.a", name: "A", role: "admin", teacherId: null }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(accounts.updateAccount(f.admin, { ...self, id: "khong-ton-tai" })).rejects.toMatchObject({ code: "NOT_FOUND" });
+    // Tự sửa tên hiển thị của mình thì được.
+    await expect(accounts.updateAccount(f.admin, { ...self, name: "Quản trị viên chính" })).resolves.toBeDefined();
+
+    // Có hai quản trị: quản trị này hạ quyền quản trị kia được, nhưng không thể không còn ai.
+    await accounts.updateAccount(f.admin, { id: f.actorB.userId, username: "gv.b", name: "B", role: "admin", teacherId: null });
+    const second = { userId: f.actorB.userId, role: "admin" as const, teacherId: null };
+    await accounts.updateAccount(second, { ...self, role: "teacher", teacherId: f.teacherB.id });
+    expect((await db.select().from(user).where(eq(user.id, f.admin.userId)))[0]!.role).toBe("teacher");
+  });
+
   it("đặt lại mật khẩu buộc đổi lại và thu hồi phiên", async () => {
     const { id } = await accounts.createAccount(f.admin, { ...input, teacherId: f.teacherA.id });
     await db.update(user).set({ mustChangePassword: false }).where(eq(user.id, id));

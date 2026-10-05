@@ -150,6 +150,21 @@ test("Admin: cấu hình, đóng lớp, chốt tổng kết, duyệt và trao qu
   await expectNoHorizontalScroll(page);
   await page.screenshot({ path: "test-results/shots/report-charts-360.png", fullPage: true });
 
+  // Sửa tài khoản: đổi tên hiển thị của một GV; trùng tên đăng nhập bị từ chối.
+  await page.goto("/admin/accounts");
+  const lan = page.getByRole("listitem").filter({ hasText: "gv.lan" });
+  await lan.getByRole("button", { name: "Sửa" }).click();
+  await page.getByLabel("Tên đăng nhập").fill("gv.minh");
+  await page.getByRole("button", { name: "Lưu" }).click();
+  await expect(page.getByRole("dialog").getByText("Tên đăng nhập đã tồn tại").first()).toBeVisible();
+  await page.getByLabel("Tên đăng nhập").fill("gv.lan");
+  await page.getByLabel("Tên hiển thị").fill("Cô Lan Robotics");
+  await page.getByRole("button", { name: "Lưu" }).click();
+  await expect(page.getByText("Đã cập nhật tài khoản.")).toBeVisible();
+  await expect(lan).toContainText("Cô Lan Robotics");
+  await expectNoHorizontalScroll(page);
+  await page.screenshot({ path: "test-results/shots/accounts-edit-360.png", fullPage: true });
+
   // Nhật ký: lọc theo hành động, xem chi tiết.
   await page.goto("/admin/audit");
   await expect(page.getByRole("heading", { name: "Nhật ký" })).toBeVisible();

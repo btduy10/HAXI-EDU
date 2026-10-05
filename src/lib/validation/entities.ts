@@ -114,6 +114,23 @@ export const accountInput = z
     message: "Tài khoản giáo viên phải gắn với một giáo viên",
   });
 
+/** Sửa tài khoản: không đổi mật khẩu ở đây (dùng "Đặt lại mật khẩu"). */
+export const accountEditInput = z
+  .object({
+    id: z.string().min(1).max(64),
+    username: z
+      .string({ error: "Bắt buộc nhập" })
+      .trim()
+      .toLowerCase()
+      .regex(/^[a-z0-9._-]{3,32}$/, "3–32 ký tự: chữ thường, số, dấu . _ -"),
+    name: reqText(100),
+    role: z.enum(["admin", "teacher"]),
+    teacherId: optId,
+  })
+  .refine((v) => v.role !== "teacher" || v.teacherId, {
+    path: ["teacherId"],
+    message: "Tài khoản giáo viên phải gắn với một giáo viên",
+  });
 export const resetPasswordInput = z.object({ id: z.string().min(1), password });
 export const userIdInput = z.object({ id: z.string().min(1).max(64) });
 export const lockInput = z.object({ id: z.string().min(1).max(64), locked: z.boolean() });

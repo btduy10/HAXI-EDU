@@ -2,6 +2,7 @@
 
 import { idOnly } from "@/lib/validation/common";
 import {
+  accountEditInput,
   accountInput,
   classInput,
   classTeacherInput,
@@ -85,6 +86,7 @@ export const enrollStudentAction = async (classId: unknown, input: unknown) =>
 export const leaveEnrollmentAction = async (input: unknown) => runAction(leaveInput, input, classes.leaveEnrollment, ADMIN);
 
 export const createAccountAction = async (input: unknown) => runAction(accountInput, input, accounts.createAccount, ADMIN);
+export const updateAccountAction = async (input: unknown) => runAction(accountEditInput, input, accounts.updateAccount, ADMIN);
 export const resetPasswordAction = async (input: unknown) =>
   runAction(resetPasswordInput, input, (a, d) => accounts.resetAccountPassword(a, d.id, d.password), ADMIN);
 export const lockAccountAction = async (input: unknown) =>

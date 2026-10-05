@@ -1,9 +1,9 @@
 import { randomUUID } from "node:crypto";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, count, eq, ne } from "drizzle-orm";
 import type { z } from "zod";
 import { db } from "@/db";
 import { account, session, teachers, twoFactor, user } from "@/db/schema";
-import type { accountInput } from "@/lib/validation/entities";
+import type { accountEditInput, accountInput } from "@/lib/validation/entities";
 import { audit } from "../audit";
 import { AppError, notFound, translateDbError } from "../errors";
 import { type Actor, assertAdmin } from "../guard";
@@ -68,6 +68,65 @@ export async function createAccount(actor: Actor, data: z.output<typeof accountI
   }
 }
 
+/**
+ * Admin sửa tài khoản: tên đăng nhập, tên hiển thị, vai trò, giáo viên gắn kèm.
+ * Đổi vai trò hoặc tên đăng nhập sẽ thu hồi mọi phiên của tài khoản đó.
+ */
+export async function updateAccount(actor: Actor, data: z.output<typeof accountEditInput>) {
+  assertAdmin(actor);
+  try {
+    return await db.transaction(async (tx) => {
+      const [before] = await tx.select().from(user).where(eq(user.id, data.id)).for("update").limit(1);
+      if (!before) throw notFound("tài khoản");
+      const teacherId = data.role === "teacher" ? data.teacherId : null;
+
+      if (before.role !== data.role) {
+        if (data.id === actor.userId) throw new AppError("CONFLICT", "Không thể tự đổi vai trò của chính mình.", { role: "Không tự đổi được" });
+        if (before.role === "admin") {
+          // Luôn phải còn ít nhất một quản trị viên khác.
+          const [others] = await tx.select({ n: count() }).from(user).where(and(eq(user.role, "admin"), ne(user.id, data.id)));
+          if ((others?.n ?? 0) === 0) throw new AppError("CONFLICT", "Phải còn ít nhất một tài khoản quản trị.");
+        }
+      }
+      if (teacherId) {
+        const [taken] = await tx.select({ id: user.id }).from(user).where(and(eq(user.teacherId, teacherId), ne(user.id, data.id))).limit(1);
+        if (taken) throw new AppError("CONFLICT", "Giáo viên này đã có tài khoản khác.", { teacherId: "Đã có tài khoản khác" });
+      }
+
+      const [after] = await tx
+        .update(user)
+        .set({
+          name: data.name,
+          username: data.username,
+          displayUsername: data.username,
+          email: `${data.username}@haxi.local`,
+          role: data.role,
+          teacherId,
+          updatedAt: new Date(),
+        })
+        .where(eq(user.id, data.id))
+        .returning();
+      const sensitive = before.role !== data.role || before.username !== data.username || before.teacherId !== teacherId;
+      if (sensitive) await tx.delete(session).where(and(eq(session.userId, data.id), ne(session.userId, actor.userId)));
+      const pick = (u: typeof before) => ({ username: u.username, name: u.name, role: u.role, teacherId: u.teacherId });
+      await audit(tx, {
+        userId: actor.userId,
+        action: "account_updated",
+        tableName: "user",
+        recordId: data.id,
+        oldValue: pick(before),
+        newValue: pick(after!),
+      });
+      return { id: data.id };
+    });
+  } catch (e) {
+    const err = translateDbError(e);
+    if (err instanceof AppError && err.message.startsWith("Dữ liệu bị trùng")) {
+      throw new AppError("CONFLICT", "Tên đăng nhập đã tồn tại.", { username: "Tên đăng nhập đã tồn tại" });
+    }
+    throw err;
+  }
+}
 /** Admin đặt lại mật khẩu tạm: thu hồi mọi phiên và buộc đổi mật khẩu. */
 export async function resetAccountPassword(actor: Actor, userId: string, newPassword: string) {
   assertAdmin(actor);

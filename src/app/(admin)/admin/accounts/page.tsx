@@ -8,6 +8,7 @@ import {
   lockAccountAction,
   resetPasswordAction,
   resetTwoFactorAction,
+  updateAccountAction,
 } from "@/server/actions/admin";
 import { listAccounts } from "@/server/services/accounts";
 import { listTeachers } from "@/server/services/catalog";
@@ -71,6 +72,30 @@ export default async function AccountsPage() {
                 {a.lastLoginAt && ` · đăng nhập gần nhất ${formatDateTime(a.lastLoginAt)}`}
               </p>
               <div className="flex flex-wrap gap-2">
+                <FormDialogButton
+                  label="Sửa"
+                  variant="outline"
+                  className="h-9"
+                  title={`Sửa tài khoản ${a.username}`}
+                  description="Đổi tên đăng nhập, vai trò hoặc giáo viên gắn kèm sẽ đăng xuất tài khoản này khỏi mọi thiết bị."
+                  fields={[
+                    { name: "username", label: "Tên đăng nhập", required: true },
+                    { name: "name", label: "Tên hiển thị", required: true },
+                    { name: "role", label: "Vai trò", type: "select", required: true, options: toOptions(LABELS.role) },
+                    {
+                      name: "teacherId",
+                      label: "Giáo viên (với vai trò Giáo viên)",
+                      type: "select",
+                      options: teachers
+                        .filter((t) => t.id === a.teacherId || !linked.has(t.id))
+                        .map((t) => ({ value: t.id, label: `${t.code} – ${t.fullName}` })),
+                    },
+                  ]}
+                  initial={{ username: a.username, name: a.name, role: a.role, teacherId: a.teacherId ?? "" }}
+                  fixed={{ id: a.id }}
+                  action={updateAccountAction}
+                  successMessage="Đã cập nhật tài khoản."
+                />
                 <FormDialogButton
                   label="Đặt lại mật khẩu"
                   variant="outline"
