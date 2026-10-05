@@ -71,7 +71,7 @@ Nguyên tắc: mọi hàm trong `server/services` nhận `actor` lấy từ phi�
 ### Tài khoản và phân quyền
 
 - Đăng nhập bằng tên đăng nhập, băm Argon2id, buộc đổi mật khẩu lần đầu, khóa tạm sau 5 lần sai (15 phút), giới hạn tốc độ.
-- 2FA (TOTP) bắt buộc với Admin, có mã dự phòng.
+- 2FA (TOTP) bắt buộc với Admin, có mã dự phòng. Chỉ khi chạy thử mới tắt bằng biến môi trường `ADMIN_2FA_REQUIRED=false`.
 - Admin toàn quyền. GV chỉ thấy và thao tác trên lớp được phân công; GV dạy thay chỉ có quyền trên đúng buổi mình dạy thay.
 
 ### Danh mục (Admin)
@@ -125,6 +125,8 @@ Vercel không chạy Docker nên cần một PostgreSQL bên ngoài. Repo đã c
    | `BETTER_AUTH_SECRET` | Chuỗi ngẫu nhiên 32 byte: `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"` |
    | `DB_PREPARE` | `false` (pooler kiểu PgBouncer không hỗ trợ prepared statement) |
    | `DB_POOL_MAX` | `3` (mỗi hàm serverless có pool riêng) |
+
+   Khi chỉ chạy thử, có thể thêm `ADMIN_2FA_REQUIRED` = `false` để Admin không bị bắt thiết lập xác thực hai lớp. Xóa biến này (rồi deploy lại) trước khi nhập dữ liệu thật của học viên.
 
    Không cần đặt `BETTER_AUTH_URL`: ứng dụng tự lấy địa chỉ production của dự án. Chỉ đặt khi muốn dùng một tên miền khác với tên miền production chính.
 4. **Deploy** (hoặc Redeploy nếu lần đầu thiếu biến). Bảng được tạo tự động ở bước build.

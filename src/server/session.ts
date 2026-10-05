@@ -33,9 +33,16 @@ export const getSessionUser = cache(async (): Promise<SessionUser | null> => {
 });
 
 /** Bước bắt buộc còn thiếu trước khi được dùng hệ thống. */
+/**
+ * 2FA bắt buộc với Admin (mặc định). Đặt ADMIN_2FA_REQUIRED=false để bỏ qua khi chạy thử;
+ * KHÔNG nên tắt khi hệ thống chứa dữ liệu thật của học viên.
+ */
+const needsTwoFactorSetup = (user: SessionUser) =>
+  process.env.ADMIN_2FA_REQUIRED !== "false" && user.role === "admin" && !user.twoFactorEnabled;
+
 export function pendingStep(user: SessionUser): "/change-password" | "/two-factor/setup" | null {
   if (user.mustChangePassword) return "/change-password";
-  if (user.role === "admin" && !user.twoFactorEnabled) return "/two-factor/setup";
+  if (needsTwoFactorSetup(user)) return "/two-factor/setup";
   return null;
 }
 
@@ -46,7 +53,7 @@ export async function requireActor(): Promise<Actor> {
   const user = await getSessionUser();
   if (!user) throw unauthenticated();
   if (user.mustChangePassword) throw new AppError("FORBIDDEN", "Bạn cần đổi mật khẩu trước khi tiếp tục.");
-  if (user.role === "admin" && !user.twoFactorEnabled) {
+  if (needsTwoFactorSetup(user)) {
     throw new AppError("FORBIDDEN", "Quản trị viên cần bật xác thực hai lớp trước khi tiếp tục.");
   }
   return { userId: user.id, role: user.role, teacherId: user.teacherId };
