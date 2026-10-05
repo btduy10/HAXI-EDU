@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { LinkButton } from "@/components/link-button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { cn } from "@/lib/utils";
 import { type ActionFn, type Field, FormDialog } from "./form-dialog";
 
 export type CrudRow = {
@@ -57,7 +58,7 @@ export function CrudSection({
   }
 
   const rowActions = (row: CrudRow) => (
-    <div className="flex shrink-0 items-center gap-1">
+    <div className="flex shrink-0 items-center justify-end gap-1">
       {row.href && (
         <LinkButton variant="outline" className="h-9" href={row.href}>
           {detailLabel}
@@ -95,7 +96,7 @@ export function CrudSection({
         <>
           <ul className="grid gap-2 md:hidden">
             {rows.map((row) => (
-              <li key={row.id} className="flex items-start justify-between gap-2 rounded-lg border p-3">
+              <li key={row.id} className={cn("flex gap-2 rounded-lg border p-3", row.href ? "flex-col" : "items-start justify-between")}>
                 <div className="min-w-0">
                   <p className="font-medium break-words">{row.cells[0]}</p>
                   <dl className="mt-1 grid gap-0.5 text-sm text-muted-foreground">

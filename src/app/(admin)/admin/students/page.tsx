@@ -47,6 +47,7 @@ export default async function StudentsPage({ searchParams }: PageProps<"/admin/s
         columns={["Họ tên", "Mã HV", "Ngày sinh", "Khối", "Phụ huynh", "Điện thoại", "Trạng thái"]}
         rows={students.map((s) => ({
           id: s.id,
+          href: `/admin/students/${s.id}`,
           cells: [
             s.fullName,
             s.code,
@@ -72,6 +73,7 @@ export default async function StudentsPage({ searchParams }: PageProps<"/admin/s
         createAction={createStudentAction}
         updateAction={updateStudentAction}
         deleteAction={deleteStudentAction}
+        detailLabel="Sao & avatar"
         emptyText={q ? "Không tìm thấy học viên phù hợp." : "Chưa có học viên."}
       />
     </div>

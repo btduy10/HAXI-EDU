@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { StudentProgressCard } from "@/components/avatar";
 import { CrudSection } from "@/components/crud-section";
 import type { Field } from "@/components/form-dialog";
 import { Badge } from "@/components/ui/badge";
@@ -13,7 +14,7 @@ import { orNotFound, uuidParam } from "@/server/page";
 import { listRooms, listTeachers, listTimeSlots } from "@/server/services/catalog";
 import { getClass, listClassTeachers } from "@/server/services/classes";
 import { listTemplates } from "@/server/services/sessions";
-import { listClassStudents } from "@/server/services/students";
+import { listClassProgress } from "@/server/services/stars";
 import { requirePageUser } from "@/server/session";
 
 export const metadata: Metadata = { title: "Chi tiết lớp" };
@@ -25,7 +26,7 @@ export default async function ClassDetailPage({ params }: PageProps<"/admin/clas
   const [assigned, teachers, students, templates, slots, rooms] = await Promise.all([
     listClassTeachers(actor, classId),
     listTeachers(actor),
-    listClassStudents(actor, classId),
+    listClassProgress(actor, classId),
     listTemplates(actor, classId),
     listTimeSlots(actor),
     listRooms(actor),
@@ -186,11 +187,8 @@ export default async function ClassDetailPage({ params }: PageProps<"/admin/clas
         ) : (
           <ul className="grid gap-2 sm:grid-cols-2">
             {students.map((s) => (
-              <li key={s.id} className="rounded-lg border p-3 text-sm">
-                <p className="font-medium">{s.fullName}</p>
-                <p className="text-muted-foreground">
-                  {s.code} · vào lớp {formatDate(s.joinedAt)}
-                </p>
+              <li key={s.id}>
+                <StudentProgressCard fullName={s.fullName} code={s.code} progress={s.progress} href={`/admin/students/${s.id}`} />
               </li>
             ))}
           </ul>

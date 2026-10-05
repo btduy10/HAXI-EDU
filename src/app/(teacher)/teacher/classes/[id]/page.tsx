@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { StudentProgressCard } from "@/components/avatar";
 import { Badge } from "@/components/ui/badge";
 import { LABELS, formatDate } from "@/lib/format";
 import { orNotFound, uuidParam } from "@/server/page";
 import { getClass, listClassTeachers } from "@/server/services/classes";
-import { listClassStudents } from "@/server/services/students";
+import { listClassProgress } from "@/server/services/stars";
 import { requirePageUser } from "@/server/session";
 
 export const metadata: Metadata = { title: "Lớp của tôi" };
@@ -14,7 +15,7 @@ export default async function TeacherClassPage({ params }: PageProps<"/teacher/c
   const classId = uuidParam((await params).id);
   // getClass kiểm tra quyền sở hữu lớp; lớp của GV khác trả 404.
   const cls = await orNotFound(getClass(actor, classId));
-  const [teachers, students] = await Promise.all([listClassTeachers(actor, classId), listClassStudents(actor, classId)]);
+  const [teachers, students] = await Promise.all([listClassTeachers(actor, classId), listClassProgress(actor, classId)]);
 
   return (
     <div className="grid gap-4">
@@ -48,12 +49,8 @@ export default async function TeacherClassPage({ params }: PageProps<"/teacher/c
         ) : (
           <ul className="grid gap-2 sm:grid-cols-2">
             {students.map((s) => (
-              <li key={s.id} className="rounded-lg border p-3 text-sm">
-                <p className="font-medium">{s.fullName}</p>
-                <p className="text-muted-foreground">
-                  {s.code}
-                  {s.schoolGrade ? ` · khối ${s.schoolGrade}` : ""}
-                </p>
+              <li key={s.id}>
+                <StudentProgressCard fullName={s.fullName} code={s.code} progress={s.progress} href={`/teacher/students/${s.id}`} />
               </li>
             ))}
           </ul>

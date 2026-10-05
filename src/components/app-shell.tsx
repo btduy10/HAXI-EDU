@@ -14,6 +14,7 @@ import {
   type LucideIcon,
   MenuIcon,
   SchoolIcon,
+  StarIcon,
   UserCogIcon,
   UsersIcon,
 } from "lucide-react";
@@ -40,6 +41,7 @@ const NAV: Record<"admin" | "teacher", NavItem[]> = {
     { href: "/admin/enrollments", label: "Ghi danh", icon: ClipboardListIcon },
     { href: "/admin/timetable", label: "Thời khóa biểu", icon: CalendarDaysIcon },
     { href: "/admin/attendance", label: "Điểm danh", icon: ClipboardCheckIcon },
+    { href: "/admin/stars", label: "Sao & Avatar", icon: StarIcon },
     { href: "/admin/accounts", label: "Tài khoản", icon: UserCogIcon },
   ],
   teacher: [

@@ -15,8 +15,11 @@ async function main() {
   const { hashPassword } = await import("../src/server/password");
 
   const [{ n }] = (await db.execute(sql`select count(*)::int as n from "user"`)) as unknown as [{ n: number }];
+  const { ensureAvatarCatalog } = await import("../src/server/services/avatars");
   if (n > 0) {
-    console.log("CSDL đã có tài khoản — bỏ qua seed.");
+    // CSDL đã có dữ liệu: chỉ bổ sung kho avatar mặc định nếu còn thiếu.
+    const added = await ensureAvatarCatalog(db);
+    console.log(`CSDL đã có tài khoản — bỏ qua seed. Đã bổ sung ${added} avatar mặc định.`);
     await closeDb();
     return;
   }
@@ -168,6 +171,21 @@ async function main() {
       })),
     );
     await db.update(s.sessions).set({ status: "done", content: "Bài học theo giáo trình" }).where(sql`${s.sessions.id} = ${session.id}`);
+  }
+
+  // Kho avatar + vài lần ghi sao ở các buổi đã dạy để học viên có cấp và avatar khác nhau.
+  await ensureAvatarCatalog(db);
+  const { awardStars } = await import("../src/server/services/stars");
+  const criteria = await db.select().from(s.starCriteria);
+  const byName = (name: string) => criteria.find((c) => c.name === name)!.id;
+  for (const [index, session] of oldSessions.entries()) {
+    const roster = (await sessionRoster(db, session)).map((r) => r.studentId);
+    const give = (name: string, studentIds: string[]) =>
+      studentIds.length > 0 ? awardStars(admin, { sessionId: session.id, criteriaId: byName(name), studentIds, note: null }) : null;
+    await give("Hoàn thành nhiệm vụ", roster);
+    await give("Sáng tạo vượt yêu cầu", roster.slice(0, 2));
+    await give("Giúp đỡ bạn", roster.slice(2, 4));
+    if (index % 2 === 0) await give("Mất trật tự", roster.slice(-1));
   }
 
   console.log("Đã tạo dữ liệu mẫu.");

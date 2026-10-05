@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ConfirmButton } from "@/components/action-buttons";
 import { AttendanceSheet } from "@/components/attendance-sheet";
+import { SessionTabs } from "@/components/session-tabs";
 import { SessionBadges } from "@/components/timetable";
 import { WEEKDAY_LABELS, isoWeekday } from "@/lib/dates";
 import { formatDate, formatTime, todayIso } from "@/lib/format";
@@ -33,6 +34,8 @@ export async function AttendancePage({ actor, sessionId, backHref }: { actor: Ac
           <SessionBadges session={session} today={todayIso()} />
         </div>
       </div>
+
+      <SessionTabs role={actor.role} sessionId={sessionId} active="attendance" />
 
       {sheet.locked && actor.role === "admin" && (
         <ConfirmButton

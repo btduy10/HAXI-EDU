@@ -72,6 +72,11 @@ export default async function SessionDetailPage({ params }: PageProps<"/admin/se
           </LinkButton>
         )}
         {!cancelled && (
+          <LinkButton variant="outline" className="h-10" href={`/admin/sessions/${id}/stars`}>
+            Ghi sao
+          </LinkButton>
+        )}
+        {!cancelled && (
           <FormDialogButton
             label="Sửa buổi này"
             variant="outline"

@@ -2,7 +2,7 @@
 
 Ứng dụng web cho trung tâm dạy Robotics: quản lý giáo viên, học viên, lớp, thời khóa biểu, điểm danh, chấm sao, avatar game hóa và tổng kết tặng quà. Hai loại tài khoản: **Quản trị (Admin)** và **Giáo viên (GV)**. Học viên và phụ huynh không có tài khoản.
 
-> **Tiến độ:** đã xong **Giai đoạn 1 – Nền tảng** và **Giai đoạn 2 – TKB & điểm danh**. Giai đoạn 3 (sao & avatar) và 4 (cuối khóa & báo cáo, xuất PDF/Excel) chưa làm.
+> **Tiến độ:** đã xong **Giai đoạn 1 – Nền tảng**, **Giai đoạn 2 – TKB & điểm danh** và **Giai đoạn 3 – Sao & avatar**. Giai đoạn 4 (cuối khóa & báo cáo, xuất PDF/Excel, nhật ký, sao lưu) chưa làm.
 
 ## Công nghệ
 
@@ -29,7 +29,7 @@ npm run dev                   # http://localhost:3000
 | `gv.lan` | Giáo viên | Dạy lớp RB-CB01 |
 | `gv.minh` | Giáo viên | Dạy lớp RB-NC01 |
 
-Mật khẩu tạm là giá trị `SEED_DEFAULT_PASSWORD` trong `.env` (mặc định `Haxi@2026`). Lần đăng nhập đầu **bắt buộc đổi mật khẩu** (tối thiểu 10 ký tự, có chữ và số). Dữ liệu mẫu gồm 2 lớp (mỗi lớp 2 buổi/tuần, đã sinh buổi học; các buổi cũ hơn 7 ngày đã điểm danh sẵn), 15 học viên, 2 phòng, 3 ca học, 5 cấp bậc và các tiêu chí sao.
+Mật khẩu tạm là giá trị `SEED_DEFAULT_PASSWORD` trong `.env` (mặc định `Haxi@2026`). Lần đăng nhập đầu **bắt buộc đổi mật khẩu** (tối thiểu 10 ký tự, có chữ và số). Dữ liệu mẫu gồm 2 lớp (mỗi lớp 2 buổi/tuần, đã sinh buổi học; các buổi cũ hơn 7 ngày đã điểm danh sẵn), 15 học viên, 2 phòng, 3 ca học, 5 cấp bậc, các tiêu chí sao, 15 avatar và một số lần ghi sao. Với CSDL đã có dữ liệu, chạy lại `npm run db:seed` chỉ bổ sung kho avatar còn thiếu.
 
 ## Lệnh thường dùng
 
@@ -83,8 +83,21 @@ Nguyên tắc: mọi hàm trong `server/services` nhận `actor` lấy từ phi�
 
 Chưa có ở giai đoạn này: xuất TKB ra PDF/Excel và trang Cấu hình để sửa số ngày khóa (đều thuộc Giai đoạn 4; hiện đổi số ngày khóa trực tiếp trong bảng `app_settings`).
 
-## Bảo mật
-- **Phân quyền ở máy chủ:** GV chỉ truy cập lớp được phân công; truy cập lớp khác trả 404 (không lộ sự tồn tại). Có test ở tầng service và test gọi trực tiếp qua HTTP.
+## Đã có ở Giai đoạn 3
+
+- **Tiêu chí sao:** Admin quản lý (số dương = thưởng, số âm = trừ). Khi ghi, số sao lấy từ tiêu chí ở máy chủ; client không tự gửi số sao.
+- **Ghi sao theo buổi:** cho từng em, một nhóm hoặc cả lớp trong một thao tác; chỉ học viên thuộc buổi đó.
+- **Sổ cái chỉ thêm:** `star_logs` không sửa, không xóa (có trigger ở CSDL). Hoàn tác tạo bản ghi đảo dấu, mỗi lần ghi chỉ hoàn tác được một lần.
+- **Tổng sao:** tính khi truy vấn bằng `GREATEST(0, SUM(stars))`, không lưu cứng, không bao giờ âm.
+- **Cấp bậc:** suy ra trực tiếp từ tổng sao toàn thời gian; trừ sao là tụt cấp ngay. Admin sửa được tên, mốc sao, màu khung (bảng cấp phải tăng dần).
+- **Giới hạn trừ sao:** mỗi học viên bị trừ tối đa 3 sao/buổi (`max_deduction_per_session` trong `app_settings`); các lần đã hoàn tác không tính.
+- **Avatar:** 15 robot SVG (12 mở theo cấp, 3 tặng riêng). GV của lớp và Admin đổi avatar cho học viên; chỉ chọn được avatar đã mở theo cấp hoặc được tặng. Avatar khóa hiển thị mờ kèm "Cần X sao".
+- **Tự đổi avatar khi tụt cấp:** nếu avatar đang dùng bị khóa, hệ thống đổi sang avatar theo cấp cao nhất còn mở và báo cho GV. Avatar tặng riêng không mất khi tụt cấp. Lên cấp hiện thông báo chúc mừng (không tự đổi avatar).
+- **Danh sách học viên của lớp:** avatar có khung viền theo cấp, tổng sao và thanh tiến độ "còn X sao để lên cấp".
+
+Thiết kế lại bộ avatar: sửa `scripts/generate-avatars.mjs` rồi chạy `node scripts/generate-avatars.mjs`. Kho avatar là bộ có sẵn; hệ thống không cho tải SVG mới lên.
+
+## Bảo mật- **Phân quyền ở máy chủ:** GV chỉ truy cập lớp được phân công; truy cập lớp khác trả 404 (không lộ sự tồn tại). Có test ở tầng service và test gọi trực tiếp qua HTTP.
 - **Phiên:** cookie `httpOnly`, `SameSite=Lax`, `Secure` ở production; phiên được đọc lại từ CSDL mỗi request nên khóa tài khoản có hiệu lực ngay.
 - **CSRF:** Better Auth và Server Action kiểm tra Origin; Route Handler ghi dữ liệu tự kiểm tra Origin.
 - **Header:** CSP với nonce theo từng request (`script-src` không có `unsafe-inline`), HSTS, `X-Frame-Options: DENY`, `nosniff`, `Referrer-Policy`, `Permissions-Policy`.
