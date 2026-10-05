@@ -1,4 +1,4 @@
-import { and, asc, eq, ilike, or } from "drizzle-orm";
+import { and, asc, count, eq, ilike, or } from "drizzle-orm";
 import type { z } from "zod";
 import { db } from "@/db";
 import { enrollments, students } from "@/db/schema";
@@ -16,6 +16,28 @@ export async function listStudents(actor: Actor, search?: string) {
     .from(students)
     .where(pattern ? or(ilike(students.fullName, pattern), ilike(students.code, pattern)) : undefined)
     .orderBy(asc(students.code));
+}
+
+export const STUDENT_PAGE_SIZE = 10;
+
+/** Danh sách học viên theo trang (mỗi trang 10 em). Trang vượt quá số trang thì trả về trang cuối. */
+export async function listStudentsPage(actor: Actor, search: string | undefined, page: number) {
+  assertAdmin(actor);
+  const term = search?.trim();
+  const pattern = term ? `%${term.replace(/[%_\\]/g, "\\$&")}%` : null;
+  const where = pattern ? or(ilike(students.fullName, pattern), ilike(students.code, pattern)) : undefined;
+  const [counted] = await db.select({ n: count() }).from(students).where(where);
+  const total = counted?.n ?? 0;
+  const pageCount = Math.max(1, Math.ceil(total / STUDENT_PAGE_SIZE));
+  const current = Math.min(Math.max(1, Math.trunc(page) || 1), pageCount);
+  const rows = await db
+    .select()
+    .from(students)
+    .where(where)
+    .orderBy(asc(students.code))
+    .limit(STUDENT_PAGE_SIZE)
+    .offset((current - 1) * STUDENT_PAGE_SIZE);
+  return { rows, total, page: current, pageCount, pageSize: STUDENT_PAGE_SIZE };
 }
 
 export async function getStudent(actor: Actor, id: string) {

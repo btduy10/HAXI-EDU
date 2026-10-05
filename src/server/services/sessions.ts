@@ -12,6 +12,7 @@ import {
   scheduleTemplates,
   sessionStudents,
   sessions,
+  starLogs,
   teachers,
   timeSlots,
 } from "@/db/schema";
@@ -421,6 +422,26 @@ export async function restoreSession(actor: Actor, sessionId: string): Promise<S
     const before = await loadForChange(tx, sessionId);
     if (before.status !== "cancelled") throw new AppError("CONFLICT", "Buổi này không ở trạng thái đã hủy.");
     return applyChange(tx, actor, before, { status: "planned" }, "session_restored");
+  });
+}
+
+/**
+ * Xóa hẳn một buổi xếp sai. Chỉ xóa được khi buổi chưa có điểm danh và chưa ghi sao;
+ * buổi đã có dữ liệu thì dùng "Hủy buổi" để giữ lịch sử.
+ */
+export async function deleteSession(actor: Actor, sessionId: string): Promise<{ date: string }> {
+  assertAdmin(actor);
+  return db.transaction(async (tx) => {
+    await lockSchedule(tx);
+    const before = await loadForChange(tx, sessionId);
+    const [attended] = await tx.select({ id: attendances.id }).from(attendances).where(eq(attendances.sessionId, sessionId)).limit(1);
+    const [starred] = await tx.select({ id: starLogs.id }).from(starLogs).where(eq(starLogs.sessionId, sessionId)).limit(1);
+    if (attended || starred) {
+      throw new AppError("CONFLICT", "Buổi này đã có điểm danh hoặc đã ghi sao nên không xóa được. Hãy dùng \"Hủy buổi\" để giữ lịch sử.");
+    }
+    await tx.delete(sessions).where(eq(sessions.id, sessionId));
+    await audit(tx, { userId: actor.userId, action: "session_deleted", tableName: "sessions", recordId: sessionId, oldValue: before });
+    return { date: before.date };
   });
 }
 

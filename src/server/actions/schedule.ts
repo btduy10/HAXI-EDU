@@ -1,5 +1,6 @@
 "use server";
 
+import { redirect } from "next/navigation";
 import { idOnly } from "@/lib/validation/common";
 import {
   attendanceInput,
@@ -33,6 +34,12 @@ export const rescheduleSessionAction = async (input: unknown) =>
 export const cancelSessionAction = async (input: unknown) => runAction(sessionCancelInput, input, sessions.cancelSession, ADMIN);
 export const restoreSessionAction = async (input: unknown) =>
   runAction(idOnly, input, (a, d) => sessions.restoreSession(a, d.id), ADMIN);
+/** Xóa buổi xếp sai rồi đưa Admin về thời khóa biểu của ngày đó (trang buổi học không còn tồn tại). */
+export const deleteSessionAction = async (input: unknown) => {
+  const result = await runAction(idOnly, input, (a, d) => sessions.deleteSession(a, d.id), ADMIN);
+  if (result.ok) redirect(`/admin/timetable?date=${result.data.date}`);
+  return result;
+};
 export const setSubstituteAction = async (input: unknown) =>
   runAction(sessionSubstituteInput, input, sessions.setSubstitute, ADMIN);
 export const createManualSessionAction = async (input: unknown) =>

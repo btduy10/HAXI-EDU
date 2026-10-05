@@ -7,6 +7,7 @@ import { WEEKDAY_LABELS, isoWeekday } from "@/lib/dates";
 import { formatDate, formatTime, todayIso } from "@/lib/format";
 import {
   cancelSessionAction,
+  deleteSessionAction,
   rescheduleSessionAction,
   restoreSessionAction,
   setSubstituteAction,
@@ -158,6 +159,16 @@ export default async function SessionDetailPage({ params }: PageProps<"/admin/se
             action={restoreSessionAction}
             input={{ id }}
             successMessage="Đã khôi phục buổi học."
+          />
+        )}
+        {session.attendanceCount === 0 && (
+          <ConfirmButton
+            label="Xóa buổi"
+            variant="destructive"
+            confirmText="Xóa hẳn buổi học này khỏi thời khóa biểu? Không hoàn tác được."
+            action={deleteSessionAction}
+            input={{ id }}
+            successMessage="Đã xóa buổi học."
           />
         )}
         {session.classStatus === "open" && (

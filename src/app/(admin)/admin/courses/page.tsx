@@ -19,6 +19,7 @@ export default async function CoursesPage() {
   return (
     <CrudSection
       title="Khóa học"
+      numbered
       columns={["Tên khóa học", "Số buổi", "Mô tả"]}
       rows={courses.map((c) => ({
         id: c.id,

@@ -129,7 +129,18 @@ test("Admin: TKB có bộ lọc, sửa giờ riêng một buổi, trùng lịch 
   await page.getByRole("button", { name: "Hủy", exact: true }).click();
   await page.screenshot({ path: "test-results/shots/admin-week-manual-1280.png", fullPage: true });
 
+  // Xếp sai thì xóa: mở buổi vừa xếp, bấm "Xóa buổi" → quay về thời khóa biểu, buổi không còn.
+  await page.getByRole("link", { name: /14:00 RB-CB01/ }).click();
+  await expect(page.getByRole("heading", { name: /Buổi học RB-CB01/ })).toBeVisible();
+  page.once("dialog", (d) => d.accept());
+  await page.getByRole("button", { name: "Xóa buổi" }).click();
+  await expect(page).toHaveURL(/\/admin\/timetable\?date=/);
+  await expect(page.getByRole("columnheader", { name: "Ca" })).toBeVisible();
+  await expect(page.getByRole("link", { name: /14:00 RB-CB01/ })).toHaveCount(0);
+
   await page.goto("/admin/students");
+  await expect(page.getByRole("columnheader", { name: "STT" })).toBeVisible();
+  await expect(page.getByRole("row")).toHaveCount(11);
   await page.screenshot({ path: "test-results/shots/admin-students-1280.png" });
   await page.setViewportSize({ width: 360, height: 740 });
 

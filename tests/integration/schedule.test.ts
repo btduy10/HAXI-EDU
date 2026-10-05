@@ -350,6 +350,20 @@ describe("điểm danh", () => {
     await expect(svc.cancelSession(f.admin, { id: first.id, note: null })).rejects.toMatchObject({ code: "CONFLICT" });
   });
 
+  it("Admin xóa buổi xếp sai: có nhật ký, sinh lại lịch tạo lại buổi; buổi đã điểm danh không xóa được; GV không xóa được", async () => {
+    await expect(svc.deleteSession(f.actorA, later.id)).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(svc.deleteSession(f.admin, later.id)).resolves.toEqual({ date: "2026-02-10" });
+    expect(await db.select().from(sessions).where(eq(sessions.id, later.id))).toEqual([]);
+    const [log] = await db.select().from(auditLogs).where(eq(auditLogs.action, "session_deleted"));
+    expect(log).toMatchObject({ userId: f.admin.userId, recordId: later.id, oldValue: { date: "2026-02-10" } });
+    await expect(svc.deleteSession(f.admin, later.id)).rejects.toMatchObject({ code: "NOT_FOUND" });
+
+    const sheet = await attendance.getAttendanceSheet(f.actorA, first.id, at("2026-01-06"));
+    await attendance.saveAttendance(f.actorA, { sessionId: first.id, content: null, entries: entries(sheet.rows) }, at("2026-01-06"));
+    await expect(svc.deleteSession(f.admin, first.id)).rejects.toMatchObject({ code: "CONFLICT" });
+    expect(await db.select().from(sessions).where(eq(sessions.id, first.id))).toHaveLength(1);
+  });
+
   it("buổi quá hạn: GV chỉ thấy buổi mình thực dạy, bỏ qua buổi đã hủy và đã điểm danh", async () => {
     const now = at("2026-01-21"); // đã qua 06/01, 13/01, 20/01
     expect((await attendance.listOverdueSessions(f.actorA, now)).map((s) => s.date)).toEqual(["2026-01-20", "2026-01-13", "2026-01-06"]);

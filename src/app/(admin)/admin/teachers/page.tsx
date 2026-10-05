@@ -22,6 +22,7 @@ export default async function TeachersPage() {
   return (
     <CrudSection
       title="Giáo viên"
+      numbered
       columns={["Họ tên", "Mã GV", "Điện thoại", "Email", "Trạng thái"]}
       rows={teachers.map((t) => ({
         id: t.id,

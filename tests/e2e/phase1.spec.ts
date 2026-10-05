@@ -108,6 +108,20 @@ test("Admin: đổi mật khẩu → bắt buộc thiết lập 2FA → quản l
   await expectNoHorizontalScroll(page);
   await page.screenshot({ path: "test-results/shots/admin-students-360.png" });
 
+  // Phân trang: mỗi trang 10 học viên có STT; trang 2 đánh số tiếp từ 11.
+  const cards = page.locator("ul:visible > li");
+  await expect(cards).toHaveCount(10);
+  await expect(cards.first()).toContainText("1.");
+  await expect(page.getByText("Trang 1/2 · 15 học viên")).toBeVisible();
+  await page.getByRole("link", { name: "Sau ›" }).click();
+  await expect(page).toHaveURL(/\/admin\/students\?page=2$/);
+  await expect(cards).toHaveCount(5);
+  await expect(cards.first()).toContainText("11.");
+  await expectNoHorizontalScroll(page);
+  await page.screenshot({ path: "test-results/shots/admin-students-page2-360.png", fullPage: true });
+  await page.getByRole("link", { name: "‹ Trước" }).click();
+  await expect(page).toHaveURL(/\/admin\/students$/);
+
   // Thêm học viên: lỗi xác thực hiển thị theo trường, sau đó lưu thành công.
   await page.getByRole("button", { name: "Thêm" }).click();
   await page.getByLabel("Mã HV").fill("HV 999");
@@ -118,7 +132,8 @@ test("Admin: đổi mật khẩu → bắt buộc thiết lập 2FA → quản l
   await page.getByLabel("Mã HV").fill("HV999");
   await page.getByRole("button", { name: "Lưu" }).click();
   await expect(page.getByText("Đã lưu.")).toBeVisible();
-  // Nội dung người dùng nhập hiển thị dạng văn bản, không chạy như HTML.
+  // Nội dung người dùng nhập hiển thị dạng văn bản, không chạy như HTML. (HV999 xếp cuối nên nằm ở trang 2.)
+  await page.goto("/admin/students?page=2");
   await expect(visibleText(page, "Trần Thử Nghiệm <script>alert(1)</script>")).toBeVisible();
   await expectNoHorizontalScroll(page);
 

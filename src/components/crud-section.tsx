@@ -33,7 +33,19 @@ export function CrudSection({
   addLabel = "Thêm",
   emptyText = "Chưa có dữ liệu.",
   detailLabel = "Chi tiết",
+  numbered = false,
+  startIndex = 0,
+  total,
+  footer,
 }: {
+  /** Hiện cột STT ở đầu danh sách. */
+  numbered?: boolean;
+  /** Số thứ tự của dòng đầu trừ 1 (khi danh sách được phân trang). */
+  startIndex?: number;
+  /** Tổng số dòng của cả danh sách khi `rows` chỉ là một trang. */
+  total?: number;
+  /** Phần hiển thị dưới danh sách, vd. điều hướng trang. */
+  footer?: React.ReactNode;
   title: string;
   columns: string[];
   rows: CrudRow[];
@@ -81,7 +93,7 @@ export function CrudSection({
     <section className="grid gap-3">
       <div className="flex items-center justify-between gap-2">
         <h2 className="text-lg font-semibold">
-          {title} <span className="text-sm font-normal text-muted-foreground">({rows.length})</span>
+          {title} <span className="text-sm font-normal text-muted-foreground">({total ?? rows.length})</span>
         </h2>
         {createAction && (
           <Button className="h-10" onClick={() => setEditing("new")}>
@@ -95,10 +107,13 @@ export function CrudSection({
       ) : (
         <>
           <ul className="grid gap-2 md:hidden">
-            {rows.map((row) => (
+            {rows.map((row, index) => (
               <li key={row.id} className={cn("flex gap-2 rounded-lg border p-3", row.href ? "flex-col" : "items-start justify-between")}>
                 <div className="min-w-0">
-                  <p className="font-medium break-words">{row.cells[0]}</p>
+                  <p className="font-medium break-words">
+                    {numbered && <span className="mr-1 font-normal text-muted-foreground tabular-nums">{startIndex + index + 1}.</span>}
+                    {row.cells[0]}
+                  </p>
                   <dl className="mt-1 grid gap-0.5 text-sm text-muted-foreground">
                     {row.cells.slice(1).map((cell, i) =>
                       cell ? (
@@ -118,6 +133,7 @@ export function CrudSection({
             <Table>
               <TableHeader>
                 <TableRow>
+                  {numbered && <TableHead className="w-12 text-right">STT</TableHead>}
                   {columns.map((c) => (
                     <TableHead key={c}>{c}</TableHead>
                   ))}
@@ -125,8 +141,9 @@ export function CrudSection({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {rows.map((row) => (
+                {rows.map((row, index) => (
                   <TableRow key={row.id}>
+                    {numbered && <TableCell className="text-right text-muted-foreground tabular-nums">{startIndex + index + 1}</TableCell>}
                     {row.cells.map((cell, i) => (
                       <TableCell key={columns[i]} className="whitespace-normal">
                         {cell}
@@ -140,6 +157,7 @@ export function CrudSection({
           </div>
         </>
       )}
+      {footer}
 
       {editing && (
         <FormDialog

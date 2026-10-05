@@ -6,7 +6,7 @@ import { LinkButton } from "@/components/link-button";
 import { Input } from "@/components/ui/input";
 import { LABELS, formatDate, toOptions } from "@/lib/format";
 import { createStudentAction, deleteStudentAction, updateStudentAction } from "@/server/actions/admin";
-import { listStudents } from "@/server/services/students";
+import { listStudentsPage } from "@/server/services/students";
 import { requirePageUser } from "@/server/session";
 
 export const metadata: Metadata = { title: "Học viên" };
@@ -27,7 +27,19 @@ export default async function StudentsPage({ searchParams }: PageProps<"/admin/s
   const { actor } = await requirePageUser("admin");
   const raw = (await searchParams).q;
   const q = (Array.isArray(raw) ? raw[0] : raw)?.slice(0, 100) ?? "";
-  const students = await listStudents(actor, q);
+  const rawPage = (await searchParams).page;
+  const { rows: students, total, page, pageCount, pageSize } = await listStudentsPage(
+    actor,
+    q,
+    Number(Array.isArray(rawPage) ? rawPage[0] : rawPage),
+  );
+  const pageHref = (n: number) => {
+    const query = new URLSearchParams();
+    if (q) query.set("q", q);
+    if (n > 1) query.set("page", String(n));
+    const text = query.toString();
+    return text ? `/admin/students?${text}` : "/admin/students";
+  };
 
   return (
     <div className="grid gap-4">
@@ -44,6 +56,44 @@ export default async function StudentsPage({ searchParams }: PageProps<"/admin/s
       </div>
       <CrudSection
         title="Học viên"
+        numbered
+        startIndex={(page - 1) * pageSize}
+        total={total}
+        footer={
+          pageCount > 1 && (
+            <nav aria-label="Phân trang học viên" className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-sm text-muted-foreground">
+                Trang {page}/{pageCount} · {total} học viên
+              </p>
+              <div className="flex flex-wrap gap-1">
+                {page > 1 && (
+                  <LinkButton variant="outline" className="h-10" href={pageHref(page - 1)}>
+                    ‹ Trước
+                  </LinkButton>
+                )}
+                {Array.from({ length: pageCount }, (_, i) => i + 1)
+                  .filter((n) => n === 1 || n === pageCount || Math.abs(n - page) <= 1)
+                  .map((n) => (
+                    <LinkButton
+                      key={n}
+                      variant={n === page ? "default" : "outline"}
+                      className="h-10 min-w-10"
+                      href={pageHref(n)}
+                      aria-label={`Trang ${n}`}
+                      aria-current={n === page ? "page" : undefined}
+                    >
+                      {n}
+                    </LinkButton>
+                  ))}
+                {page < pageCount && (
+                  <LinkButton variant="outline" className="h-10" href={pageHref(page + 1)}>
+                    Sau ›
+                  </LinkButton>
+                )}
+              </div>
+            </nav>
+          )
+        }
         columns={["Họ tên", "Mã HV", "Ngày sinh", "Khối", "Phụ huynh", "Điện thoại", "Trạng thái"]}
         rows={students.map((s) => ({
           id: s.id,
