@@ -101,20 +101,37 @@ export default async function AccountsPage() {
                   variant="outline"
                   className="h-9"
                   title={`Đặt lại mật khẩu cho ${a.username}`}
-                  description="Mọi phiên đăng nhập của tài khoản này sẽ bị thu hồi."
-                  fields={[{ name: "password", label: "Mật khẩu tạm mới", type: "password", required: true, hint: PASSWORD_HINT }]}
+                  description={
+                    isSelf
+                      ? "Đặt mật khẩu mới cho chính bạn."
+                      : "Tài khoản sẽ bị đăng xuất khỏi mọi thiết bị và được mở khóa nếu đang bị khóa."
+                  }
+                  fields={[
+                    { name: "password", label: "Mật khẩu mới", type: "password", required: true, hint: "Tối thiểu 8 ký tự, gồm chữ và số." },
+                    {
+                      name: "mustChange",
+                      label: "Sau khi đặt lại",
+                      type: "select",
+                      required: true,
+                      options: [
+                        { value: "true", label: "Bắt đổi mật khẩu ở lần đăng nhập sau" },
+                        { value: "false", label: "Dùng luôn mật khẩu này" },
+                      ],
+                    },
+                  ]}
+                  initial={{ mustChange: isSelf ? "false" : "true" }}
                   fixed={{ id: a.id }}
                   action={resetPasswordAction}
                   successMessage="Đã đặt lại mật khẩu."
                 />
-                {!isSelf && (
+                {/* Không còn nút khóa tay. Chỉ hiện "Mở khóa" khi tài khoản đang bị khóa (vd. do nhập sai nhiều lần). */}
+                {!isSelf && locked && (
                   <ConfirmButton
-                    label={locked ? "Mở khóa" : "Khóa"}
+                    label="Mở khóa"
                     className="h-9"
-                    variant={locked ? "outline" : "destructive"}
-                    confirmText={locked ? `Mở khóa tài khoản ${a.username}?` : `Khóa tài khoản ${a.username}? Người dùng sẽ bị đăng xuất.`}
+                    confirmText={`Mở khóa tài khoản ${a.username}?`}
                     action={lockAccountAction}
-                    input={{ id: a.id, locked: !locked }}
+                    input={{ id: a.id, locked: false }}
                   />
                 )}
                 {!isSelf && a.twoFactorEnabled && (

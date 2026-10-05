@@ -131,7 +131,15 @@ export const accountEditInput = z
     path: ["teacherId"],
     message: "Tài khoản giáo viên phải gắn với một giáo viên",
   });
-export const resetPasswordInput = z.object({ id: z.string().min(1), password });
+export const resetPasswordInput = z.object({
+  id: z.string().min(1).max(64),
+  password,
+  /** true = mật khẩu tạm, người dùng phải đổi ở lần đăng nhập sau; false = dùng luôn mật khẩu này. */
+  mustChange: z
+    .union([z.boolean(), z.enum(["true", "false"])])
+    .default(true)
+    .transform((v) => v === true || v === "true"),
+});
 export const userIdInput = z.object({ id: z.string().min(1).max(64) });
 export const lockInput = z.object({ id: z.string().min(1).max(64), locked: z.boolean() });
 

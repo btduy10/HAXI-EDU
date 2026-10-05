@@ -88,7 +88,7 @@ export const leaveEnrollmentAction = async (input: unknown) => runAction(leaveIn
 export const createAccountAction = async (input: unknown) => runAction(accountInput, input, accounts.createAccount, ADMIN);
 export const updateAccountAction = async (input: unknown) => runAction(accountEditInput, input, accounts.updateAccount, ADMIN);
 export const resetPasswordAction = async (input: unknown) =>
-  runAction(resetPasswordInput, input, (a, d) => accounts.resetAccountPassword(a, d.id, d.password), ADMIN);
+  runAction(resetPasswordInput, input, (a, d) => accounts.resetAccountPassword(a, d.id, d.password, d.mustChange), ADMIN);
 export const lockAccountAction = async (input: unknown) =>
   runAction(lockInput, input, (a, d) => accounts.setAccountLocked(a, d.id, d.locked), ADMIN);
 export const resetTwoFactorAction = async (input: unknown) =>

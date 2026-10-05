@@ -6,6 +6,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/password-input";
 import { Label } from "@/components/ui/label";
 import { authClient, authErrorMessage } from "@/lib/auth-client";
 import { hardNavigate } from "@/lib/navigate";
@@ -67,7 +68,7 @@ export function SetupForm({ required }: { required: boolean }) {
           <form onSubmit={start} className="grid gap-4">
             <div className="grid gap-2">
               <Label htmlFor="password">Nhập lại mật khẩu để tiếp tục</Label>
-              <Input id="password" name="password" type="password" autoComplete="current-password" required className="h-11" />
+              <PasswordInput id="password" name="password" autoComplete="current-password" required className="h-11" />
             </div>
             <Button type="submit" disabled={pending} className="h-11">
               {pending ? "Đang tạo mã…" : "Tiếp tục"}

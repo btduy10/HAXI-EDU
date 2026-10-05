@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/password-input";
 import { Label } from "@/components/ui/label";
 import { authClient, authErrorMessage } from "@/lib/auth-client";
 import { hardNavigate } from "@/lib/navigate";
@@ -54,15 +54,15 @@ export function ChangePasswordForm({ forced }: { forced: boolean }) {
           )}
           <div className="grid gap-2">
             <Label htmlFor="currentPassword">Mật khẩu hiện tại</Label>
-            <Input id="currentPassword" name="currentPassword" type="password" autoComplete="current-password" required className="h-11" />
+            <PasswordInput id="currentPassword" name="currentPassword" autoComplete="current-password" required className="h-11" />
           </div>
           <div className="grid gap-2">
             <Label htmlFor="newPassword">Mật khẩu mới</Label>
-            <Input id="newPassword" name="newPassword" type="password" autoComplete="new-password" required className="h-11" />
+            <PasswordInput id="newPassword" name="newPassword" autoComplete="new-password" required className="h-11" />
           </div>
           <div className="grid gap-2">
             <Label htmlFor="confirmPassword">Nhập lại mật khẩu mới</Label>
-            <Input id="confirmPassword" name="confirmPassword" type="password" autoComplete="new-password" required className="h-11" />
+            <PasswordInput id="confirmPassword" name="confirmPassword" autoComplete="new-password" required className="h-11" />
           </div>
           <Button type="submit" disabled={pending} className="h-11">
             {pending ? "Đang lưu…" : "Lưu mật khẩu"}

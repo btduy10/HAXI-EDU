@@ -13,6 +13,23 @@ test("chưa đăng nhập bị chuyển về trang đăng nhập, có header b�
   expect(headers["x-frame-options"]).toBe("DENY");
   expect(headers["x-content-type-options"]).toBe("nosniff");
   await expectNoHorizontalScroll(page);
+
+  // Nút con mắt: nhấn giữ thì hiện mật khẩu đã nhập, thả ra thì ẩn lại.
+  const password = page.getByLabel("Mật khẩu");
+  const eye = page.getByRole("button", { name: "Nhấn giữ để xem nội dung đã nhập" });
+  await password.fill("BiMat12345");
+  await expect(password).toHaveAttribute("type", "password");
+  await eye.dispatchEvent("pointerdown");
+  await expect(password).toHaveAttribute("type", "text");
+  await expect(password).toHaveValue("BiMat12345");
+  await page.screenshot({ path: "test-results/shots/password-reveal-360.png" });
+  await eye.dispatchEvent("pointerup");
+  await expect(password).toHaveAttribute("type", "password");
+  await eye.focus();
+  await page.keyboard.down("Space");
+  await expect(password).toHaveAttribute("type", "text");
+  await page.keyboard.up("Space");
+  await expect(password).toHaveAttribute("type", "password");
 });
 
 test("GV: buộc đổi mật khẩu, chỉ thấy lớp mình, không vào được dữ liệu lớp khác hay trang Admin", async ({ page }) => {

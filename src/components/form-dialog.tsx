@@ -6,6 +6,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/password-input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 
@@ -151,12 +152,14 @@ export function FormDialog({
                   </select>
                 ) : field.type === "textarea" ? (
                   <Textarea {...common} rows={3} />
+                ) : field.type === "password" ? (
+                  <PasswordInput {...common} autoComplete="new-password" className="h-11" />
                 ) : (
                   <Input
                     {...common}
                     type={field.type ?? "text"}
                     inputMode={field.type === "number" ? "numeric" : undefined}
-                    autoComplete={field.type === "password" ? "new-password" : "off"}
+                    autoComplete="off"
                     className="h-11"
                   />
                 )}

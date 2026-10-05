@@ -139,6 +139,25 @@ describe("tài khoản", () => {
     expect((await db.select().from(user).where(eq(user.id, f.admin.userId)))[0]!.role).toBe("teacher");
   });
 
+  it("đặt lại mật khẩu: gỡ khóa tài khoản, có thể cho dùng luôn; Admin tự đặt lại thì không bị đăng xuất", async () => {
+    // GV A đang bị khóa tạm do nhập sai nhiều lần.
+    await db.update(user).set({ lockedUntil: new Date(Date.now() + 15 * 60_000), failedAttempts: 4 }).where(eq(user.id, f.actorA.userId));
+    await db.insert(account).values({ id: "acc-a", accountId: f.actorA.userId, providerId: "credential", userId: f.actorA.userId, password: "cu" });
+    await accounts.resetAccountPassword(f.admin, f.actorA.userId, "MatKhau88", false);
+    const [u] = await db.select().from(user).where(eq(user.id, f.actorA.userId));
+    expect(u).toMatchObject({ lockedUntil: null, failedAttempts: 0, mustChangePassword: false });
+    const [a] = await db.select().from(account).where(eq(account.userId, f.actorA.userId));
+    expect(await verifyPassword({ hash: a!.password!, password: "MatKhau88" })).toBe(true);
+
+    // Admin tự đặt lại mật khẩu của mình: phiên hiện tại được giữ.
+    await db.insert(account).values({ id: "acc-admin", accountId: f.admin.userId, providerId: "credential", userId: f.admin.userId, password: "cu" });
+    await db.insert(session).values({ id: "s-admin", token: "t-admin", userId: f.admin.userId, expiresAt: new Date(Date.now() + 3600_000) });
+    await accounts.resetAccountPassword(f.admin, f.admin.userId, "MatKhauAdmin99", false);
+    expect(await db.select().from(session).where(eq(session.userId, f.admin.userId))).toHaveLength(1);
+
+    await expect(accounts.resetAccountPassword(f.actorA, f.admin.userId, "ChiemQuyen123", false)).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+
   it("đặt lại mật khẩu buộc đổi lại và thu hồi phiên", async () => {
     const { id } = await accounts.createAccount(f.admin, { ...input, teacherId: f.teacherA.id });
     await db.update(user).set({ mustChangePassword: false }).where(eq(user.id, id));

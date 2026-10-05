@@ -127,8 +127,11 @@ export async function updateAccount(actor: Actor, data: z.output<typeof accountE
     throw err;
   }
 }
-/** Admin đặt lại mật khẩu tạm: thu hồi mọi phiên và buộc đổi mật khẩu. */
-export async function resetAccountPassword(actor: Actor, userId: string, newPassword: string) {
+/**
+ * Admin đặt lại mật khẩu của bất kỳ tài khoản nào. Đồng thời gỡ khóa (nếu tài khoản đang bị khóa do nhập sai)
+ * và thu hồi các phiên đăng nhập của tài khoản đó. `mustChange` = bắt đổi mật khẩu ở lần đăng nhập sau.
+ */
+export async function resetAccountPassword(actor: Actor, userId: string, newPassword: string, mustChange = true) {
   assertAdmin(actor);
   const passwordHash = await hashPassword(newPassword);
   await db.transaction(async (tx) => {
@@ -138,9 +141,19 @@ export async function resetAccountPassword(actor: Actor, userId: string, newPass
       .where(and(eq(account.userId, userId), eq(account.providerId, "credential")))
       .returning({ id: account.id });
     if (updated.length === 0) throw notFound("tài khoản");
-    await tx.update(user).set({ mustChangePassword: true, failedAttempts: 0, updatedAt: new Date() }).where(eq(user.id, userId));
-    await tx.delete(session).where(eq(session.userId, userId));
-    await audit(tx, { userId: actor.userId, action: "account_password_reset", tableName: "user", recordId: userId });
+    await tx
+      .update(user)
+      .set({ mustChangePassword: mustChange, failedAttempts: 0, lockedUntil: null, updatedAt: new Date() })
+      .where(eq(user.id, userId));
+    // Admin tự đặt lại mật khẩu của mình thì giữ phiên hiện tại; tài khoản khác bị đăng xuất khỏi mọi thiết bị.
+    if (userId !== actor.userId) await tx.delete(session).where(eq(session.userId, userId));
+    await audit(tx, {
+      userId: actor.userId,
+      action: "account_password_reset",
+      tableName: "user",
+      recordId: userId,
+      newValue: { mustChange },
+    });
   });
 }
 

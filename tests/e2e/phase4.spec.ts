@@ -162,6 +162,18 @@ test("Admin: cấu hình, đóng lớp, chốt tổng kết, duyệt và trao qu
   await page.getByRole("button", { name: "Lưu" }).click();
   await expect(page.getByText("Đã cập nhật tài khoản.")).toBeVisible();
   await expect(lan).toContainText("Cô Lan Robotics");
+
+  // Không còn nút khóa tay; đặt lại mật khẩu có nút con mắt và lựa chọn dùng luôn.
+  await expect(page.getByRole("button", { name: "Khóa", exact: true })).toHaveCount(0);
+  const minh = page.getByRole("listitem").filter({ hasText: "gv.minh" });
+  await minh.getByRole("button", { name: "Đặt lại mật khẩu" }).click();
+  await page.locator("#f-password").fill("MatKhauDatLai8");
+  await page.getByRole("dialog").getByRole("button", { name: "Nhấn giữ để xem nội dung đã nhập" }).dispatchEvent("pointerdown");
+  await expect(page.locator("#f-password")).toHaveAttribute("type", "text");
+  await page.getByRole("dialog").getByRole("button", { name: "Nhấn giữ để xem nội dung đã nhập" }).dispatchEvent("pointerup");
+  await page.locator("#f-mustChange").selectOption({ label: "Dùng luôn mật khẩu này" });
+  await page.getByRole("button", { name: "Lưu" }).click();
+  await expect(page.getByText("Đã đặt lại mật khẩu.")).toBeVisible();
   await expectNoHorizontalScroll(page);
   await page.screenshot({ path: "test-results/shots/accounts-edit-360.png", fullPage: true });
 
@@ -182,18 +194,13 @@ test("Admin: cấu hình, đóng lớp, chốt tổng kết, duyệt và trao qu
 });
 
 test("GV của lớp đã đóng: thấy lớp ở trạng thái đã đóng, không điểm danh hay ghi sao được nữa", async ({ page }) => {
-  // gv.minh bị khóa tạm ở phase1 (sai mật khẩu 5 lần); mở khóa và đặt lại để đăng nhập.
+  // gv.minh bị khóa tạm ở phase1 (sai mật khẩu 5 lần). Ở test trước, Admin đã đặt lại mật khẩu với lựa chọn
+  // "Dùng luôn mật khẩu này": việc đó phải gỡ khóa và cho đăng nhập thẳng, không bắt đổi mật khẩu.
   const db = sql();
-  await db`update "user" set locked_until = null, failed_attempts = 0 where username = 'gv.minh'`;
   const [session] = await db`select id from sessions where class_id = ${otherClassId} and status = 'done' order by date desc limit 1`;
   await db.end();
 
-  await login(page, "gv.minh", process.env.SEED_DEFAULT_PASSWORD ?? "Haxi@2026");
-  await expect(page).toHaveURL(/\/change-password$/);
-  await page.getByLabel("Mật khẩu hiện tại").fill(process.env.SEED_DEFAULT_PASSWORD ?? "Haxi@2026");
-  await page.getByLabel("Mật khẩu mới", { exact: true }).fill(NEW_PASSWORD);
-  await page.getByLabel("Nhập lại mật khẩu mới").fill(NEW_PASSWORD);
-  await page.getByRole("button", { name: "Lưu mật khẩu" }).click();
+  await login(page, "gv.minh", "MatKhauDatLai8");
   await expect(page).toHaveURL(/\/teacher\/dashboard$/);
 
   await page.goto("/teacher/classes");
