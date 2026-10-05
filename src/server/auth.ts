@@ -42,7 +42,7 @@ function resolveBaseUrl(): string | undefined {
 }
 
 export const auth = betterAuth({
-  appName: "HAXI Robotics",
+  appName: "HAXI STEM",
   baseURL: resolveBaseUrl(),
   secret: process.env.BETTER_AUTH_SECRET,
   database: drizzleAdapter(db, {
@@ -186,7 +186,7 @@ export const auth = betterAuth({
   },
   plugins: [
     username({ minUsernameLength: 3, maxUsernameLength: 32 }),
-    twoFactor({ issuer: "HAXI Robotics" }),
+    twoFactor({ issuer: "HAXI STEM" }),
     nextCookies(), // phải đứng cuối
   ],
 });

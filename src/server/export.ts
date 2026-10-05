@@ -92,7 +92,7 @@ async function toPdf(doc: ExportDoc): Promise<Uint8Array> {
         section: { fontSize: 11, bold: true, margin: [0, 14, 0, 6] },
       },
       footer: (page: number, pages: number) => ({
-        text: `HAXI Robotics · xuất lúc ${formatDateTime(new Date())} · trang ${page}/${pages}`,
+        text: `HAXI STEM · xuất lúc ${formatDateTime(new Date())} · trang ${page}/${pages}`,
         alignment: "center",
         fontSize: 8,
         color: "#6b7280",

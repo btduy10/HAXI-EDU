@@ -1,17 +1,18 @@
 import type { Metadata, Viewport } from "next";
-import { Be_Vietnam_Pro } from "next/font/google";
+import { Quicksand } from "next/font/google";
 import { connection } from "next/server";
 import { Toaster } from "@/components/ui/sonner";
 import "./globals.css";
 
-const font = Be_Vietnam_Pro({
+// Quicksand: chữ bo tròn, thân thiện, có đủ dấu tiếng Việt.
+const font = Quicksand({
   variable: "--font-sans",
   subsets: ["latin", "vietnamese"],
-  weight: ["400", "500", "600", "700"],
+  weight: ["500", "600", "700"],
 });
 
 export const metadata: Metadata = {
-  title: { default: "HAXI Robotics", template: "%s · HAXI Robotics" },
+  title: { default: "HAXI STEM", template: "%s · HAXI STEM" },
   description: "Hệ thống quản lý Trung tâm Robotics",
 };
 
