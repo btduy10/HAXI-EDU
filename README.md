@@ -1,0 +1,91 @@
+# HAXI Robotics — Hệ thống quản lý Trung tâm Robotics
+
+Ứng dụng web cho trung tâm dạy Robotics: quản lý giáo viên, học viên, lớp, thời khóa biểu, điểm danh, chấm sao, avatar game hóa và tổng kết tặng quà. Hai loại tài khoản: **Quản trị (Admin)** và **Giáo viên (GV)**. Học viên và phụ huynh không có tài khoản.
+
+> **Tiến độ:** đã xong **Giai đoạn 1 – Nền tảng**. Giai đoạn 2 (TKB & điểm danh), 3 (sao & avatar), 4 (cuối khóa & báo cáo) chưa làm.
+
+## Công nghệ
+
+Next.js 16 (App Router) · TypeScript strict · Tailwind CSS + shadcn/ui · PostgreSQL 17 + Drizzle ORM · Better Auth (tên đăng nhập + TOTP) · Zod · Vitest · Playwright.
+
+## Chạy trên máy
+
+Yêu cầu: Node.js 22+ và Docker Desktop.
+
+```bash
+cp .env.example .env          # rồi đặt BETTER_AUTH_SECRET (lệnh tạo có ghi trong tệp)
+docker compose up -d          # PostgreSQL ở cổng 5432, kèm CSDL test haxi_edu_test
+npm install
+npm run db:migrate            # tạo bảng
+npm run db:seed               # dữ liệu mẫu (chỉ chạy khi CSDL chưa có tài khoản)
+npm run dev                   # http://localhost:3000
+```
+
+### Tài khoản demo
+
+| Tên đăng nhập | Vai trò | Ghi chú |
+|---|---|---|
+| `admin` | Quản trị | Sau khi đổi mật khẩu phải thiết lập xác thực hai lớp (TOTP) |
+| `gv.lan` | Giáo viên | Dạy lớp RB-CB01 |
+| `gv.minh` | Giáo viên | Dạy lớp RB-NC01 |
+
+Mật khẩu tạm là giá trị `SEED_DEFAULT_PASSWORD` trong `.env` (mặc định `Haxi@2026`). Lần đăng nhập đầu **bắt buộc đổi mật khẩu** (tối thiểu 10 ký tự, có chữ và số). Dữ liệu mẫu gồm 2 lớp, 15 học viên, 2 phòng, 3 ca học, 5 cấp bậc và các tiêu chí sao.
+
+## Lệnh thường dùng
+
+| Lệnh | Việc |
+|---|---|
+| `npm run lint` | ESLint |
+| `npm run typecheck` | Sinh kiểu route của Next rồi chạy `tsc` |
+| `npm test` | Vitest: test đơn vị + test tích hợp trên CSDL `haxi_edu_test` (tự dựng lại schema) |
+| `npm run test:e2e` | Playwright ở màn hình 360px, tự chạy server riêng (cổng 3100) trên CSDL test. Lần đầu cần `npx playwright install chromium` |
+| `npm run db:generate` | Sinh migration sau khi sửa `src/db/schema` |
+| `npm run db:migrate` / `db:seed` | Áp dụng migration / nạp dữ liệu mẫu |
+
+## Cấu trúc
+
+```
+src/
+  proxy.ts              CSP theo nonce, header bảo mật, ép HTTPS, chặn sớm khi chưa đăng nhập
+  app/(auth)            Đăng nhập, xác thực hai lớp, đổi mật khẩu
+  app/(admin)/admin     Trang quản trị
+  app/(teacher)/teacher Trang giáo viên
+  app/api               Better Auth, nhập Excel
+  db/schema             Schema Drizzle (migration ở ./drizzle)
+  domain                Quy tắc nghiệp vụ thuần, không phụ thuộc CSDL
+  server/services       Nghiệp vụ + PHÂN QUYỀN (nơi duy nhất quyết định ai được làm gì)
+  server/actions        Server Action: chỉ là vỏ (phiên → Zod → service)
+  lib/validation        Schema Zod
+tests/unit · tests/integration · tests/e2e
+```
+
+Nguyên tắc: mọi hàm trong `server/services` nhận `actor` lấy từ phiên ở máy chủ và tự kiểm tra quyền. Giao diện chỉ ẩn/hiện cho tiện, không phải lớp bảo vệ.
+
+## Đã có ở Giai đoạn 1
+
+- Đăng nhập bằng tên đăng nhập, băm Argon2id, buộc đổi mật khẩu lần đầu, khóa tạm sau 5 lần sai (15 phút), giới hạn tốc độ.
+- 2FA (TOTP) bắt buộc với Admin, có mã dự phòng.
+- Admin: Tổng quan, Học viên (tìm kiếm, nhập Excel có xem trước và báo lỗi từng dòng), Giáo viên, Khóa học, Lớp học (phân công GV), Phòng & Ca học & Ngày nghỉ, Ghi danh (chặn vượt sĩ số, giữ lịch sử rời lớp), Tài khoản (tạo, đặt lại mật khẩu, khóa/mở, đặt lại 2FA).
+- GV: Tổng quan, Lớp của tôi, danh sách học viên của lớp mình (chỉ các trường tối thiểu).
+- Nhật ký `audit_logs` cho đăng nhập, thay đổi tài khoản và mọi thao tác tạo/sửa/xóa.
+- Toàn bộ schema CSDL cho cả 4 giai đoạn (kể cả trigger khiến sổ cái sao chỉ thêm được).
+
+## Bảo mật
+
+- **Phân quyền ở máy chủ:** GV chỉ truy cập lớp được phân công; truy cập lớp khác trả 404 (không lộ sự tồn tại). Có test ở tầng service và test gọi trực tiếp qua HTTP.
+- **Phiên:** cookie `httpOnly`, `SameSite=Lax`, `Secure` ở production; phiên được đọc lại từ CSDL mỗi request nên khóa tài khoản có hiệu lực ngay.
+- **CSRF:** Better Auth và Server Action kiểm tra Origin; Route Handler ghi dữ liệu tự kiểm tra Origin.
+- **Header:** CSP với nonce theo từng request (`script-src` không có `unsafe-inline`), HSTS, `X-Frame-Options: DENY`, `nosniff`, `Referrer-Policy`, `Permissions-Policy`.
+- **HTTPS:** bản production tự chuyển hướng HTTP → HTTPS. Triển khai sau reverse proxy có TLS và truyền `X-Forwarded-Proto`. Chỉ đặt `FORCE_HTTPS=false` khi thử `npm run build && npm start` trên máy.
+- **Dữ liệu vào:** mọi input qua Zod; chỉ truy vấn tham số hóa qua Drizzle; nội dung do người dùng nhập luôn hiển thị dạng văn bản; tệp Excel được kiểm tra đuôi, chữ ký tệp, dung lượng (2 MB) và số dòng (500).
+- **Dữ liệu trẻ em:** GV không nhận số điện thoại, tên phụ huynh, ghi chú của học viên. Log ứng dụng không ghi dữ liệu cá nhân.
+
+### Rủi ro còn lại (đã biết)
+
+- `style-src` cho phép `'unsafe-inline'` vì thư viện giao diện chèn style nội tuyến để định vị hộp thoại. Script vẫn bị khóa chặt bằng nonce.
+- Giới hạn tốc độ của Server Action/API lưu trong bộ nhớ tiến trình: chỉ đúng khi chạy một instance. Giới hạn của đăng nhập lưu trong CSDL.
+- Giới hạn tốc độ đăng nhập theo IP phụ thuộc header `X-Forwarded-For` do reverse proxy đặt; cần cấu hình proxy không cho client tự gửi header này.
+- `npm audit` (05/10/2026): 15 cảnh báo, **không có cái nào nằm trên đường chạy production**:
+  - `exceljs → uuid` (trung bình): lỗi chỉ ở `uuid` v3/v5/v6 khi truyền bộ đệm; ExcelJS không dùng cách gọi đó.
+  - `drizzle-kit → esbuild`, `shadcn`/`eslint-config-next → fast-glob → braces` (trung bình/cao): chỉ là công cụ lúc phát triển, không có trong bản chạy thật. Sửa bằng `npm audit fix --force` sẽ hạ cấp gây lỗi nên chưa áp dụng; cập nhật khi upstream phát hành bản vá.
+- Chưa có script sao lưu/khôi phục CSDL (thuộc Giai đoạn 4).
