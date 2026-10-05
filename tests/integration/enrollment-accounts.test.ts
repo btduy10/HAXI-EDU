@@ -97,6 +97,8 @@ describe("tài khoản", () => {
     // Chỉ đổi tên hiển thị: không đăng xuất.
     await accounts.updateAccount(f.admin, { ...base, name: "Cô B" });
     expect(await db.select().from(session).where(eq(session.userId, f.actorB.userId))).toHaveLength(1);
+    // Sửa tài khoản không bao giờ tự khóa tài khoản đó.
+    expect((await db.select().from(user).where(eq(user.id, f.actorB.userId)))[0]).toMatchObject({ lockedUntil: null, failedAttempts: 0 });
 
     await accounts.updateAccount(f.admin, { ...base, name: "Cô B", username: "co.b" });
     const [renamed] = await db.select().from(user).where(eq(user.id, f.actorB.userId));

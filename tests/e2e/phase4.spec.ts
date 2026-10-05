@@ -163,8 +163,19 @@ test("Admin: cấu hình, đóng lớp, chốt tổng kết, duyệt và trao qu
   await expect(page.getByText("Đã cập nhật tài khoản.")).toBeVisible();
   await expect(lan).toContainText("Cô Lan Robotics");
 
-  // Không còn nút khóa tay; đặt lại mật khẩu có nút con mắt và lựa chọn dùng luôn.
-  await expect(page.getByRole("button", { name: "Khóa", exact: true })).toHaveCount(0);
+  // Sửa tài khoản không làm tài khoản bị khóa. Admin khóa tay rồi mở khóa lại được; không có nút khóa chính mình.
+  await expect(lan.getByText("Đang khóa")).toHaveCount(0);
+  page.on("dialog", (dialog) => void dialog.accept());
+  await lan.getByRole("button", { name: "Khóa", exact: true }).click();
+  await expect(page.getByText("Đã khóa tài khoản.")).toBeVisible();
+  await expect(lan.getByText("Đang khóa")).toBeVisible();
+  await lan.getByRole("button", { name: "Mở khóa", exact: true }).click();
+  await expect(page.getByText("Đã mở khóa tài khoản.")).toBeVisible();
+  await expect(lan.getByText("Đang khóa")).toHaveCount(0);
+  const self = page.getByRole("listitem").filter({ hasText: "Quản trị" }).first();
+  await expect(self.getByRole("button", { name: /khóa/i })).toHaveCount(0);
+
+  // Đặt lại mật khẩu có nút con mắt và lựa chọn dùng luôn.
   const minh = page.getByRole("listitem").filter({ hasText: "gv.minh" });
   await minh.getByRole("button", { name: "Đặt lại mật khẩu" }).click();
   await page.locator("#f-password").fill("MatKhauDatLai8");

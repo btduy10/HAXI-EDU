@@ -124,14 +124,19 @@ export default async function AccountsPage() {
                   action={resetPasswordAction}
                   successMessage="Đã đặt lại mật khẩu."
                 />
-                {/* Không còn nút khóa tay. Chỉ hiện "Mở khóa" khi tài khoản đang bị khóa (vd. do nhập sai nhiều lần). */}
-                {!isSelf && locked && (
+                {/* Admin khóa/mở khóa bất kỳ tài khoản nào khác; không tự khóa chính mình để khỏi mất quyền quản trị. */}
+                {!isSelf && (
                   <ConfirmButton
-                    label="Mở khóa"
+                    label={locked ? "Mở khóa" : "Khóa"}
                     className="h-9"
-                    confirmText={`Mở khóa tài khoản ${a.username}?`}
+                    confirmText={
+                      locked
+                        ? `Mở khóa tài khoản ${a.username}?`
+                        : `Khóa tài khoản ${a.username}? Tài khoản sẽ bị đăng xuất và không đăng nhập được cho tới khi bạn mở khóa.`
+                    }
                     action={lockAccountAction}
-                    input={{ id: a.id, locked: false }}
+                    input={{ id: a.id, locked: !locked }}
+                    successMessage={locked ? "Đã mở khóa tài khoản." : "Đã khóa tài khoản."}
                   />
                 )}
                 {!isSelf && a.twoFactorEnabled && (
