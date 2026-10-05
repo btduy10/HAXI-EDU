@@ -34,12 +34,15 @@ export function CrudSection({
   emptyText = "Chưa có dữ liệu.",
   detailLabel = "Chi tiết",
   numbered = false,
+  centered = [],
   startIndex = 0,
   total,
   footer,
 }: {
   /** Hiện cột STT ở đầu danh sách. */
   numbered?: boolean;
+  /** Tên các cột canh giữa trong bảng (cột STT luôn canh giữa). */
+  centered?: string[];
   /** Số thứ tự của dòng đầu trừ 1 (khi danh sách được phân trang). */
   startIndex?: number;
   /** Tổng số dòng của cả danh sách khi `rows` chỉ là một trang. */
@@ -133,9 +136,11 @@ export function CrudSection({
             <Table>
               <TableHeader>
                 <TableRow>
-                  {numbered && <TableHead className="w-12 text-right">STT</TableHead>}
+                  {numbered && <TableHead className="w-14 text-center">STT</TableHead>}
                   {columns.map((c) => (
-                    <TableHead key={c}>{c}</TableHead>
+                    <TableHead key={c} className={cn(centered.includes(c) && "text-center")}>
+                      {c}
+                    </TableHead>
                   ))}
                   <TableHead className="w-0" />
                 </TableRow>
@@ -143,9 +148,9 @@ export function CrudSection({
               <TableBody>
                 {rows.map((row, index) => (
                   <TableRow key={row.id}>
-                    {numbered && <TableCell className="text-right text-muted-foreground tabular-nums">{startIndex + index + 1}</TableCell>}
+                    {numbered && <TableCell className="text-center text-muted-foreground tabular-nums">{startIndex + index + 1}</TableCell>}
                     {row.cells.map((cell, i) => (
-                      <TableCell key={columns[i]} className="whitespace-normal">
+                      <TableCell key={columns[i]} className={cn("whitespace-normal", centered.includes(columns[i]!) && "text-center")}>
                         {cell}
                       </TableCell>
                     ))}

@@ -60,6 +60,7 @@ export default async function RoomsSlotsPage() {
     <div className="grid gap-8">
       <CrudSection
         title="Phòng học"
+        numbered
         columns={["Tên phòng", "Sức chứa"]}
         rows={rooms.map((r) => ({
           id: r.id,
@@ -73,6 +74,7 @@ export default async function RoomsSlotsPage() {
       />
       <CrudSection
         title="Ca học"
+        numbered
         columns={["Tên ca", "Bắt đầu", "Kết thúc"]}
         rows={slots.map((s) => ({
           id: s.id,

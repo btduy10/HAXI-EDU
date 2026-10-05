@@ -141,6 +141,17 @@ test("Admin: TKB có bộ lọc, sửa giờ riêng một buổi, trùng lịch 
   await page.goto("/admin/students");
   await expect(page.getByRole("columnheader", { name: "STT" })).toBeVisible();
   await expect(page.getByRole("row")).toHaveCount(11);
+  await expect(page.getByRole("columnheader", { name: "STT" })).toHaveCSS("text-align", "center");
+  await expect(page.getByRole("columnheader", { name: "Khối" })).toHaveCSS("text-align", "center");
+  await page.goto("/admin/rooms-slots");
+  await expect(page.getByRole("columnheader", { name: "STT" })).toHaveCount(2);
+  await page.screenshot({ path: "test-results/shots/admin-rooms-1280.png", fullPage: true });
+  // Ghi danh: ô chọn lớp chỉ rộng khoảng nửa vùng nội dung trên màn hình rộng.
+  await page.goto("/admin/enrollments");
+  const selectBox = (await page.getByLabel("Lớp học").boundingBox())!;
+  expect(selectBox.width).toBeLessThan(560);
+  await page.screenshot({ path: "test-results/shots/admin-enrollments-1280.png" });
+  await page.goto("/admin/students");
   await page.screenshot({ path: "test-results/shots/admin-students-1280.png" });
   await page.setViewportSize({ width: 360, height: 740 });
 

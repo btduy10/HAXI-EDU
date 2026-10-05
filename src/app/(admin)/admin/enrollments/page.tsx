@@ -30,7 +30,8 @@ export default async function EnrollmentsPage({ searchParams }: PageProps<"/admi
     <div className="grid gap-4">
       <h1 className="text-lg font-semibold">Ghi danh</h1>
       <form className="flex flex-col gap-2 sm:flex-row sm:items-end">
-        <label className="grid flex-1 gap-1.5 text-sm font-medium">
+        {/* Màn hình rộng: ô chọn lớp chỉ chiếm nửa chiều ngang; điện thoại vẫn đủ rộng. */}
+        <label className="grid gap-1.5 text-sm font-medium sm:w-1/2">
           Lớp học
           <select name="classId" defaultValue={current?.id ?? ""} className={selectClass}>
             <option value="">— Chọn lớp —</option>

@@ -57,6 +57,7 @@ export default async function StudentsPage({ searchParams }: PageProps<"/admin/s
       <CrudSection
         title="Học viên"
         numbered
+        centered={["Khối"]}
         startIndex={(page - 1) * pageSize}
         total={total}
         footer={
