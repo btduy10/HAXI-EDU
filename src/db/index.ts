@@ -2,8 +2,9 @@ import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import * as schema from "./schema";
 
-const url = process.env.DATABASE_URL;
-if (!url) throw new Error("Thiếu biến môi trường DATABASE_URL");
+// Một số tích hợp CSDL (vd. Postgres trên Vercel) đặt tên biến là POSTGRES_URL.
+const url = process.env.DATABASE_URL ?? process.env.POSTGRES_URL;
+if (!url) throw new Error("Thiếu biến môi trường DATABASE_URL (hoặc POSTGRES_URL)");
 
 // Tránh tạo nhiều pool khi Next.js hot-reload ở chế độ dev.
 const globalForDb = globalThis as unknown as { __pg?: ReturnType<typeof postgres> };
