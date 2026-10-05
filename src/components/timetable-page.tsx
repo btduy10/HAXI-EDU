@@ -2,6 +2,7 @@ import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 import Link from "next/link";
 import { ExportLinks } from "@/components/class-report";
 import { selectClass } from "@/components/form-dialog";
+import { ManualScheduler } from "@/components/manual-scheduler";
 import { MonthView, type TimetableSession, WeekView } from "@/components/timetable";
 import { Button } from "@/components/ui/button";
 import { LinkButton } from "@/components/link-button";
@@ -137,7 +138,21 @@ export async function TimetablePage({
       />
 
       {view === "week" ? (
-        <WeekView sessions={sessions} date={date} slots={slots} hrefOf={sessionHref} today={today} />
+        options ? (
+          <ManualScheduler
+            options={{
+              slots: slots.map((s) => ({ value: s.id, label: `${s.name} (${s.defaultStart.slice(0, 5)}–${s.defaultEnd.slice(0, 5)})` })),
+              classes: options[1].filter((c) => c.status === "open").map((c) => ({ value: c.id, label: `${c.code} – ${c.name}` })),
+              teachers: options[0].filter((t) => t.status === "active").map((t) => ({ value: t.id, label: `${t.code} – ${t.fullName}` })),
+              rooms: options[2].map((r) => ({ value: r.id, label: `${r.name} (${r.capacity} chỗ)` })),
+            }}
+          >
+            <p className="text-sm text-muted-foreground">Bấm dấu + ở một ô để xếp tay một buổi học vào ngày và ca đó.</p>
+            <WeekView sessions={sessions} date={date} slots={slots} hrefOf={sessionHref} today={today} />
+          </ManualScheduler>
+        ) : (
+          <WeekView sessions={sessions} date={date} slots={slots} hrefOf={sessionHref} today={today} />
+        )
       ) : (
         <MonthView sessions={sessions} date={date} dayHref={(day) => href({ view: "week", date: day })} today={today} />
       )}

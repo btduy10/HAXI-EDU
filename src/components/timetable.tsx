@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AddSessionButton } from "@/components/manual-scheduler";
 import { Badge } from "@/components/ui/badge";
 import { WEEKDAY_LABELS, WEEKDAY_SHORT, addDays, eachDay, endOfMonth, isoWeekday, startOfMonth, startOfWeek } from "@/lib/dates";
 import { formatDate, formatTime } from "@/lib/format";
@@ -126,6 +127,7 @@ export function WeekView({
               ) : (
                 items.map((s) => <SessionCard key={s.id} session={s} href={hrefOf(s)} today={today} />)
               )}
+              <AddSessionButton date={day} label={`Xếp buổi học ngày ${formatDate(day)}`} className="min-h-10 w-full" />
             </section>
           );
         })}
@@ -160,6 +162,14 @@ export function WeekView({
                           .map((s) => (
                             <SessionChip key={s.id} session={s} href={hrefOf(s)} />
                           ))}
+                        {row.key !== "other" && (
+                          <AddSessionButton
+                            date={day}
+                            slotId={row.key}
+                            label={`Xếp buổi học ${WEEKDAY_SHORT[isoWeekday(day)]} ${formatDate(day).slice(0, 5)}, ${row.label}`}
+                            className="min-h-7 w-full opacity-60 hover:opacity-100 focus-visible:opacity-100"
+                          />
+                        )}
                       </div>
                     </td>
                   ))}

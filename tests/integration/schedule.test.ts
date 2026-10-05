@@ -1,7 +1,7 @@
 import { and, asc, eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/db";
-import { auditLogs, enrollments, holidays, rooms, scheduleTemplates, sessions, timeSlots } from "@/db/schema";
+import { auditLogs, classes, enrollments, holidays, rooms, scheduleTemplates, sessions, timeSlots } from "@/db/schema";
 import * as attendance from "@/server/services/attendance";
 import * as catalog from "@/server/services/catalog";
 import * as svc from "@/server/services/sessions";
@@ -183,6 +183,56 @@ describe("trùng lịch theo giờ thực tế", () => {
     await expect(svc.createMakeupSession(f.admin, { ...input, startTime: "14:30", endTime: "15:30", studentIds: [a1!.id] })).rejects.toMatchObject({
       code: "CONFLICT",
     });
+  });
+
+  it("Admin xếp tay một buổi vào ngày × ca: giờ theo ca, mặc định GV chính và phòng của lớp, vẫn chặn trùng", async () => {
+    // Thứ Tư 07/01 chưa có buổi nào.
+    const created = await svc.createManualSession(f.admin, { classId: f.classA.id, date: "2026-01-07", timeSlotId: late.id, teacherId: null, roomId: null });
+    const [row] = await db.select().from(sessions).where(eq(sessions.id, created.id));
+    expect(row).toMatchObject({
+      date: "2026-01-07",
+      startTime: "09:00:00",
+      endTime: "10:30:00",
+      timeSlotId: late.id,
+      teacherId: f.teacherA.id,
+      roomId: f.room.id,
+      templateId: null,
+      kind: "regular",
+      status: "planned",
+    });
+    expect(created.warnings).toEqual([]);
+
+    // Cùng ngày, ca sáng (08:00–09:30) chồng lên 09:00–10:30: trùng phòng Lab → chặn.
+    await expect(
+      svc.createManualSession(f.admin, { classId: f.classB.id, date: "2026-01-07", timeSlotId: morning.id, teacherId: null, roomId: null }),
+    ).rejects.toMatchObject({ code: "CONFLICT", message: expect.stringContaining("Phòng") });
+    // Đổi phòng nhưng chọn GV A đang dạy → trùng GV.
+    await expect(
+      svc.createManualSession(f.admin, { classId: f.classB.id, date: "2026-01-07", timeSlotId: morning.id, teacherId: f.teacherA.id, roomId: room2.id }),
+    ).rejects.toMatchObject({ code: "CONFLICT", message: expect.stringContaining("Giáo viên") });
+    // Phòng khác, GV khác thì được; chọn GV/phòng riêng được lưu đúng.
+    const other = await svc.createManualSession(f.admin, { classId: f.classB.id, date: "2026-01-07", timeSlotId: morning.id, teacherId: f.teacherB.id, roomId: room2.id });
+    expect((await db.select().from(sessions).where(eq(sessions.id, other.id)))[0]).toMatchObject({ teacherId: f.teacherB.id, roomId: room2.id });
+
+    // Buổi xếp tay không bị sinh buổi tạo trùng hay ghi đè, và GV của lớp điểm danh được.
+    const before = (await sessionsOf(f.classA.id)).length;
+    expect((await svc.generateSessions(f.admin, f.classA.id)).created).toBe(0);
+    expect((await sessionsOf(f.classA.id)).length).toBe(before);
+    await expect(attendance.getAttendanceSheet(f.actorA, created.id, at("2026-01-07"))).resolves.toMatchObject({ recorded: false });
+  });
+
+  it("xếp tay: cảnh báo ngày nghỉ và ngày ngoài thời gian lớp; từ chối lớp đã đóng và người không phải Admin", async () => {
+    await db.insert(holidays).values({ date: "2026-01-09", reason: "Nghỉ lễ" });
+    const onHoliday = await svc.createManualSession(f.admin, { classId: f.classA.id, date: "2026-01-09", timeSlotId: morning.id, teacherId: null, roomId: null });
+    expect(onHoliday.warnings.join(" ")).toContain("ngày nghỉ");
+    const outside = await svc.createManualSession(f.admin, { classId: f.classA.id, date: "2026-04-15", timeSlotId: morning.id, teacherId: null, roomId: null });
+    expect(outside.warnings.join(" ")).toContain("ngoài thời gian học");
+
+    const input = { classId: f.classA.id, date: "2026-01-08", timeSlotId: morning.id, teacherId: null, roomId: null };
+    await expect(svc.createManualSession(f.actorA, input)).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(svc.createManualSession(f.admin, { ...input, timeSlotId: f.classA.id })).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await db.update(classes).set({ status: "closed" }).where(eq(classes.id, f.classA.id));
+    await expect(svc.createManualSession(f.admin, input)).rejects.toMatchObject({ code: "CONFLICT" });
   });
 
   it("GV không được sinh buổi hay điều chỉnh lịch", async () => {

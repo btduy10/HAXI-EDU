@@ -24,6 +24,7 @@ import {
 } from "@/domain/schedule";
 import type {
   makeupInput,
+  manualSessionInput,
   sessionCancelInput,
   sessionEditInput,
   sessionRescheduleInput,
@@ -486,5 +487,62 @@ export async function createMakeupSession(
       newValue: { ...created, studentIds },
     });
     return { id: created!.id, warnings: await capacityWarnings(tx, input.roomId, studentIds.length) };
+  });
+}
+
+/**
+ * Admin xếp tay một buổi học vào một ngày và ca bất kỳ (không qua lịch mẫu).
+ * Giờ lấy từ ca; không chọn GV/phòng thì dùng GV chính và phòng mặc định của lớp.
+ * Vẫn kiểm tra trùng GV/phòng theo giờ thực tế như mọi buổi khác.
+ */
+export async function createManualSession(
+  actor: Actor,
+  input: z.output<typeof manualSessionInput>,
+): Promise<ScheduleResult & { id: string }> {
+  assertAdmin(actor);
+  return db.transaction(async (tx) => {
+    await lockSchedule(tx);
+    const [cls] = await tx.select().from(classes).where(eq(classes.id, input.classId)).limit(1);
+    if (!cls) throw notFound("lớp học");
+    if (cls.status !== "open") throw new AppError("CONFLICT", "Lớp đã đóng, không thể xếp thêm buổi.");
+    const [slot] = await tx.select().from(timeSlots).where(eq(timeSlots.id, input.timeSlotId)).limit(1);
+    if (!slot) throw notFound("ca học");
+
+    let teacherId = input.teacherId;
+    if (!teacherId) {
+      const [main] = await tx
+        .select({ teacherId: classTeachers.teacherId })
+        .from(classTeachers)
+        .where(and(eq(classTeachers.classId, cls.id), eq(classTeachers.role, "main")))
+        .limit(1);
+      teacherId = main?.teacherId ?? null;
+    }
+    if (!teacherId) {
+      throw new AppError("VALIDATION", "Lớp chưa có giáo viên chính. Hãy chọn giáo viên cho buổi này.", { teacherId: "Bắt buộc chọn" });
+    }
+    const candidate = {
+      date: input.date,
+      startTime: slot.defaultStart.slice(0, 5),
+      endTime: slot.defaultEnd.slice(0, 5),
+      roomId: input.roomId ?? cls.defaultRoomId,
+      teacherId,
+    };
+    assertNoConflict(candidate, await loadBusy(tx, input.date, input.date));
+
+    const [created] = await tx
+      .insert(sessions)
+      .values({ ...candidate, classId: cls.id, timeSlotId: slot.id, kind: "regular", status: "planned" })
+      .returning();
+    await audit(tx, { userId: actor.userId, action: "session_created", tableName: "sessions", recordId: created!.id, newValue: created });
+
+    const warnings = await capacityWarnings(tx, candidate.roomId, await headcountOf(tx, created!));
+    if (input.date < cls.startDate || input.date > cls.endDate) warnings.push("Ngày này nằm ngoài thời gian học của lớp.");
+    const [holiday] = await tx
+      .select({ reason: holidays.reason })
+      .from(holidays)
+      .where(and(eq(holidays.date, input.date), or(isNull(holidays.classId), eq(holidays.classId, cls.id))))
+      .limit(1);
+    if (holiday) warnings.push(`Ngày này là ngày nghỉ: ${holiday.reason}.`);
+    return { id: created!.id, warnings };
   });
 }

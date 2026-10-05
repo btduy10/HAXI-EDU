@@ -111,9 +111,35 @@ test("Admin: TKB có bộ lọc, sửa giờ riêng một buổi, trùng lịch 
   await page.goto("/admin/timetable");
   await expect(page.getByRole("columnheader", { name: "Ca" })).toBeVisible();
   await page.screenshot({ path: "test-results/shots/admin-week-1280.png", fullPage: true });
+
+  // Xếp tay: bấm dấu + ở ô Chủ nhật × Ca chiều, chọn lớp, lưu → buổi hiện ngay trong ô.
+  const sundayAfternoon = page.getByRole("button", { name: /^Xếp buổi học CN .*, Ca chiều$/ });
+  await sundayAfternoon.click();
+  await expect(page.getByRole("dialog")).toContainText("Chủ nhật");
+  await page.locator("#f-classId").selectOption({ label: "RB-CB01 – Robotics Cơ bản 01" });
+  await page.getByRole("button", { name: "Xếp vào lịch" }).click();
+  await expect(page.getByText("Đã xếp buổi học.")).toBeVisible();
+  await expect(page.getByRole("link", { name: /14:00 RB-CB01/ })).toBeVisible();
+  // Cùng ô đó xếp lớp khác với cùng giáo viên → trùng giờ, bị chặn.
+  await sundayAfternoon.click();
+  await page.locator("#f-classId").selectOption({ label: "RB-NC01 – Robotics Nâng cao 01" });
+  await page.locator("#f-teacherId").selectOption({ label: "GV01 – Nguyễn Thị Lan" });
+  await page.getByRole("button", { name: "Xếp vào lịch" }).click();
+  await expect(page.locator('[data-slot="alert"]')).toContainText("Trùng lịch: Giáo viên đã có buổi RB-CB01 lúc 14:00–15:30");
+  await page.getByRole("button", { name: "Hủy", exact: true }).click();
+  await page.screenshot({ path: "test-results/shots/admin-week-manual-1280.png", fullPage: true });
+
   await page.goto("/admin/students");
   await page.screenshot({ path: "test-results/shots/admin-students-1280.png" });
   await page.setViewportSize({ width: 360, height: 740 });
+
+  // Trên điện thoại: nút xếp buổi nằm dưới từng ngày, có thêm ô chọn ca.
+  await page.goto("/admin/timetable");
+  await page.getByRole("button", { name: /^Xếp buổi học ngày / }).last().click();
+  await expect(page.locator("#f-timeSlotId")).toBeVisible();
+  await expectNoHorizontalScroll(page);
+  await page.screenshot({ path: "test-results/shots/manual-schedule-360.png" });
+  await page.getByRole("button", { name: "Hủy", exact: true }).click();
 
   // Sửa riêng buổi hôm nay của RB-NC01 (06:00–06:45, Lab 2, GV Minh).
   await page.goto(`/admin/sessions/${otherSessionId}`);

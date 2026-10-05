@@ -118,7 +118,7 @@ export function AppShell({
   // Logo có chữ màu navy nên phần đầu thanh điều hướng giữ nền trắng.
   const sidebarBrand = (
     <div className="flex items-center gap-3 bg-white px-4 py-3 text-foreground">
-      <BrandLogo height={56} priority />
+      <BrandLogo height={56} />
       <span className="text-sm leading-tight font-semibold text-muted-foreground">
         Quản lý
         <br />
@@ -144,7 +144,7 @@ export function AppShell({
             <AccountLinks userName={userName} />
           </SheetContent>
         </Sheet>
-        <BrandLogo height={40} priority />
+        <BrandLogo height={40} />
       </header>
 
       <aside className="sticky top-0 hidden h-dvh w-60 shrink-0 flex-col bg-sidebar text-sidebar-foreground md:flex">

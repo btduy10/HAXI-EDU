@@ -5,6 +5,7 @@ import {
   attendanceInput,
   classIdInput,
   makeupInput,
+  manualSessionInput,
   sessionCancelInput,
   sessionEditInput,
   sessionIdInput,
@@ -34,6 +35,8 @@ export const restoreSessionAction = async (input: unknown) =>
   runAction(idOnly, input, (a, d) => sessions.restoreSession(a, d.id), ADMIN);
 export const setSubstituteAction = async (input: unknown) =>
   runAction(sessionSubstituteInput, input, sessions.setSubstitute, ADMIN);
+export const createManualSessionAction = async (input: unknown) =>
+  runAction(manualSessionInput, input, sessions.createManualSession, ADMIN);
 export const createMakeupAction = async (input: unknown) => runAction(makeupInput, input, sessions.createMakeupSession, ADMIN);
 
 // Dùng chung cho Admin và GV: service kiểm tra quyền trên từng buổi.

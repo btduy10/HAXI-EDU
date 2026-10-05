@@ -71,3 +71,12 @@ export const attendanceInput = z.object({
 });
 
 export const sessionIdInput = z.object({ sessionId: id });
+
+/** Admin xếp tay một buổi vào ô ngày × ca của thời khóa biểu. */
+export const manualSessionInput = z.object({
+  classId: id,
+  date: isoDate,
+  timeSlotId: id,
+  teacherId: optId,
+  roomId: optId,
+});
