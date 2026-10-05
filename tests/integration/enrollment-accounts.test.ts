@@ -160,6 +160,25 @@ describe("tài khoản", () => {
     await expect(accounts.resetAccountPassword(f.actorA, f.admin.userId, "ChiemQuyen123", false)).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 
+  it("xóa tài khoản: xóa phiên và mật khẩu, giữ hồ sơ giáo viên, ghi nhật ký; không tự xóa mình, GV không xóa được", async () => {
+    const { id } = await accounts.createAccount(f.admin, { ...input, teacherId: null, role: "admin" });
+    await db.insert(session).values({ id: "s-del", token: "t-del", userId: id, expiresAt: new Date(Date.now() + 3600_000) });
+    await expect(accounts.deleteAccount(f.actorA, id)).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(accounts.deleteAccount(f.admin, f.admin.userId)).rejects.toMatchObject({ code: "CONFLICT" });
+
+    await accounts.deleteAccount(f.admin, id);
+    expect(await db.select().from(user).where(eq(user.id, id))).toEqual([]);
+    expect(await db.select().from(session).where(eq(session.userId, id))).toEqual([]);
+    expect(await db.select().from(account).where(eq(account.userId, id))).toEqual([]);
+    const [log] = await db.select().from(auditLogs).where(eq(auditLogs.action, "account_deleted"));
+    expect(log).toMatchObject({ userId: f.admin.userId, recordId: id, oldValue: { username: "gv.moi" } });
+    await expect(accounts.deleteAccount(f.admin, id)).rejects.toMatchObject({ code: "NOT_FOUND" });
+
+    // Xóa tài khoản GV: hồ sơ giáo viên còn nguyên, tạo lại tài khoản cho giáo viên đó được.
+    await accounts.deleteAccount(f.admin, f.actorA.userId);
+    await expect(accounts.createAccount(f.admin, { ...input, teacherId: f.teacherA.id })).resolves.toBeDefined();
+  });
+
   it("đặt lại mật khẩu buộc đổi lại và thu hồi phiên", async () => {
     const { id } = await accounts.createAccount(f.admin, { ...input, teacherId: f.teacherA.id });
     await db.update(user).set({ mustChangePassword: false }).where(eq(user.id, id));

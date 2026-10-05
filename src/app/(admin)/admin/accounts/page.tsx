@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { LABELS, formatDateTime, toOptions } from "@/lib/format";
 import {
   createAccountAction,
+  deleteAccountAction,
   lockAccountAction,
   resetPasswordAction,
   resetTwoFactorAction,
@@ -146,6 +147,17 @@ export default async function AccountsPage() {
                     confirmText={`Xóa thiết lập xác thực hai lớp của ${a.username}?`}
                     action={resetTwoFactorAction}
                     input={{ id: a.id }}
+                  />
+                )}
+                {!isSelf && (
+                  <ConfirmButton
+                    label="Xóa"
+                    variant="destructive"
+                    className="h-9"
+                    confirmText={`Xóa hẳn tài khoản ${a.username}? Không hoàn tác được. Điểm danh, sao và nhật ký đã ghi vẫn được giữ.`}
+                    action={deleteAccountAction}
+                    input={{ id: a.id }}
+                    successMessage="Đã xóa tài khoản."
                   />
                 )}
               </div>

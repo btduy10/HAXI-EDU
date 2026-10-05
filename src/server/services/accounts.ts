@@ -177,6 +177,27 @@ export async function setAccountLocked(actor: Actor, userId: string, locked: boo
   });
 }
 
+/**
+ * Admin xóa hẳn một tài khoản (không xóa được chính mình, nên luôn còn ít nhất một quản trị viên).
+ * Phiên đăng nhập, mật khẩu, 2FA của tài khoản bị xóa theo; điểm danh, sao, nhật ký đã ghi vẫn giữ nguyên
+ * (cột người thực hiện để trống). Hồ sơ giáo viên gắn kèm không bị xóa.
+ */
+export async function deleteAccount(actor: Actor, userId: string) {
+  assertAdmin(actor);
+  if (userId === actor.userId) throw new AppError("CONFLICT", "Không thể tự xóa tài khoản của chính mình.");
+  await db.transaction(async (tx) => {
+    const [deleted] = await tx.delete(user).where(eq(user.id, userId)).returning();
+    if (!deleted) throw notFound("tài khoản");
+    await audit(tx, {
+      userId: actor.userId,
+      action: "account_deleted",
+      tableName: "user",
+      recordId: userId,
+      oldValue: { username: deleted.username, name: deleted.name, role: deleted.role, teacherId: deleted.teacherId },
+    });
+  });
+}
+
 /** Xóa thiết lập 2FA (khi mất thiết bị). Admin sẽ bị buộc thiết lập lại ở lần đăng nhập sau. */
 export async function resetAccountTwoFactor(actor: Actor, userId: string) {
   assertAdmin(actor);

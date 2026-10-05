@@ -175,6 +175,21 @@ test("Admin: cấu hình, đóng lớp, chốt tổng kết, duyệt và trao qu
   const self = page.getByRole("listitem").filter({ hasText: "Quản trị" }).first();
   await expect(self.getByRole("button", { name: /khóa/i })).toHaveCount(0);
 
+  // Tạo một tài khoản rồi xóa hẳn; không có nút xóa chính mình.
+  await page.getByRole("button", { name: "Thêm tài khoản" }).click();
+  await page.locator("#f-username").fill("tam.thoi");
+  await page.locator("#f-name").fill("Tài khoản tạm");
+  await page.locator("#f-role").selectOption("admin");
+  await page.locator("#f-password").fill("MatKhauTam88");
+  await page.getByRole("button", { name: "Lưu" }).click();
+  await expect(page.getByText("Đã tạo tài khoản.")).toBeVisible();
+  const temp = page.getByRole("listitem").filter({ hasText: "tam.thoi" });
+  await temp.getByRole("button", { name: "Xóa", exact: true }).click();
+  await expect(page.getByText("Đã xóa tài khoản.")).toBeVisible();
+  await expect(temp).toHaveCount(0);
+  await expect(self.getByRole("button", { name: "Xóa", exact: true })).toHaveCount(0);
+  await expectNoHorizontalScroll(page);
+
   // Đặt lại mật khẩu có nút con mắt và lựa chọn dùng luôn.
   const minh = page.getByRole("listitem").filter({ hasText: "gv.minh" });
   await minh.getByRole("button", { name: "Đặt lại mật khẩu" }).click();
