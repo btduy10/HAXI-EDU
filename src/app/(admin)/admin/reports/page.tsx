@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { ClassReportTable, ExportLinks } from "@/components/class-report";
+import { ClassReportCharts, ClassReportTable, ExportLinks } from "@/components/class-report";
 import { selectClass } from "@/components/form-dialog";
 import { LinkButton } from "@/components/link-button";
 import { Button } from "@/components/ui/button";
@@ -44,6 +44,7 @@ export default async function ReportsPage({ searchParams }: PageProps<"/admin/re
               Tổng kết & quà tặng
             </LinkButton>
           </div>
+          <ClassReportCharts rows={report.rows} />
           <ClassReportTable rows={report.rows} sessions={report.sessions} />
         </section>
       )}

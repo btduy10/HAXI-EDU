@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
 import { ClassList } from "@/components/class-list";
+import { DashboardCharts } from "@/components/dashboard-charts";
 import { OverdueSessions, TodaySessions } from "@/components/session-lists";
 import { todayIso } from "@/lib/format";
 import { listOverdueSessions } from "@/server/services/attendance";
 import { listClasses } from "@/server/services/classes";
+import { dashboardCharts } from "@/server/services/dashboard";
 import { listSessions } from "@/server/services/sessions";
 import { requirePageUser } from "@/server/session";
 
@@ -12,10 +14,11 @@ export const metadata: Metadata = { title: "Tổng quan" };
 export default async function TeacherDashboardPage() {
   const user = await requirePageUser("teacher");
   const today = todayIso();
-  const [todaySessions, overdue, classes] = await Promise.all([
+  const [todaySessions, overdue, classes, charts] = await Promise.all([
     listSessions(user.actor, { from: today, to: today, personal: true }),
     listOverdueSessions(user.actor),
     listClasses(user.actor),
+    dashboardCharts(user.actor),
   ]);
   const attendanceHref = (id: string) => `/teacher/sessions/${id}/attendance`;
 
@@ -24,6 +27,7 @@ export default async function TeacherDashboardPage() {
       <h1 className="text-lg font-semibold">Xin chào, {user.name}</h1>
       <TodaySessions sessions={todaySessions} hrefOf={(s) => attendanceHref(s.id)} today={today} />
       <OverdueSessions sessions={overdue} hrefOf={attendanceHref} />
+      <DashboardCharts data={charts} scopeLabel="các lớp của tôi" />
       <section className="grid gap-2">
         <h2 className="font-medium">Lớp đang dạy</h2>
         <ClassList classes={classes.filter((c) => c.status === "open")} basePath="/teacher/classes" />

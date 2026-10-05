@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ClassReportTable, ExportLinks } from "@/components/class-report";
+import { ClassReportCharts, ClassReportTable, ExportLinks } from "@/components/class-report";
 import { orNotFound, uuidParam } from "@/server/page";
 import { getClassReport } from "@/server/services/summaries";
 import { requirePageUser } from "@/server/session";
@@ -21,7 +21,8 @@ export default async function TeacherClassReportPage({ params }: PageProps<"/tea
         <h1 className="text-lg font-semibold">Báo cáo lớp {report.class.code}</h1>
       </div>
       <ExportLinks baseHref={`/api/export/class-report/${classId}`} />
-      <ClassReportTable rows={report.rows} sessions={report.sessions} />
+      <ClassReportCharts rows={report.rows} />
+          <ClassReportTable rows={report.rows} sessions={report.sessions} />
     </div>
   );
 }

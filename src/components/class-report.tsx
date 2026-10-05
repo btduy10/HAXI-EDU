@@ -1,4 +1,5 @@
 import { StarIcon } from "lucide-react";
+import { AttendanceDonut, BarList, ChartCard } from "@/components/charts";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 
@@ -27,6 +28,46 @@ export function ExportLinks({ baseHref, label = "Xuất" }: { baseHref: string; 
           {format === "xlsx" ? "Excel" : "PDF"}
         </a>
       ))}
+    </div>
+  );
+}
+
+/** Biểu đồ của báo cáo lớp: cơ cấu điểm danh (tròn), sao và chuyên cần theo học viên (cột ngang). */
+export function ClassReportCharts({ rows }: { rows: Row[] }) {
+  const counts = { present: 0, late: 0, left_early: 0, excused: 0, absent: 0 };
+  for (const r of rows) {
+    counts.present += r.attendance.present;
+    counts.late += r.attendance.late;
+    counts.left_early += r.attendance.left_early;
+    counts.excused += r.attendance.excused;
+    counts.absent += r.attendance.absent;
+  }
+  const byStars = [...rows].sort((a, b) => b.totalStars - a.totalStars);
+  const byRate = [...rows].sort((a, b) => b.attendance.rate - a.attendance.rate);
+  return (
+    <div className="grid gap-3 lg:grid-cols-2">
+      <ChartCard title="Cơ cấu điểm danh của lớp" subtitle="Tất cả lượt điểm danh ở các buổi đã dạy" className="lg:col-span-2">
+        <AttendanceDonut counts={counts} emptyText="Lớp chưa có buổi nào được điểm danh." />
+      </ChartCard>
+      <ChartCard title="Sao của lớp theo học viên" subtitle="Tổng sao ghi trong các buổi của lớp này">
+        <BarList
+          emptyText="Lớp chưa có học viên."
+          data={byStars.map((r) => ({ key: r.studentId, label: r.fullName, value: r.totalStars, detail: `${r.code} · hạng ${r.rank}` }))}
+        />
+      </ChartCard>
+      <ChartCard title="Chuyên cần theo học viên" subtitle="Tỷ lệ có đi học trên số buổi đã dạy">
+        <BarList
+          max={100}
+          emptyText="Lớp chưa có học viên."
+          data={byRate.map((r) => ({
+            key: r.studentId,
+            label: r.fullName,
+            value: r.attendance.rate,
+            display: `${r.attendance.rate}%`,
+            detail: `${r.code} · ${r.attendance.taught} buổi`,
+          }))}
+        />
+      </ChartCard>
     </div>
   );
 }

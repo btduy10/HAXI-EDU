@@ -131,9 +131,24 @@ test("Admin: cấu hình, đóng lớp, chốt tổng kết, duyệt và trao qu
   await page.goto(`/admin/reports?classId=${ownClassId}`);
   await expect(page.getByRole("columnheader", { name: "Chuyên cần" })).toBeVisible();
   await page.screenshot({ path: "test-results/shots/report-1280.png", fullPage: true });
+  await expect(page.getByRole("heading", { name: "Cơ cấu điểm danh của lớp" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Sao của lớp theo học viên" })).toBeVisible();
   await page.goto(`/admin/rewards?tab=summary&classId=${otherClassId}`);
   await page.screenshot({ path: "test-results/shots/summary-1280.png", fullPage: true });
+  await page.goto("/admin/dashboard");
+  await expect(page.getByRole("heading", { name: "Điểm danh 30 ngày qua" })).toBeVisible();
+  await expect(page.getByRole("img", { name: /có đi học: \d+%/ })).toBeVisible();
+  await page.screenshot({ path: "test-results/shots/dashboard-1280.png", fullPage: true });
   await page.setViewportSize({ width: 360, height: 740 });
+
+  // Biểu đồ trên điện thoại: không tràn ngang, có chú giải số liệu.
+  await expect(page.getByRole("heading", { name: "Chuyên cần theo lớp" })).toBeVisible();
+  await expect(page.getByRole("listitem").filter({ hasText: "Vắng không phép" }).first()).toBeVisible();
+  await expectNoHorizontalScroll(page);
+  await page.screenshot({ path: "test-results/shots/dashboard-360.png", fullPage: true });
+  await page.goto(`/admin/reports?classId=${ownClassId}`);
+  await expectNoHorizontalScroll(page);
+  await page.screenshot({ path: "test-results/shots/report-charts-360.png", fullPage: true });
 
   // Nhật ký: lọc theo hành động, xem chi tiết.
   await page.goto("/admin/audit");

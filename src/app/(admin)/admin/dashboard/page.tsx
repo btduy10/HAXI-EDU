@@ -1,15 +1,20 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { DashboardCharts } from "@/components/dashboard-charts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { listOverdueSessions } from "@/server/services/attendance";
-import { adminOverview } from "@/server/services/dashboard";
+import { adminOverview, dashboardCharts } from "@/server/services/dashboard";
 import { requirePageUser } from "@/server/session";
 
 export const metadata: Metadata = { title: "Tổng quan" };
 
 export default async function AdminDashboardPage() {
   const user = await requirePageUser("admin");
-  const [overview, overdue] = await Promise.all([adminOverview(user.actor), listOverdueSessions(user.actor)]);
+  const [overview, overdue, charts] = await Promise.all([
+    adminOverview(user.actor),
+    listOverdueSessions(user.actor),
+    dashboardCharts(user.actor),
+  ]);
   const stats = [
     { label: "Học viên đang học", value: overview.activeStudents, href: "/admin/students" },
     { label: "Giáo viên đang dạy", value: overview.activeTeachers, href: "/admin/teachers" },
@@ -31,6 +36,7 @@ export default async function AdminDashboardPage() {
           </Link>
         ))}
       </div>
+      <DashboardCharts data={charts} scopeLabel="toàn trung tâm" />
     </div>
   );
 }
