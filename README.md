@@ -112,7 +112,38 @@ Nguyên tắc: mọi hàm trong `server/services` nhận `actor` lấy từ phi�
 - **Nhật ký** (Admin): lọc theo hành động, bảng, khoảng ngày; xem giá trị cũ/mới.
 - **Cấu hình** (Admin): số ngày khóa điểm danh, giới hạn trừ sao mỗi buổi.
 
-## Triển khai trên Netlify
+## Triển khai trên Vercel
+
+Vercel không chạy Docker nên cần một PostgreSQL bên ngoài. Repo đã có `vercel.json`: mỗi lần build chạy `npm run db:migrate` rồi `npm run build`, hàm chạy ở vùng Singapore (`sin1`). Gói Hobby của Vercel chỉ dành cho mục đích phi thương mại.
+
+1. **Vercel → Add New → Project** → nhập repo này. Không cần sửa lệnh build.
+2. **Tạo CSDL:** trong dự án, vào **Storage → Create Database → Neon** (chọn vùng Singapore). Vercel tự thêm biến `DATABASE_URL` (đã là địa chỉ pooler). Nếu tự tạo CSDL ở nơi khác thì thêm `DATABASE_URL` bằng tay, dùng chuỗi kết nối pooler có `sslmode=require`.
+3. **Settings → Environment Variables**, thêm:
+
+   | Biến | Giá trị |
+   |---|---|
+   | `BETTER_AUTH_SECRET` | Chuỗi ngẫu nhiên 32 byte: `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"` |
+   | `DB_PREPARE` | `false` (pooler kiểu PgBouncer không hỗ trợ prepared statement) |
+   | `DB_POOL_MAX` | `3` (mỗi hàm serverless có pool riêng) |
+
+   Không cần đặt `BETTER_AUTH_URL`: ứng dụng tự lấy địa chỉ production của dự án. Chỉ đặt khi muốn dùng một tên miền khác với tên miền production chính.
+4. **Deploy** (hoặc Redeploy nếu lần đầu thiếu biến). Bảng được tạo tự động ở bước build.
+5. **Tạo tài khoản đầu tiên** bằng cách chạy seed từ máy của bạn, trỏ vào CSDL đó (chuỗi kết nối xem ở Storage → `.env.local`). Đặt mật khẩu tạm riêng, đừng dùng mặc định trên trang công khai:
+
+   ```powershell
+   $env:DATABASE_URL = "<chuỗi kết nối>"; $env:SEED_DEFAULT_PASSWORD = "<mật khẩu tạm của bạn>"; npm run db:seed
+   ```
+
+   Seed tạo `admin`, `gv.lan`, `gv.minh` và dữ liệu mẫu. Đăng nhập `admin` ngay sau đó để đổi mật khẩu và bật 2FA. Tài khoản GV và Admin khác tạo ở trang **Tài khoản**.
+
+Khác biệt khi chạy trên Vercel:
+
+- Giới hạn tốc độ của Server Action/API (lưu trong bộ nhớ tiến trình) không đáng tin vì các lần gọi có thể chạy ở những tiến trình khác nhau. Giới hạn đăng nhập và khóa tài khoản lưu trong CSDL nên vẫn đúng.
+- `scripts/backup.*` không dùng được (dựa vào Docker); dùng tính năng sao lưu/khôi phục của nhà cung cấp CSDL.
+- Chỉ đăng nhập được ở địa chỉ production. Địa chỉ xem trước (preview) có tên miền khác nên bị từ chối, và mỗi bản preview cũng chạy migration vào cùng CSDL.
+- Cấu hình này **chưa được chạy thật trên Vercel**. Sau lần deploy đầu hãy thử: đăng nhập, thiết lập 2FA, điểm danh, và xuất một tệp PDF.
+
+## Triển khai trên Netlify (phương án khác)
 
 Netlify không chạy Docker nên cần một PostgreSQL bên ngoài (Neon, Supabase…). Repo đã có `netlify.toml`: mỗi lần build sẽ chạy `npm run db:migrate` rồi `npm run build`.
 

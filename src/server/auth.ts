@@ -31,10 +31,19 @@ async function findLoginUser(name: string | null) {
   return row ?? null;
 }
 
+/**
+ * Địa chỉ chính của trang. Ưu tiên BETTER_AUTH_URL; nếu chưa đặt thì lấy địa chỉ production
+ * do nền tảng cung cấp (Vercel: VERCEL_PROJECT_PRODUCTION_URL không kèm giao thức; Netlify: URL).
+ */
+function resolveBaseUrl(): string | undefined {
+  if (process.env.BETTER_AUTH_URL) return process.env.BETTER_AUTH_URL;
+  if (process.env.VERCEL_PROJECT_PRODUCTION_URL) return `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`;
+  return process.env.URL;
+}
+
 export const auth = betterAuth({
   appName: "HAXI Robotics",
-  // Netlify tự cung cấp biến URL (địa chỉ chính của trang) nếu chưa đặt BETTER_AUTH_URL.
-  baseURL: process.env.BETTER_AUTH_URL ?? process.env.URL,
+  baseURL: resolveBaseUrl(),
   secret: process.env.BETTER_AUTH_SECRET,
   database: drizzleAdapter(db, {
     provider: "pg",
