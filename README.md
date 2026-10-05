@@ -112,6 +112,39 @@ Nguyên tắc: mọi hàm trong `server/services` nhận `actor` lấy từ phi�
 - **Nhật ký** (Admin): lọc theo hành động, bảng, khoảng ngày; xem giá trị cũ/mới.
 - **Cấu hình** (Admin): số ngày khóa điểm danh, giới hạn trừ sao mỗi buổi.
 
+## Triển khai trên Netlify
+
+Netlify không chạy Docker nên cần một PostgreSQL bên ngoài (Neon, Supabase…). Repo đã có `netlify.toml`: mỗi lần build sẽ chạy `npm run db:migrate` rồi `npm run build`.
+
+1. **Tạo CSDL** (ví dụ Neon, chọn vùng Singapore) và lấy chuỗi kết nối dạng **pooler** (`...-pooler...`, có `sslmode=require`).
+2. **Netlify → Add new site → Import an existing project** → chọn repo này. Giữ nguyên lệnh build mà Netlify đọc từ `netlify.toml`.
+3. **Site configuration → Environment variables**, thêm:
+
+   | Biến | Giá trị |
+   |---|---|
+   | `DATABASE_URL` | Chuỗi kết nối pooler của CSDL |
+   | `BETTER_AUTH_SECRET` | Chuỗi ngẫu nhiên 32 byte: `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"` |
+   | `DB_PREPARE` | `false` (pooler kiểu PgBouncer không hỗ trợ prepared statement) |
+   | `DB_POOL_MAX` | `3` (mỗi hàm serverless có pool riêng) |
+   | `CLIENT_IP_HEADER` | `x-nf-client-connection-ip` (IP thật của client để giới hạn tốc độ đăng nhập) |
+
+   Không cần đặt `BETTER_AUTH_URL` nếu dùng địa chỉ chính của trang (ứng dụng tự lấy biến `URL` của Netlify). Nếu gắn tên miền riêng, đặt `BETTER_AUTH_URL` bằng địa chỉ đó.
+4. **Deploy.** Bảng được tạo tự động ở bước build.
+5. **Tạo tài khoản đầu tiên** bằng cách chạy seed từ máy của bạn, trỏ vào CSDL đó. Đặt mật khẩu tạm riêng, đừng dùng mặc định trên trang công khai:
+
+   ```powershell
+   $env:DATABASE_URL = "<chuỗi kết nối>"; $env:SEED_DEFAULT_PASSWORD = "<mật khẩu tạm của bạn>"; npm run db:seed
+   ```
+
+   Seed tạo cả dữ liệu mẫu (2 lớp, 15 học viên…). Đăng nhập `admin` ngay sau đó để đổi mật khẩu và bật 2FA.
+
+Khác biệt khi chạy trên Netlify:
+
+- Giới hạn tốc độ của Server Action/API (lưu trong bộ nhớ tiến trình) gần như không có tác dụng vì mỗi lần gọi có thể chạy ở một tiến trình khác. Giới hạn đăng nhập và khóa tài khoản lưu trong CSDL nên vẫn đúng.
+- `scripts/backup.*` không dùng được (dựa vào Docker); dùng tính năng sao lưu của nhà cung cấp CSDL.
+- Chỉ dùng địa chỉ chính của trang. Địa chỉ xem trước (deploy preview) có tên miền khác nên đăng nhập sẽ bị từ chối.
+- Cấu hình này đã được kiểm tra bằng bản build cục bộ của Netlify tới bước đóng gói, **chưa được chạy thật trên Netlify**. Sau lần deploy đầu hãy thử: đăng nhập, thiết lập 2FA, điểm danh, và xuất một tệp PDF.
+
 ## Bảo mật
 
 - **Phân quyền ở máy chủ:** GV truy cập lớp, buổi học, học viên hay báo cáo của lớp khác đều nhận 404 (không lộ sự tồn tại). Có test ở tầng service và test gọi trực tiếp qua HTTP.

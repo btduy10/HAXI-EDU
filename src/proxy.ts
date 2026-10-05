@@ -36,7 +36,8 @@ function applySecurityHeaders(response: NextResponse, csp: string) {
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
+  // btoa có ở cả Node lẫn môi trường edge (Netlify chạy proxy trên edge, không có Buffer).
+  const nonce = btoa(crypto.randomUUID());
   const csp = buildCsp(nonce);
 
   // Ép HTTPS khi triển khai (mặc định bật ở production; FORCE_HTTPS=false chỉ để thử bản build trên máy).

@@ -1,0 +1,17 @@
+# Triển khai trên Netlify. Xem mục "Triển khai trên Netlify" trong README.md.
+# Netlify tự nhận diện Next.js và dùng adapter OpenNext, không cần khai báo plugin.
+
+[build]
+  # Áp dụng migration vào CSDL (DATABASE_URL) trước khi build, để schema luôn khớp mã nguồn.
+  command = "npm run db:migrate && npm run build"
+  publish = ".next"
+
+[build.environment]
+  NODE_VERSION = "22"
+
+# Tệp avatar tĩnh: cho trình duyệt lưu đệm lâu.
+[[headers]]
+  for = "/avatars/*"
+  [headers.values]
+    Cache-Control = "public, max-age=604800"
+    X-Content-Type-Options = "nosniff"

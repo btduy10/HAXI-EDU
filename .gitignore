@@ -46,3 +46,7 @@ next-env.d.ts
 /playwright-report/
 /backups/
 
+
+# netlify
+.netlify
+

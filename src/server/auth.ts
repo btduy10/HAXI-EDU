@@ -33,7 +33,8 @@ async function findLoginUser(name: string | null) {
 
 export const auth = betterAuth({
   appName: "HAXI Robotics",
-  baseURL: process.env.BETTER_AUTH_URL,
+  // Netlify tự cung cấp biến URL (địa chỉ chính của trang) nếu chưa đặt BETTER_AUTH_URL.
+  baseURL: process.env.BETTER_AUTH_URL ?? process.env.URL,
   secret: process.env.BETTER_AUTH_SECRET,
   database: drizzleAdapter(db, {
     provider: "pg",
@@ -71,6 +72,9 @@ export const auth = betterAuth({
   advanced: {
     useSecureCookies: isProd,
     defaultCookieAttributes: { httpOnly: true, sameSite: "lax", secure: isProd },
+    // Header chứa IP thật của client do hạ tầng đặt (vd. Netlify: x-nf-client-connection-ip). Chỉ đặt khi
+    // hạ tầng luôn ghi đè header này; nếu không, client tự gửi được để né giới hạn tốc độ.
+    ...(process.env.CLIENT_IP_HEADER ? { ipAddress: { ipAddressHeaders: [process.env.CLIENT_IP_HEADER] } } : {}),
   },
   rateLimit: {
     enabled: process.env.AUTH_RATE_LIMIT !== "off",
