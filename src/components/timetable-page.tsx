@@ -1,5 +1,6 @@
 import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 import Link from "next/link";
+import { ExportLinks } from "@/components/class-report";
 import { selectClass } from "@/components/form-dialog";
 import { MonthView, type TimetableSession, WeekView } from "@/components/timetable";
 import { Button } from "@/components/ui/button";
@@ -129,6 +130,11 @@ export async function TimetablePage({
           <ChevronRightIcon />
         </LinkButton>
       </div>
+
+      <ExportLinks
+        label="Xuất khoảng đang xem"
+        baseHref={`/api/export/timetable?${new URLSearchParams({ from: range.from, to: range.to, ...Object.fromEntries(Object.entries(filters).filter(([, v]) => v)) })}`}
+      />
 
       {view === "week" ? (
         <WeekView sessions={sessions} date={date} slots={slots} hrefOf={sessionHref} today={today} />

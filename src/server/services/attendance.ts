@@ -7,7 +7,7 @@ import { todayIso } from "@/lib/format";
 import type { attendanceInput } from "@/lib/validation/schedule";
 import { audit } from "../audit";
 import { AppError, notFound } from "../errors";
-import { type Actor, assertAdmin, assertSessionAccess, isAdmin } from "../guard";
+import { type Actor, assertAdmin, assertClassOpen, assertSessionAccess, isAdmin } from "../guard";
 import { getSettings } from "../settings";
 
 const UNLOCK_HOURS = 24;
@@ -93,6 +93,7 @@ export async function saveAttendance(actor: Actor, input: z.output<typeof attend
     const settings = await getSettings(tx);
     const reason = blockedReason(session, settings.attendance_lock_days, now);
     if (reason) throw new AppError("CONFLICT", reason);
+    await assertClassOpen(session.classId, tx);
 
     const roster = await sessionRoster(tx, session);
     const rosterIds = new Set(roster.map((r) => r.studentId));

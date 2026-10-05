@@ -20,7 +20,7 @@ import { todayIso } from "@/lib/format";
 import type { awardInput, criteriaInput, levelInput } from "@/lib/validation/stars";
 import { audit } from "../audit";
 import { AppError, notFound } from "../errors";
-import { type Actor, assertAdmin, assertSessionAccess, isAdmin } from "../guard";
+import { type Actor, assertAdmin, assertClassOpen, assertSessionAccess, isAdmin } from "../guard";
 import { getSettings } from "../settings";
 import { sessionRoster } from "./attendance";
 import { createRow, deleteRow, updateRow } from "./crud";
@@ -271,6 +271,7 @@ export async function awardStars(actor: Actor, input: z.output<typeof awardInput
     if (!session) throw notFound("buổi học");
     if (session.status === "cancelled") throw new AppError("CONFLICT", "Buổi đã hủy nên không ghi sao được.");
     if (session.date > todayIso(now)) throw new AppError("CONFLICT", "Chưa đến ngày học.");
+    await assertClassOpen(session.classId, tx);
 
     const [criteria] = await tx.select().from(starCriteria).where(eq(starCriteria.id, input.criteriaId)).limit(1);
     if (!criteria || !criteria.active) throw new AppError("VALIDATION", "Tiêu chí không tồn tại hoặc đã ngừng dùng.");
@@ -331,6 +332,10 @@ export async function undoStarLog(actor: Actor, logId: string, now: Date = new D
 
   return db.transaction(async (tx) => {
     await tx.select({ id: students.id }).from(students).where(eq(students.id, target.studentId)).for("update");
+    if (target.sessionId) {
+      const [session] = await tx.select({ classId: sessions.classId }).from(sessions).where(eq(sessions.id, target.sessionId)).limit(1);
+      if (session) await assertClassOpen(session.classId, tx);
+    }
     if (target.reversesLogId) throw new AppError("CONFLICT", "Không hoàn tác được một bản ghi hoàn tác.");
     const [already] = await tx.select({ id: starLogs.id }).from(starLogs).where(eq(starLogs.reversesLogId, logId)).limit(1);
     if (already) throw new AppError("CONFLICT", "Lần ghi sao này đã được hoàn tác.");

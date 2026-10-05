@@ -1,12 +1,14 @@
 "use client";
 
 import {
+  BarChart3Icon,
   BookOpenIcon,
   BotIcon,
   Building2Icon,
   CalendarDaysIcon,
   ClipboardCheckIcon,
   ClipboardListIcon,
+  GiftIcon,
   GraduationCapIcon,
   KeyRoundIcon,
   LayoutDashboardIcon,
@@ -14,6 +16,8 @@ import {
   type LucideIcon,
   MenuIcon,
   SchoolIcon,
+  ScrollTextIcon,
+  SettingsIcon,
   StarIcon,
   UserCogIcon,
   UsersIcon,
@@ -29,7 +33,6 @@ import { cn } from "@/lib/utils";
 
 type NavItem = { href: string; label: string; icon: LucideIcon };
 
-// Chỉ liệt kê các mục đã có ở giai đoạn hiện tại.
 const NAV: Record<"admin" | "teacher", NavItem[]> = {
   admin: [
     { href: "/admin/dashboard", label: "Tổng quan", icon: LayoutDashboardIcon },
@@ -42,7 +45,11 @@ const NAV: Record<"admin" | "teacher", NavItem[]> = {
     { href: "/admin/timetable", label: "Thời khóa biểu", icon: CalendarDaysIcon },
     { href: "/admin/attendance", label: "Điểm danh", icon: ClipboardCheckIcon },
     { href: "/admin/stars", label: "Sao & Avatar", icon: StarIcon },
+    { href: "/admin/rewards", label: "Quà & Tổng kết", icon: GiftIcon },
+    { href: "/admin/reports", label: "Báo cáo", icon: BarChart3Icon },
     { href: "/admin/accounts", label: "Tài khoản", icon: UserCogIcon },
+    { href: "/admin/audit", label: "Nhật ký", icon: ScrollTextIcon },
+    { href: "/admin/settings", label: "Cấu hình", icon: SettingsIcon },
   ],
   teacher: [
     { href: "/teacher/dashboard", label: "Tổng quan", icon: LayoutDashboardIcon },

@@ -1,6 +1,6 @@
 import { and, eq, or } from "drizzle-orm";
 import { db, type DbOrTx } from "@/db";
-import { classTeachers, sessions } from "@/db/schema";
+import { classTeachers, classes, sessions } from "@/db/schema";
 import { AppError, forbidden, notFound } from "./errors";
 
 // Người thực hiện thao tác, luôn lấy từ phiên ở máy chủ (không nhận từ client).
@@ -68,3 +68,9 @@ export async function assertSessionAccess(actor: Actor, sessionId: string, tx: D
 }
 
 export const unauthenticated = () => new AppError("UNAUTHENTICATED", "Vui lòng đăng nhập.");
+
+/** Lớp đã đóng thì số liệu đã chốt: không điểm danh hay ghi/hoàn tác sao cho các buổi của lớp nữa. */
+export async function assertClassOpen(classId: string, tx: DbOrTx = db) {
+  const [cls] = await tx.select({ status: classes.status }).from(classes).where(eq(classes.id, classId)).limit(1);
+  if (cls?.status !== "open") throw new AppError("CONFLICT", "Lớp đã đóng và đã chốt tổng kết nên không thay đổi được nữa.");
+}

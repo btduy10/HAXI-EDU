@@ -147,6 +147,22 @@ async function main() {
       { name: "Không giữ gìn thiết bị", stars: -2, type: "penalty" },
     ]);
 
+    const [sticker, keychain, kit] = await tx
+      .insert(s.gifts)
+      .values([
+        { name: "Sticker robot", description: "Bộ 5 sticker", stock: 30 },
+        { name: "Móc khóa robot", description: "Móc khóa in 3D", stock: 10 },
+        { name: "Bộ lắp ráp mini", description: "Bộ robot lắp ráp cỡ nhỏ", stock: 3 },
+      ])
+      .returning();
+    await tx.insert(s.rewardTiers).values(
+      [c1!.id, c2!.id].flatMap((courseId) => [
+        { courseId, minStars: 10, giftId: sticker!.id },
+        { courseId, minStars: 30, giftId: keychain!.id },
+        { courseId, minStars: 60, giftId: kit!.id },
+      ]),
+    );
+
     await tx.insert(s.appSettings).values([
       { key: "attendance_lock_days", value: 7 },
       { key: "max_deduction_per_session", value: 3 },
@@ -166,7 +182,11 @@ async function main() {
       roster.map((r, i) => ({
         sessionId: session.id,
         studentId: r.studentId,
-        status: (i === 3 ? "absent" : i === 5 ? "late" : "present") as "absent" | "late" | "present",
+        // Rải vài lần vắng/đi trễ qua các buổi và học viên khác nhau cho dữ liệu mẫu giống thật.
+        status: ((i + Number(session.date.slice(8))) % 9 === 3 ? "absent" : (i + Number(session.date.slice(8))) % 7 === 5 ? "late" : "present") as
+          | "absent"
+          | "late"
+          | "present",
         recordedBy: adminUser!.id,
       })),
     );
