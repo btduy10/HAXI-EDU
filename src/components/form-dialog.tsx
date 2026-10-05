@@ -23,6 +23,12 @@ export type Field = {
 
 export type ActionFn = (input: unknown) => Promise<{ ok: true; data: unknown } | { ok: false; error: string; fieldErrors?: Record<string, string> }>;
 
+/** Cảnh báo không chặn (vd. vượt sức chứa phòng) mà service trả về kèm kết quả. */
+export function showWarnings(data: unknown) {
+  const warnings = (data as { warnings?: unknown } | null)?.warnings;
+  if (Array.isArray(warnings)) for (const w of warnings) toast.warning(String(w), { duration: 10_000 });
+}
+
 export const selectClass =
   "h-11 w-full rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50";
 
@@ -74,6 +80,7 @@ export function FormDialog({
       return;
     }
     toast.success(successMessage);
+    showWarnings(result.data);
     onOpenChange(false);
   }
 

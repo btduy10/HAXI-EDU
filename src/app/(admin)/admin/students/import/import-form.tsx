@@ -1,11 +1,11 @@
 "use client";
 
-import Link from "next/link";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { LinkButton } from "@/components/link-button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
@@ -89,9 +89,9 @@ export function ImportForm() {
             {pending ? "Đang nhập…" : `Nhập ${preview.validCount} dòng hợp lệ`}
           </Button>
         )}
-        <Button className="h-10" variant="ghost" nativeButton={false} render={<Link href="/admin/students" />}>
+        <LinkButton className="h-10" variant="ghost" href="/admin/students">
           Về danh sách
-        </Button>
+        </LinkButton>
       </div>
 
       {preview && (

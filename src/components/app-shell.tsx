@@ -4,6 +4,8 @@ import {
   BookOpenIcon,
   BotIcon,
   Building2Icon,
+  CalendarDaysIcon,
+  ClipboardCheckIcon,
   ClipboardListIcon,
   GraduationCapIcon,
   KeyRoundIcon,
@@ -36,10 +38,13 @@ const NAV: Record<"admin" | "teacher", NavItem[]> = {
     { href: "/admin/classes", label: "Lớp học", icon: SchoolIcon },
     { href: "/admin/rooms-slots", label: "Phòng & Ca học", icon: Building2Icon },
     { href: "/admin/enrollments", label: "Ghi danh", icon: ClipboardListIcon },
+    { href: "/admin/timetable", label: "Thời khóa biểu", icon: CalendarDaysIcon },
+    { href: "/admin/attendance", label: "Điểm danh", icon: ClipboardCheckIcon },
     { href: "/admin/accounts", label: "Tài khoản", icon: UserCogIcon },
   ],
   teacher: [
     { href: "/teacher/dashboard", label: "Tổng quan", icon: LayoutDashboardIcon },
+    { href: "/teacher/timetable", label: "TKB của tôi", icon: CalendarDaysIcon },
     { href: "/teacher/classes", label: "Lớp của tôi", icon: SchoolIcon },
   ],
 };

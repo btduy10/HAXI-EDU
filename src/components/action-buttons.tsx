@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { type ActionFn, type Field, FormDialog } from "./form-dialog";
+import { type ActionFn, type Field, FormDialog, showWarnings } from "./form-dialog";
 
 type ButtonVariant = "default" | "outline" | "ghost" | "destructive" | "secondary";
 
@@ -79,8 +79,9 @@ export function ConfirmButton({
     if (!window.confirm(confirmText)) return;
     startTransition(async () => {
       const result = await action(input);
-      if (result.ok) toast.success(successMessage);
-      else toast.error(result.error);
+      if (!result.ok) return void toast.error(result.error);
+      toast.success(successMessage);
+      showWarnings(result.data);
     });
   }
   return (

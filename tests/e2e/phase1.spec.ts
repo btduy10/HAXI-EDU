@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { NEW_PASSWORD, SEED_PASSWORD, expectNoHorizontalScroll, firstLogin, login, sql, studentWorkbook, totp, visibleText } from "./helpers";
+import { NEW_PASSWORD, SEED_PASSWORD, expectNoHorizontalScroll, firstLogin, login, saveAdminSecret, sql, studentWorkbook, totp, visibleText } from "./helpers";
 
 // Các test chạy tuần tự trên cùng CSDL test và phụ thuộc thứ tự (đổi mật khẩu, bật 2FA).
 test.describe.configure({ mode: "serial" });
@@ -18,7 +18,7 @@ test("chưa đăng nhập bị chuyển về trang đăng nhập, có header b�
 test("GV: buộc đổi mật khẩu, chỉ thấy lớp mình, không vào được dữ liệu lớp khác hay trang Admin", async ({ page }) => {
   await firstLogin(page, "gv.lan");
   await expect(page).toHaveURL(/\/teacher\/dashboard$/);
-  await expect(page.getByText("RB-CB01")).toBeVisible();
+  await expect(page.getByText("RB-CB01").first()).toBeVisible();
   await expect(page.getByText("RB-NC01")).toHaveCount(0);
   await expectNoHorizontalScroll(page);
 
@@ -78,6 +78,7 @@ test("Admin: đổi mật khẩu → bắt buộc thiết lập 2FA → quản l
   await page.getByRole("button", { name: "Tiếp tục" }).click();
   adminSecret = (await page.getByTestId("totp-secret").innerText()).trim();
   expect(adminSecret.length).toBeGreaterThan(10);
+  saveAdminSecret(adminSecret);
   await page.screenshot({ path: "test-results/shots/2fa-setup-360.png", fullPage: true });
   await expectNoHorizontalScroll(page);
   await page.getByLabel(/Nhập mã 6 số/).fill(totp(adminSecret));

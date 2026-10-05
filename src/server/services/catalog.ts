@@ -41,6 +41,13 @@ export async function listTimeSlots(actor: Actor) {
   assertAdmin(actor);
   return db.select().from(timeSlots).orderBy(asc(timeSlots.defaultStart));
 }
+/** Ca học để dựng lưới TKB: mọi người dùng đã đăng nhập đều xem được (không chứa dữ liệu cá nhân). */
+export async function listTimeSlotsForGrid() {
+  return db
+    .select({ id: timeSlots.id, name: timeSlots.name, defaultStart: timeSlots.defaultStart, defaultEnd: timeSlots.defaultEnd })
+    .from(timeSlots)
+    .orderBy(asc(timeSlots.defaultStart));
+}
 export const createTimeSlot = (actor: Actor, data: z.output<typeof timeSlotInput>) =>
   createRow(actor, timeSlots, "time_slots", data);
 // Sửa ca chỉ đổi giờ mặc định cho các buổi sinh SAU này; buổi đã sinh giữ giờ riêng.

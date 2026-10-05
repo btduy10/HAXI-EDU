@@ -1,4 +1,7 @@
 import { createHmac } from "node:crypto";
+import { readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { type Page, expect } from "@playwright/test";
 import postgres from "postgres";
 
@@ -54,3 +57,8 @@ export async function studentWorkbook(rows: (string | number)[][]): Promise<Buff
   for (const row of rows) sheet.addRow(row);
   return Buffer.from(await workbook.xlsx.writeBuffer());
 }
+
+// Khóa TOTP của admin được tạo ở phase1 và dùng lại ở các tệp test sau.
+const ADMIN_SECRET_FILE = join(tmpdir(), "haxi-e2e-admin-totp.txt");
+export const saveAdminSecret = (secret: string) => writeFileSync(ADMIN_SECRET_FILE, secret, "utf8");
+export const loadAdminSecret = () => readFileSync(ADMIN_SECRET_FILE, "utf8").trim();

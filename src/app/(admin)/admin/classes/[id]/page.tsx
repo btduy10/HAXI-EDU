@@ -3,12 +3,16 @@ import Link from "next/link";
 import { CrudSection } from "@/components/crud-section";
 import type { Field } from "@/components/form-dialog";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { LABELS, formatDate, toOptions } from "@/lib/format";
+import { LinkButton } from "@/components/link-button";
+import { GenerateSessionsButton } from "@/components/generate-sessions-button";
+import { WEEKDAY_LABELS } from "@/lib/dates";
+import { LABELS, formatDate, formatTime, toOptions } from "@/lib/format";
 import { assignTeacherAction, unassignTeacherAction } from "@/server/actions/admin";
+import { createTemplateAction, deleteTemplateAction } from "@/server/actions/schedule";
 import { orNotFound, uuidParam } from "@/server/page";
-import { listTeachers } from "@/server/services/catalog";
+import { listRooms, listTeachers, listTimeSlots } from "@/server/services/catalog";
 import { getClass, listClassTeachers } from "@/server/services/classes";
+import { listTemplates } from "@/server/services/sessions";
 import { listClassStudents } from "@/server/services/students";
 import { requirePageUser } from "@/server/session";
 
@@ -18,10 +22,13 @@ export default async function ClassDetailPage({ params }: PageProps<"/admin/clas
   const { actor } = await requirePageUser("admin");
   const classId = uuidParam((await params).id);
   const cls = await orNotFound(getClass(actor, classId));
-  const [assigned, teachers, students] = await Promise.all([
+  const [assigned, teachers, students, templates, slots, rooms] = await Promise.all([
     listClassTeachers(actor, classId),
     listTeachers(actor),
     listClassStudents(actor, classId),
+    listTemplates(actor, classId),
+    listTimeSlots(actor),
+    listRooms(actor),
   ]);
 
   const assignedIds = new Set(assigned.map((a) => a.teacherId));
@@ -38,8 +45,40 @@ export default async function ClassDetailPage({ params }: PageProps<"/admin/clas
     { name: "role", label: "Vai trò", type: "select", required: true, options: toOptions(LABELS.classTeacherRole), defaultValue: "main" },
   ];
 
-  return (
-    <div className="grid gap-6">
+  const templateFields: Field[] = [
+    {
+      name: "weekday",
+      label: "Thứ",
+      type: "select",
+      required: true,
+      options: Object.entries(WEEKDAY_LABELS).map(([value, label]) => ({ value, label })),
+    },
+    {
+      name: "timeSlotId",
+      label: "Ca học",
+      type: "select",
+      required: true,
+      options: slots.map((s) => ({ value: s.id, label: `${s.name} (${formatTime(s.defaultStart)}–${formatTime(s.defaultEnd)})` })),
+    },
+    {
+      name: "roomId",
+      label: "Phòng",
+      type: "select",
+      options: rooms.map((r) => ({ value: r.id, label: `${r.name} (${r.capacity} chỗ)` })),
+      hint: "Không chọn = phòng mặc định của lớp.",
+    },
+    {
+      name: "teacherId",
+      label: "Giáo viên",
+      type: "select",
+      options: assigned.map((a) => ({ value: a.teacherId, label: `${a.code} – ${a.fullName}` })),
+      hint: "Không chọn = GV chính của lớp.",
+    },
+    { name: "startTime", label: "Giờ bắt đầu riêng", type: "time", hint: "Để trống = theo giờ mặc định của ca." },
+    { name: "endTime", label: "Giờ kết thúc riêng", type: "time" },
+  ];
+
+  return (    <div className="grid gap-6">
       <div className="grid gap-2">
         <Link href="/admin/classes" className="text-sm text-muted-foreground underline-offset-2 hover:underline">
           ← Danh sách lớp
@@ -89,19 +128,56 @@ export default async function ClassDetailPage({ params }: PageProps<"/admin/clas
         emptyText="Chưa phân công giáo viên."
       />
 
+      <CrudSection
+        title="Lịch mẫu hằng tuần"
+        addLabel="Thêm"
+        columns={["Thứ", "Ca", "Giờ học", "Phòng", "Giáo viên"]}
+        rows={templates.map((t) => ({
+          id: t.id,
+          cells: [
+            WEEKDAY_LABELS[t.weekday] ?? "",
+            t.slotName,
+            `${formatTime(t.startTime ?? t.slotStart)}–${formatTime(t.endTime ?? t.slotEnd)}${t.startTime ? " (giờ riêng)" : ""}`,
+            t.roomName ?? "Phòng mặc định",
+            t.teacherName ?? "GV chính",
+          ],
+          values: {},
+        }))}
+        fields={templateFields}
+        createAction={createTemplateAction.bind(null, classId)}
+        deleteAction={deleteTemplateAction}
+        emptyText="Chưa có lịch mẫu. Thêm các buổi học cố định trong tuần rồi sinh buổi học."
+      />
+
+      <section className="grid gap-2">
+        <h2 className="text-lg font-semibold">Buổi học</h2>
+        <p className="text-sm text-muted-foreground">
+          Sinh buổi trong khoảng {formatDate(cls.startDate)} – {formatDate(cls.endDate)}, bỏ qua ngày nghỉ. Chạy lại không tạo trùng và không
+          ghi đè buổi đã sửa.
+        </p>
+        <div className="flex flex-wrap items-start gap-2">
+          <GenerateSessionsButton classId={classId} disabled={templates.length === 0 || cls.status !== "open"} />
+          <LinkButton variant="outline" className="h-10" href={`/admin/timetable?classId=${classId}`}>
+            Xem thời khóa biểu lớp
+          </LinkButton>
+          {cls.status === "open" && (
+            <LinkButton variant="outline" className="h-10" href={`/admin/sessions/makeup?classId=${classId}`}>
+              Thêm buổi bù
+            </LinkButton>
+          )}
+        </div>
+      </section>
+
       <section className="grid gap-3">
         <div className="flex items-center justify-between gap-2">
           <h2 className="text-lg font-semibold">
             Học viên đang học <span className="text-sm font-normal text-muted-foreground">({students.length})</span>
           </h2>
-          <Button
+          <LinkButton
             variant="outline"
-            className="h-10"
-            nativeButton={false}
-            render={<Link href={`/admin/enrollments?classId=${classId}`} />}
-          >
+            className="h-10" href={`/admin/enrollments?classId=${classId}`}>
             Quản lý ghi danh
-          </Button>
+          </LinkButton>
         </div>
         {students.length === 0 ? (
           <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">

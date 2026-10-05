@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { CrudSection } from "@/components/crud-section";
 import type { Field } from "@/components/form-dialog";
 import { Button } from "@/components/ui/button";
+import { LinkButton } from "@/components/link-button";
 import { Input } from "@/components/ui/input";
 import { LABELS, formatDate, toOptions } from "@/lib/format";
 import { createStudentAction, deleteStudentAction, updateStudentAction } from "@/server/actions/admin";
@@ -38,9 +38,9 @@ export default async function StudentsPage({ searchParams }: PageProps<"/admin/s
             Tìm
           </Button>
         </form>
-        <Button variant="outline" className="h-10" nativeButton={false} render={<Link href="/admin/students/import" />}>
+        <LinkButton variant="outline" className="h-10" href="/admin/students/import">
           Nhập từ Excel
-        </Button>
+        </LinkButton>
       </div>
       <CrudSection
         title="Học viên"

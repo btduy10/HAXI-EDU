@@ -1,0 +1,50 @@
+import type { Metadata } from "next";
+import Link from "next/link";
+import { todayIso } from "@/lib/format";
+import { orNotFound, uuidParam } from "@/server/page";
+import { listRooms, listTeachers, listTimeSlots } from "@/server/services/catalog";
+import { getClass, listClassTeachers } from "@/server/services/classes";
+import { listClassStudents } from "@/server/services/students";
+import { requirePageUser } from "@/server/session";
+import { MakeupForm } from "./makeup-form";
+
+export const metadata: Metadata = { title: "Thêm buổi bù" };
+
+export default async function MakeupPage({ searchParams }: PageProps<"/admin/sessions/makeup">) {
+  const { actor } = await requirePageUser("admin");
+  const raw = (await searchParams).classId;
+  const classId = uuidParam((Array.isArray(raw) ? raw[0] : raw) ?? "");
+  const cls = await orNotFound(getClass(actor, classId));
+  const [students, teachers, rooms, slots, assigned] = await Promise.all([
+    listClassStudents(actor, classId),
+    listTeachers(actor),
+    listRooms(actor),
+    listTimeSlots(actor),
+    listClassTeachers(actor, classId),
+  ]);
+
+  return (
+    <div className="grid max-w-2xl gap-4">
+      <div className="grid gap-1">
+        <Link href={`/admin/classes/${classId}`} className="text-sm text-muted-foreground underline-offset-2 hover:underline">
+          ← {cls.code} – {cls.name}
+        </Link>
+        <h1 className="text-lg font-semibold">Thêm buổi bù</h1>
+        <p className="text-sm text-muted-foreground">Buổi bù chỉ gồm các học viên được chọn bên dưới.</p>
+      </div>
+      <MakeupForm
+        classId={classId}
+        defaults={{
+          date: todayIso(),
+          startTime: slots[0]?.defaultStart.slice(0, 5) ?? "08:00",
+          endTime: slots[0]?.defaultEnd.slice(0, 5) ?? "09:30",
+          roomId: cls.defaultRoomId ?? "",
+          teacherId: assigned.find((a) => a.role === "main")?.teacherId ?? assigned[0]?.teacherId ?? "",
+        }}
+        students={students.map((s) => ({ id: s.id, label: `${s.fullName} (${s.code})` }))}
+        teachers={teachers.filter((t) => t.status === "active").map((t) => ({ value: t.id, label: `${t.code} – ${t.fullName}` }))}
+        rooms={rooms.map((r) => ({ value: r.id, label: `${r.name} (${r.capacity} chỗ)` }))}
+      />
+    </div>
+  );
+}

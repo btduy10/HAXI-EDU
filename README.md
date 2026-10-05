@@ -2,7 +2,7 @@
 
 Ứng dụng web cho trung tâm dạy Robotics: quản lý giáo viên, học viên, lớp, thời khóa biểu, điểm danh, chấm sao, avatar game hóa và tổng kết tặng quà. Hai loại tài khoản: **Quản trị (Admin)** và **Giáo viên (GV)**. Học viên và phụ huynh không có tài khoản.
 
-> **Tiến độ:** đã xong **Giai đoạn 1 – Nền tảng**. Giai đoạn 2 (TKB & điểm danh), 3 (sao & avatar), 4 (cuối khóa & báo cáo) chưa làm.
+> **Tiến độ:** đã xong **Giai đoạn 1 – Nền tảng** và **Giai đoạn 2 – TKB & điểm danh**. Giai đoạn 3 (sao & avatar) và 4 (cuối khóa & báo cáo, xuất PDF/Excel) chưa làm.
 
 ## Công nghệ
 
@@ -29,7 +29,7 @@ npm run dev                   # http://localhost:3000
 | `gv.lan` | Giáo viên | Dạy lớp RB-CB01 |
 | `gv.minh` | Giáo viên | Dạy lớp RB-NC01 |
 
-Mật khẩu tạm là giá trị `SEED_DEFAULT_PASSWORD` trong `.env` (mặc định `Haxi@2026`). Lần đăng nhập đầu **bắt buộc đổi mật khẩu** (tối thiểu 10 ký tự, có chữ và số). Dữ liệu mẫu gồm 2 lớp, 15 học viên, 2 phòng, 3 ca học, 5 cấp bậc và các tiêu chí sao.
+Mật khẩu tạm là giá trị `SEED_DEFAULT_PASSWORD` trong `.env` (mặc định `Haxi@2026`). Lần đăng nhập đầu **bắt buộc đổi mật khẩu** (tối thiểu 10 ký tự, có chữ và số). Dữ liệu mẫu gồm 2 lớp (mỗi lớp 2 buổi/tuần, đã sinh buổi học; các buổi cũ hơn 7 ngày đã điểm danh sẵn), 15 học viên, 2 phòng, 3 ca học, 5 cấp bậc và các tiêu chí sao.
 
 ## Lệnh thường dùng
 
@@ -70,8 +70,20 @@ Nguyên tắc: mọi hàm trong `server/services` nhận `actor` lấy từ phi�
 - Nhật ký `audit_logs` cho đăng nhập, thay đổi tài khoản và mọi thao tác tạo/sửa/xóa.
 - Toàn bộ schema CSDL cho cả 4 giai đoạn (kể cả trigger khiến sổ cái sao chỉ thêm được).
 
-## Bảo mật
+## Đã có ở Giai đoạn 2
 
+- **Lịch mẫu & sinh buổi:** mỗi lớp nhiều dòng lịch mỗi tuần (thứ + ca, có thể đặt giờ/phòng/GV riêng). Sinh buổi trong khoảng ngày của lớp, bỏ ngày nghỉ toàn trung tâm và ngày nghỉ riêng của lớp. Chạy lại không tạo trùng, không ghi đè buổi đã sửa.
+- **Giờ riêng từng buổi:** giờ được sao chép từ ca lúc sinh; sửa một buổi không đổi ca gốc hay buổi khác, sửa ca không đổi buổi đã sinh.
+- **Trùng lịch:** so theo khoảng giờ thực tế của GV thực dạy (đã tính dạy thay) và phòng. Trùng thì **chặn**; vượt sức chứa phòng thì **cảnh báo** nhưng vẫn lưu. Hai buổi nối tiếp nhau (09:30 kết thúc, 09:30 bắt đầu) không tính là trùng.
+- **Điều chỉnh:** dời buổi (giữ ngày gốc), hủy/khôi phục, GV dạy thay (lưu cả GV gốc và GV thay), buổi bù chỉ gồm học viên được chọn.
+- **Thời khóa biểu:** lưới tuần thứ × ca và lịch tháng; Admin lọc theo GV/lớp/phòng; GV chỉ thấy lịch của mình. Trên điện thoại hiển thị theo ngày.
+- **Điểm danh trên điện thoại:** danh sách chỉ gồm học viên đang ghi danh tại ngày học, mặc định "Có mặt", lưu cả lớp một lần. Mọi lần sửa ghi vào `audit_logs` kèm giá trị cũ và mới.
+- **Khóa sửa điểm danh:** sau 7 ngày (`attendance_lock_days` trong bảng `app_settings`). Chỉ Admin mở khóa, mỗi lần 24 giờ, có ghi nhật ký; kể cả Admin cũng phải mở khóa trước khi sửa.
+- **Tổng quan của GV:** buổi hôm nay và buổi quá hạn chưa điểm danh.
+
+Chưa có ở giai đoạn này: xuất TKB ra PDF/Excel và trang Cấu hình để sửa số ngày khóa (đều thuộc Giai đoạn 4; hiện đổi số ngày khóa trực tiếp trong bảng `app_settings`).
+
+## Bảo mật
 - **Phân quyền ở máy chủ:** GV chỉ truy cập lớp được phân công; truy cập lớp khác trả 404 (không lộ sự tồn tại). Có test ở tầng service và test gọi trực tiếp qua HTTP.
 - **Phiên:** cookie `httpOnly`, `SameSite=Lax`, `Secure` ở production; phiên được đọc lại từ CSDL mỗi request nên khóa tài khoản có hiệu lực ngay.
 - **CSRF:** Better Auth và Server Action kiểm tra Origin; Route Handler ghi dữ liệu tự kiểm tra Origin.

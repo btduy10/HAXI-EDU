@@ -1,10 +1,10 @@
 "use client";
 
 import { PencilIcon, PlusIcon, Trash2Icon } from "lucide-react";
-import Link from "next/link";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { LinkButton } from "@/components/link-button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { type ActionFn, type Field, FormDialog } from "./form-dialog";
 
@@ -59,9 +59,9 @@ export function CrudSection({
   const rowActions = (row: CrudRow) => (
     <div className="flex shrink-0 items-center gap-1">
       {row.href && (
-        <Button variant="outline" className="h-9" nativeButton={false} render={<Link href={row.href} />}>
+        <LinkButton variant="outline" className="h-9" href={row.href}>
           {detailLabel}
-        </Button>
+        </LinkButton>
       )}
       {updateAction && (
         <Button variant="ghost" size="icon-lg" aria-label={`Sửa ${row.cells[0]}`} onClick={() => setEditing(row)}>

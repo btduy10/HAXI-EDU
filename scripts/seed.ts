@@ -24,6 +24,7 @@ async function main() {
   const password = process.env.SEED_DEFAULT_PASSWORD ?? "Haxi@2026";
   const passwordHash = await hashPassword(password);
 
+  const classIds: string[] = [];
   await db.transaction(async (tx) => {
     const [t1, t2] = await tx
       .insert(s.teachers)
@@ -69,11 +70,14 @@ async function main() {
       ])
       .returning();
 
-    await tx.insert(s.timeSlots).values([
-      { name: "Ca sáng", defaultStart: "08:00", defaultEnd: "09:30" },
-      { name: "Ca chiều", defaultStart: "14:00", defaultEnd: "15:30" },
-      { name: "Ca tối", defaultStart: "18:00", defaultEnd: "19:30" },
-    ]);
+    const [morning, , evening] = await tx
+      .insert(s.timeSlots)
+      .values([
+        { name: "Ca sáng", defaultStart: "08:00", defaultEnd: "09:30" },
+        { name: "Ca chiều", defaultStart: "14:00", defaultEnd: "15:30" },
+        { name: "Ca tối", defaultStart: "18:00", defaultEnd: "19:30" },
+      ])
+      .returning();
 
     const start = iso(addDays(today, -28));
     const end = iso(addDays(today, 90));
@@ -89,6 +93,15 @@ async function main() {
       { classId: k1!.id, teacherId: t1!.id, role: "main" },
       { classId: k2!.id, teacherId: t2!.id, role: "main" },
     ]);
+
+    // Lịch mẫu: lớp cơ bản học tối Thứ Ba + Thứ Năm; lớp nâng cao học sáng Thứ Bảy + Chủ nhật.
+    await tx.insert(s.scheduleTemplates).values([
+      { classId: k1!.id, weekday: 2, timeSlotId: evening!.id },
+      { classId: k1!.id, weekday: 4, timeSlotId: evening!.id },
+      { classId: k2!.id, weekday: 6, timeSlotId: morning!.id },
+      { classId: k2!.id, weekday: 7, timeSlotId: morning!.id },
+    ]);
+    classIds.push(k1!.id, k2!.id);
 
     const names = [
       "Lê Gia Bảo", "Phạm Minh Anh", "Hoàng Đức Huy", "Vũ Ngọc Hân", "Đặng Quốc Khánh",
@@ -136,6 +149,26 @@ async function main() {
       { key: "max_deduction_per_session", value: 3 },
     ]);
   });
+
+  // Sinh buổi học bằng chính service của ứng dụng, rồi điểm danh sẵn các buổi đã quá hạn khóa.
+  const { generateSessions } = await import("../src/server/services/sessions");
+  const { sessionRoster } = await import("../src/server/services/attendance");
+  const [adminUser] = await db.select().from(s.user).where(sql`${s.user.role} = 'admin'`).limit(1);
+  const admin = { userId: adminUser!.id, role: "admin" as const, teacherId: null };
+  for (const classId of classIds) await generateSessions(admin, classId);
+  const oldSessions = await db.select().from(s.sessions).where(sql`${s.sessions.date} < ${iso(addDays(today, -7))}`);
+  for (const session of oldSessions) {
+    const roster = await sessionRoster(db, session);
+    await db.insert(s.attendances).values(
+      roster.map((r, i) => ({
+        sessionId: session.id,
+        studentId: r.studentId,
+        status: (i === 3 ? "absent" : i === 5 ? "late" : "present") as "absent" | "late" | "present",
+        recordedBy: adminUser!.id,
+      })),
+    );
+    await db.update(s.sessions).set({ status: "done", content: "Bài học theo giáo trình" }).where(sql`${s.sessions.id} = ${session.id}`);
+  }
 
   console.log("Đã tạo dữ liệu mẫu.");
   console.log("Tài khoản demo: admin, gv.lan, gv.minh — mật khẩu tạm lấy từ SEED_DEFAULT_PASSWORD.");
