@@ -84,6 +84,8 @@ export const unassignTeacherAction = async (input: unknown) =>
 export const enrollStudentAction = async (classId: unknown, input: unknown) =>
   runAction(enrollInput, withClassId(classId, input), classes.enrollStudent, ADMIN);
 export const leaveEnrollmentAction = async (input: unknown) => runAction(leaveInput, input, classes.leaveEnrollment, ADMIN);
+export const deleteEnrollmentAction = async (input: unknown) =>
+  runAction(idOnly, input, (a, d) => classes.deleteEnrollment(a, d.id), ADMIN);
 
 export const createAccountAction = async (input: unknown) => runAction(accountInput, input, accounts.createAccount, ADMIN);
 export const updateAccountAction = async (input: unknown) => runAction(accountEditInput, input, accounts.updateAccount, ADMIN);

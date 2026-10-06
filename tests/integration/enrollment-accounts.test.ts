@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/db";
-import { account, auditLogs, session, students, user } from "@/db/schema";
+import { account, attendances, auditLogs, session, sessions, students, user } from "@/db/schema";
 import { verifyPassword } from "@/server/password";
 import * as accounts from "@/server/services/accounts";
 import * as catalog from "@/server/services/catalog";
@@ -37,6 +37,21 @@ describe("ghi danh", () => {
     await enroll(0, "2026-03-01");
     const after = (await classes.listEnrollments(f.admin, f.classA.id)).filter((e) => e.code === "A1");
     expect(after.map((e) => e.status).sort()).toEqual(["active", "left"]);
+  });
+
+  it("Admin xóa ghi danh nhập sai; đã có điểm danh thì không xóa được", async () => {
+    const list = await classes.listEnrollments(f.admin, f.classA.id);
+    const [a1, a2] = [list.find((e) => e.code === "A1")!, list.find((e) => e.code === "A2")!];
+    await expect(classes.deleteEnrollment(f.actorA, a1.id)).rejects.toMatchObject({ code: "FORBIDDEN" });
+
+    // A2 đã được điểm danh ở một buổi của lớp trong thời gian ghi danh → giữ lại.
+    const [held] = await db.insert(sessions).values({ classId: f.classA.id, date: "2026-01-12", startTime: "08:00", endTime: "09:30" }).returning();
+    await db.insert(attendances).values({ sessionId: held!.id, studentId: a2.studentId, status: "present" });
+    await expect(classes.deleteEnrollment(f.admin, a2.id)).rejects.toMatchObject({ code: "CONFLICT" });
+
+    await classes.deleteEnrollment(f.admin, a1.id);
+    expect((await classes.listEnrollments(f.admin, f.classA.id)).map((e) => e.code)).toEqual(["A2"]);
+    await enroll(0); // xóa xong thì ghi danh lại được
   });
 
   it("không ghi danh học viên đã nghỉ hoặc vào lớp đã đóng", async () => {

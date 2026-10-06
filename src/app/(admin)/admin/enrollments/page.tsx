@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
-import { FormDialogButton } from "@/components/action-buttons";
+import { ConfirmButton, FormDialogButton } from "@/components/action-buttons";
 import { AutoSubmitSelect } from "@/components/auto-submit-select";
 import { Badge } from "@/components/ui/badge";
 import { LABELS, formatDate, todayIso } from "@/lib/format";
-import { enrollStudentAction, leaveEnrollmentAction } from "@/server/actions/admin";
+import { deleteEnrollmentAction, enrollStudentAction, leaveEnrollmentAction } from "@/server/actions/admin";
 import { listClasses, listEnrollments } from "@/server/services/classes";
 import { listStudents } from "@/server/services/students";
 import { requireMenu } from "@/server/session";
@@ -11,7 +11,7 @@ import { requireMenu } from "@/server/session";
 export const metadata: Metadata = { title: "Ghi danh" };
 
 export default async function EnrollmentsPage({ searchParams }: PageProps<"/admin/enrollments">) {
-  const { actor, can } = await requireMenu("enrollments");
+  const { actor, role, can } = await requireMenu("enrollments");
   const classes = await listClasses(actor);
   const raw = (await searchParams).classId;
   const requested = Array.isArray(raw) ? raw[0] : raw;
@@ -87,21 +87,34 @@ export default async function EnrollmentsPage({ searchParams }: PageProps<"/admi
                       {e.leftAt && ` · rời lớp ${formatDate(e.leftAt)}`}
                     </p>
                   </div>
-                  {e.status === "active" && can("edit") ? (
-                    <FormDialogButton
-                      label="Cho rời lớp"
-                      variant="outline"
-                      title={`Cho ${e.fullName} rời lớp`}
-                      description="Lịch sử điểm danh và sao trước ngày rời lớp được giữ nguyên."
-                      fields={[{ name: "leftAt", label: "Ngày rời lớp", type: "date", required: true }]}
-                      initial={{ leftAt: today }}
-                      fixed={{ id: e.id }}
-                      action={leaveEnrollmentAction}
-                      successMessage="Đã cập nhật."
-                    />
-                  ) : (
-                    <Badge variant={e.status === "active" ? "secondary" : "outline"}>{LABELS.enrollmentStatus[e.status]}</Badge>
-                  )}
+                  <div className="flex flex-wrap items-center gap-2">
+                    {e.status === "active" && can("edit") ? (
+                      <FormDialogButton
+                        label="Cho rời lớp"
+                        variant="outline"
+                        title={`Cho ${e.fullName} rời lớp`}
+                        description="Lịch sử điểm danh và sao trước ngày rời lớp được giữ nguyên."
+                        fields={[{ name: "leftAt", label: "Ngày rời lớp", type: "date", required: true }]}
+                        initial={{ leftAt: today }}
+                        fixed={{ id: e.id }}
+                        action={leaveEnrollmentAction}
+                        successMessage="Đã cập nhật."
+                      />
+                    ) : (
+                      <Badge variant={e.status === "active" ? "secondary" : "outline"}>{LABELS.enrollmentStatus[e.status]}</Badge>
+                    )}
+                    {/* Ghi danh nhập sai: chỉ Admin xóa hẳn, và chỉ khi lớp còn mở. */}
+                    {role === "admin" && current.status === "open" && (
+                      <ConfirmButton
+                        label="Xóa"
+                        variant="destructive"
+                        confirmText={`Xóa hẳn ghi danh của ${e.fullName} ở lớp ${current.code}? Không hoàn tác được.`}
+                        action={deleteEnrollmentAction}
+                        input={{ id: e.id }}
+                        successMessage="Đã xóa ghi danh."
+                      />
+                    )}
+                  </div>
                 </li>
               ))}
             </ul>
