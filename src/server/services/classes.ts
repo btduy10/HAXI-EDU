@@ -7,6 +7,7 @@ import { audit } from "../audit";
 import { AppError, notFound, translateDbError } from "../errors";
 import { type Actor, allowedClassIds, assertAdmin, assertCan, assertCanAny, assertClassAccess } from "../guard";
 import { createRow, deleteRow, updateRow } from "./crud";
+import { purgeStudentStarLogs } from "./stars";
 
 const activeCount = sql<number>`(
   select count(*)::int from ${enrollments}
@@ -193,8 +194,8 @@ export async function leaveEnrollment(actor: Actor, data: z.output<typeof leaveI
 }
 
 /**
- * Xóa hẳn một dòng ghi danh nhập sai (chỉ Admin), kèm điểm danh của học viên ở các buổi của lớp
- * trong thời gian ghi danh đó. Sao đã ghi vẫn được giữ vì sổ sao chỉ thêm, không xóa.
+ * Xóa hẳn một dòng ghi danh nhập sai (chỉ Admin), kèm điểm danh và lịch sử sao của học viên ở các buổi
+ * của lớp trong thời gian ghi danh đó; cấp và avatar của học viên được tính lại.
  */
 export async function deleteEnrollment(actor: Actor, id: string) {
   assertAdmin(actor);
@@ -204,7 +205,7 @@ export async function deleteEnrollment(actor: Actor, id: string) {
     const [cls] = await tx.select({ status: classes.status }).from(classes).where(eq(classes.id, before.classId)).limit(1);
     if (cls?.status !== "open") throw new AppError("CONFLICT", "Lớp đã đóng và đã chốt tổng kết nên không xóa ghi danh được.");
 
-    const inPeriod = tx
+    const inPeriod = await tx
       .select({ id: sessions.id })
       .from(sessions)
       .where(
@@ -214,10 +215,15 @@ export async function deleteEnrollment(actor: Actor, id: string) {
           before.leftAt ? lt(sessions.date, before.leftAt) : undefined,
         ),
       );
-    const removed = await tx
-      .delete(attendances)
-      .where(and(eq(attendances.studentId, before.studentId), inArray(attendances.sessionId, inPeriod)))
-      .returning({ id: attendances.id });
+    const sessionIds = inPeriod.map((r) => r.id);
+    const removed =
+      sessionIds.length === 0
+        ? []
+        : await tx
+            .delete(attendances)
+            .where(and(eq(attendances.studentId, before.studentId), inArray(attendances.sessionId, sessionIds)))
+            .returning({ id: attendances.id });
+    const deletedStarLogs = await purgeStudentStarLogs(tx, actor, before.studentId, sessionIds);
 
     await tx.delete(enrollments).where(eq(enrollments.id, id));
     await audit(tx, {
@@ -226,8 +232,8 @@ export async function deleteEnrollment(actor: Actor, id: string) {
       tableName: "enrollments",
       recordId: id,
       oldValue: before,
-      newValue: { deletedAttendances: removed.length },
+      newValue: { deletedAttendances: removed.length, deletedStarLogs },
     });
-    return { deletedAttendances: removed.length };
+    return { deletedAttendances: removed.length, deletedStarLogs };
   });
 }

@@ -111,7 +111,7 @@ Nguyên tắc: mọi hàm trong `server/services` nhận `actor` lấy từ phi�
 ### Sao, cấp bậc và avatar
 
 - **Ghi sao theo buổi** cho từng em, một nhóm hoặc cả lớp. Số sao lấy từ tiêu chí ở máy chủ.
-- **Sổ cái chỉ thêm:** `star_logs` không sửa, không xóa (có trigger ở CSDL). Hoàn tác tạo bản ghi đảo dấu, mỗi lần ghi chỉ hoàn tác được một lần.
+- **Sổ cái chỉ thêm:** `star_logs` không sửa, không xóa (có trigger ở CSDL). Hoàn tác tạo bản ghi đảo dấu, mỗi lần ghi chỉ hoàn tác được một lần. Ngoại lệ duy nhất: Admin xóa hẳn một dòng ghi danh nhập sai (trang Ghi danh) thì điểm danh và lịch sử sao của học viên ở lớp đó, trong thời gian ghi danh, bị xóa theo; cấp và avatar được tính lại, thao tác có ghi Nhật ký.
 - **Hai loại tổng sao**, đều tính khi truy vấn bằng `GREATEST(0, SUM(stars))` và không lưu cứng: tổng toàn thời gian (lên cấp, mở avatar) và tổng theo lớp (xếp hạng, tặng quà).
 - **Cấp bậc** suy ra trực tiếp từ tổng toàn thời gian; trừ sao là tụt cấp ngay. Mỗi học viên bị trừ tối đa N sao/buổi (mặc định 3, sửa ở trang Cấu hình).
 - **Avatar:** 15 robot SVG (12 mở theo cấp, 3 tặng riêng). GV của lớp và Admin đổi avatar cho học viên. Avatar khóa hiển thị mờ kèm "Cần X sao".

@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import type { z } from "zod";
 import { db, type DbOrTx, type Tx } from "@/db";
@@ -159,6 +159,33 @@ async function syncAfterChange(tx: Tx, actor: Actor, studentIds: string[], befor
     }
   }
   return changes;
+}
+
+/**
+ * Ngoại lệ duy nhất của sổ cái chỉ-thêm: xóa hẳn lịch sử sao của một học viên ở các buổi cho trước,
+ * khi Admin xóa một dòng ghi danh nhập sai. Gọi trong transaction của thao tác xóa đó; sau khi xóa thì
+ * tính lại cấp và avatar của học viên. Trả về số dòng sao đã xóa.
+ */
+export async function purgeStudentStarLogs(tx: Tx, actor: Actor, studentId: string, sessionIds: string[]): Promise<number> {
+  assertAdmin(actor);
+  if (sessionIds.length === 0) return 0;
+  const targets = await tx
+    .select({ id: starLogs.id })
+    .from(starLogs)
+    .where(and(eq(starLogs.studentId, studentId), inArray(starLogs.sessionId, sessionIds)));
+  if (targets.length === 0) return 0;
+  const ids = targets.map((t) => t.id);
+  const before = await rawSums(tx, [studentId]);
+  // Trigger ở CSDL chỉ cho DELETE khi cờ này bật; cờ chỉ có hiệu lực trong giao dịch hiện tại và được tắt ngay sau khi xóa.
+  await tx.execute(sql`select set_config('haxi.star_logs_admin_delete', 'on', true)`);
+  // Xóa cả bản ghi hoàn tác trỏ tới các dòng bị xóa.
+  const removed = await tx
+    .delete(starLogs)
+    .where(or(inArray(starLogs.id, ids), inArray(starLogs.reversesLogId, ids)))
+    .returning({ id: starLogs.id });
+  await tx.execute(sql`select set_config('haxi.star_logs_admin_delete', 'off', true)`);
+  await syncAfterChange(tx, actor, [studentId], before);
+  return removed.length;
 }
 
 /** Sau khi Admin sửa bảng cấp hoặc kho avatar: đồng bộ lại avatar của mọi học viên. */

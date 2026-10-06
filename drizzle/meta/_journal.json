@@ -36,6 +36,13 @@
       "when": 1791248397761,
       "tag": "0004_roles_as_text",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1791250947084,
+      "tag": "0005_star_logs_admin_delete",
+      "breakpoints": true
     }
   ]
 }
