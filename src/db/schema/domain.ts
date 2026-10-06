@@ -126,6 +126,8 @@ export const classTeachers = pgTable(
       .notNull()
       .references(() => teachers.id),
     role: classTeacherRole("role").notNull().default("main"),
+    /** Lương mỗi buổi (đồng) của GV ở lớp này; null = chưa nhập. Chấm công dùng để tính thành tiền. */
+    ratePerSession: integer("rate_per_session"),
     createdAt: createdAt(),
   },
   (t) => [
@@ -172,6 +174,7 @@ export const scheduleTemplates = pgTable(
       .references(() => timeSlots.id),
     roomId: uuid("room_id").references(() => rooms.id),
     teacherId: uuid("teacher_id").references(() => teachers.id),
+    assistantTeacherId: uuid("assistant_teacher_id").references(() => teachers.id),
     startTime: time("start_time"),
     endTime: time("end_time"),
     createdAt: createdAt(),
@@ -199,6 +202,7 @@ export const sessions = pgTable(
     roomId: uuid("room_id").references(() => rooms.id),
     teacherId: uuid("teacher_id").references(() => teachers.id),
     substituteTeacherId: uuid("substitute_teacher_id").references(() => teachers.id),
+    assistantTeacherId: uuid("assistant_teacher_id").references(() => teachers.id),
     kind: sessionKind("kind").notNull().default("regular"),
     status: sessionStatus("status").notNull().default("planned"),
     content: text("content"),
@@ -213,6 +217,7 @@ export const sessions = pgTable(
     index("sessions_class_date_idx").on(t.classId, t.date),
     index("sessions_teacher_date_idx").on(t.teacherId, t.date),
     index("sessions_substitute_date_idx").on(t.substituteTeacherId, t.date),
+    index("sessions_assistant_date_idx").on(t.assistantTeacherId, t.date),
     index("sessions_room_date_idx").on(t.roomId, t.date),
     // Sinh buổi lặp lại không tạo trùng. Buổi đã dời giữ original_date nên dùng ngày gốc.
     uniqueIndex("sessions_template_origin_uniq").on(t.templateId, sql`coalesce(${t.originalDate}, ${t.date})`),

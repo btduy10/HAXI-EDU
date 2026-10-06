@@ -80,10 +80,21 @@ export const classInput = z
   })
   .refine((v) => v.startDate <= v.endDate, { path: ["endDate"], message: "Ngày kết thúc phải sau ngày bắt đầu" });
 
+/** Lương mỗi buổi (đồng) của GV ở lớp; để trống = chưa nhập. */
+const ratePerSession = optIntIn(0, 100_000_000);
+
 export const classTeacherInput = z.object({
   classId: id,
   teacherId: id,
   role: z.enum(["main", "assistant"]).default("main"),
+  ratePerSession,
+});
+
+/** Sửa phân công: đổi vai trò (Dạy chính / Trợ giảng) và lương mỗi buổi. */
+export const classTeacherUpdate = z.object({
+  id,
+  role: z.enum(["main", "assistant"]),
+  ratePerSession,
 });
 
 export const enrollInput = z.object({

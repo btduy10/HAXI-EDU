@@ -7,6 +7,11 @@ export function formatDate(iso: string | null | undefined): string {
   return `${d}/${m}/${y}`;
 }
 
+/** Số tiền đồng, vd. 300000 → "300.000 đ". */
+export function formatMoney(value: number): string {
+  return `${value.toLocaleString("vi-VN")} đ`;
+}
+
 export function formatDateTime(value: Date | null | undefined): string {
   if (!value) return "";
   return new Intl.DateTimeFormat("vi-VN", { timeZone: TIME_ZONE, dateStyle: "short", timeStyle: "short" }).format(value);

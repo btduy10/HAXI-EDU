@@ -6,10 +6,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { WEEKDAY_LABELS, addMonths, endOfMonth, isoWeekday, parseIsoDate, startOfMonth } from "@/lib/dates";
-import { formatDate, formatTime, todayIso } from "@/lib/format";
+import { formatDate, formatMoney, formatTime, todayIso } from "@/lib/format";
 import { listTeachers } from "@/server/services/catalog";
 import { listClasses } from "@/server/services/classes";
-import { type TimesheetState, teacherTimesheet } from "@/server/services/timesheet";
+import { TIMESHEET_ROLE_LABEL, type TimesheetState, teacherTimesheet } from "@/server/services/timesheet";
 import { requireMenu } from "@/server/session";
 
 export const metadata: Metadata = { title: "Chấm công" };
@@ -37,8 +37,15 @@ export default async function TimesheetPage({ searchParams }: PageProps<"/admin/
 
   const { rows, summary } = await teacherTimesheet(actor, { from, to, teacherId: teacher?.id, classId: cls?.id });
   const total = summary.reduce(
-    (sum, s) => ({ taught: sum.taught + s.taught, substitute: sum.substitute + s.substitute, minutes: sum.minutes + s.minutes, pending: sum.pending + s.pending }),
-    { taught: 0, substitute: 0, minutes: 0, pending: 0 },
+    (sum, s) => ({
+      taught: sum.taught + s.taught,
+      substitute: sum.substitute + s.substitute,
+      assistant: sum.assistant + s.assistant,
+      minutes: sum.minutes + s.minutes,
+      pending: sum.pending + s.pending,
+      amount: sum.amount + s.amount,
+    }),
+    { taught: 0, substitute: 0, assistant: 0, minutes: 0, pending: 0, amount: 0 },
   );
 
   const href = (range: { from: string; to: string }) => {
@@ -62,7 +69,8 @@ export default async function TimesheetPage({ searchParams }: PageProps<"/admin/
       <div>
         <h1 className="text-lg font-semibold">Chấm công giáo viên</h1>
         <p className="text-sm text-muted-foreground">
-          Mỗi buổi đã điểm danh là một công, tính cho người thực dạy (giáo viên dạy thay nếu có). Buổi đã hủy không tính.
+          Mỗi buổi đã điểm danh là một công cho người thực dạy (giáo viên dạy thay nếu có) và một công trợ giảng cho trợ giảng
+          của buổi. Buổi đã hủy không tính. Thành tiền = số công × lương/buổi nhập ở Lớp học → Giáo viên phụ trách.
         </p>
       </div>
 
@@ -141,8 +149,10 @@ export default async function TimesheetPage({ searchParams }: PageProps<"/admin/
                   <TableHead>Giáo viên</TableHead>
                   <TableHead className="text-center">Số công</TableHead>
                   <TableHead className="text-center">Trong đó dạy thay</TableHead>
+                  <TableHead className="text-center">Công trợ giảng</TableHead>
                   <TableHead className="text-center">Số giờ</TableHead>
                   <TableHead className="text-center">Chưa điểm danh</TableHead>
+                  <TableHead className="text-right">Thành tiền</TableHead>
                   <TableHead>Xuất file riêng</TableHead>
                 </TableRow>
               </TableHeader>
@@ -154,8 +164,15 @@ export default async function TimesheetPage({ searchParams }: PageProps<"/admin/
                     <TableCell className="whitespace-normal">{s.teacherName}</TableCell>
                     <TableCell className="text-center font-semibold tabular-nums">{s.taught}</TableCell>
                     <TableCell className="text-center tabular-nums">{s.substitute}</TableCell>
+                    <TableCell className="text-center tabular-nums">{s.assistant}</TableCell>
                     <TableCell className="text-center tabular-nums">{hours(s.minutes)}</TableCell>
                     <TableCell className="text-center tabular-nums">{s.pending}</TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {formatMoney(s.amount)}
+                      {s.missingRate > 0 && (
+                        <span className="block text-xs text-destructive">{s.missingRate} công chưa có mức lương</span>
+                      )}
+                    </TableCell>
                     <TableCell>
                       <a href={exportHref(s.teacherId)} download className={exportClass} aria-label={`Xuất Excel của ${s.teacherName}`}>
                         Excel
@@ -170,8 +187,10 @@ export default async function TimesheetPage({ searchParams }: PageProps<"/admin/
                     <TableCell>Tổng cộng</TableCell>
                     <TableCell className="text-center tabular-nums">{total.taught}</TableCell>
                     <TableCell className="text-center tabular-nums">{total.substitute}</TableCell>
+                    <TableCell className="text-center tabular-nums">{total.assistant}</TableCell>
                     <TableCell className="text-center tabular-nums">{hours(total.minutes)}</TableCell>
                     <TableCell className="text-center tabular-nums">{total.pending}</TableCell>
+                    <TableCell className="text-right tabular-nums">{formatMoney(total.amount)}</TableCell>
                     <TableCell />
                   </TableRow>
                 )}
@@ -195,29 +214,25 @@ export default async function TimesheetPage({ searchParams }: PageProps<"/admin/
                   <TableHead>Ngày</TableHead>
                   <TableHead>Giờ</TableHead>
                   <TableHead>Giáo viên</TableHead>
+                  <TableHead>Vai trò</TableHead>
                   <TableHead>Lớp</TableHead>
                   <TableHead>Khóa học</TableHead>
                   <TableHead>Phòng</TableHead>
                   <TableHead>Trạng thái</TableHead>
+                  <TableHead className="text-right">Lương/buổi</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {rows.map((r, index) => (
-                  <TableRow key={r.id}>
+                  <TableRow key={r.key}>
                     <TableCell className="text-center text-muted-foreground tabular-nums">{index + 1}</TableCell>
                     <TableCell>{WEEKDAY_LABELS[isoWeekday(r.date)]}</TableCell>
                     <TableCell>{formatDate(r.date)}</TableCell>
                     <TableCell className="tabular-nums">
                       {formatTime(r.startTime)}–{formatTime(r.endTime)}
                     </TableCell>
-                    <TableCell>
-                      {r.teacherName}
-                      {r.isSubstitute && (
-                        <Badge variant="outline" className="ml-1">
-                          Dạy thay
-                        </Badge>
-                      )}
-                    </TableCell>
+                    <TableCell>{r.teacherName}</TableCell>
+                    <TableCell>{TIMESHEET_ROLE_LABEL[r.role]}</TableCell>
                     <TableCell>
                       {r.classCode}
                       {r.kind === "makeup" && (
@@ -233,6 +248,7 @@ export default async function TimesheetPage({ searchParams }: PageProps<"/admin/
                         {STATE_LABEL[r.state]}
                       </Badge>
                     </TableCell>
+                    <TableCell className="text-right tabular-nums">{r.rate === null ? "—" : formatMoney(r.rate)}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>

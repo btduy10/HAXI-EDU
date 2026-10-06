@@ -25,20 +25,24 @@ describe("chồng lấn giờ", () => {
 
   it("phát hiện trùng GV và trùng phòng, bỏ qua chính nó và ngày khác", () => {
     const others = [
-      { id: "s1", date: "2026-01-06", startTime: "08:00", endTime: "09:30", roomId: "r1", teacherId: "t1", label: "A" },
-      { id: "s2", date: "2026-01-07", startTime: "08:00", endTime: "09:30", roomId: "r1", teacherId: "t1", label: "A" },
+      { id: "s1", date: "2026-01-06", startTime: "08:00", endTime: "09:30", roomId: "r1", teacherIds: ["t1"], label: "A" },
+      { id: "s2", date: "2026-01-07", startTime: "08:00", endTime: "09:30", roomId: "r1", teacherIds: ["t1"], label: "A" },
     ];
     const base = { date: "2026-01-06", startTime: "09:00", endTime: "10:00" };
-    expect(findConflicts({ ...base, roomId: "r1", teacherId: "t2" }, others).map((c) => c.kind)).toEqual(["room"]);
-    expect(findConflicts({ ...base, roomId: "r2", teacherId: "t1" }, others).map((c) => c.kind)).toEqual(["teacher"]);
-    expect(findConflicts({ ...base, roomId: "r1", teacherId: "t1" }, others)).toHaveLength(2);
-    expect(findConflicts({ ...base, id: "s1", roomId: "r1", teacherId: "t1" }, others)).toEqual([]);
-    expect(findConflicts({ ...base, roomId: null, teacherId: null }, others)).toEqual([]);
+    expect(findConflicts({ ...base, roomId: "r1", teacherIds: ["t2"] }, others).map((c) => c.kind)).toEqual(["room"]);
+    expect(findConflicts({ ...base, roomId: "r2", teacherIds: ["t1"] }, others).map((c) => c.kind)).toEqual(["teacher"]);
+    expect(findConflicts({ ...base, roomId: "r1", teacherIds: ["t1"] }, others)).toHaveLength(2);
+    expect(findConflicts({ ...base, id: "s1", roomId: "r1", teacherIds: ["t1"] }, others)).toEqual([]);
+    expect(findConflicts({ ...base, roomId: null, teacherIds: [] }, others)).toEqual([]);
+    // Trợ giảng cũng bị kiểm tra trùng: người này đang trợ giảng buổi khác cùng giờ, hoặc đang dạy chính.
+    const withAssistant = [{ ...others[0]!, id: "s3", teacherIds: ["t9", "t5"] }];
+    expect(findConflicts({ ...base, roomId: "r2", teacherIds: ["t1", "t5"] }, withAssistant).map((c) => c.kind)).toEqual(["teacher"]);
+    expect(findConflicts({ ...base, roomId: "r2", teacherIds: ["t7"] }, withAssistant)).toEqual([]);
   });
 });
 
 describe("sinh buổi học", () => {
-  const template = { id: "tp1", weekday: 2, timeSlotId: "slot", slotStart: "18:00:00", slotEnd: "19:30:00", startTime: null, endTime: null, roomId: null, teacherId: null };
+  const template = { id: "tp1", weekday: 2, timeSlotId: "slot", slotStart: "18:00:00", slotEnd: "19:30:00", startTime: null, endTime: null, roomId: null, teacherId: null, assistantTeacherId: null };
 
   it("sinh đúng thứ trong khoảng ngày, bỏ ngày nghỉ, sao chép giờ từ ca", () => {
     const planned = planSessions({

@@ -22,7 +22,9 @@ import {
   findConflicts,
   isEnrolledOn,
   planSessions,
+  staffOf,
 } from "@/domain/schedule";
+import { formatDate, todayIso } from "@/lib/format";
 import type {
   makeupInput,
   manualSessionInput,
@@ -31,13 +33,15 @@ import type {
   sessionRescheduleInput,
   sessionSubstituteInput,
   templateInput,
+  templateUpdateInput,
 } from "@/lib/validation/schedule";
 import { audit } from "../audit";
 import { AppError, notFound } from "../errors";
 import { type Actor, allowedClassIds, assertAdmin, assertCan, assertCanAny, assertClassAccess, assertSessionAccess } from "../guard";
-import { createRow } from "./crud";
+import { purgeSessionStarLogs } from "./stars";
 
 const substitute = alias(teachers, "substitute");
+const assistant = alias(teachers, "assistant");
 
 const sessionColumns = {
   id: sessions.id,
@@ -57,12 +61,15 @@ const sessionColumns = {
   teacherName: teachers.fullName,
   substituteTeacherId: sessions.substituteTeacherId,
   substituteName: substitute.fullName,
+  assistantTeacherId: sessions.assistantTeacherId,
+  assistantName: assistant.fullName,
   kind: sessions.kind,
   status: sessions.status,
   content: sessions.content,
   note: sessions.note,
   attendanceUnlockedUntil: sessions.attendanceUnlockedUntil,
   attendanceCount: sql<number>`(select count(*)::int from ${attendances} where ${attendances.sessionId} = ${sessions.id})`,
+  starLogCount: sql<number>`(select count(*)::int from ${starLogs} where ${starLogs.sessionId} = ${sessions.id})`,
 };
 
 function sessionQuery() {
@@ -73,8 +80,13 @@ function sessionQuery() {
     .leftJoin(timeSlots, eq(timeSlots.id, sessions.timeSlotId))
     .leftJoin(rooms, eq(rooms.id, sessions.roomId))
     .leftJoin(teachers, eq(teachers.id, sessions.teacherId))
-    .leftJoin(substitute, eq(substitute.id, sessions.substituteTeacherId));
+    .leftJoin(substitute, eq(substitute.id, sessions.substituteTeacherId))
+    .leftJoin(assistant, eq(assistant.id, sessions.assistantTeacherId));
 }
+
+/** Buổi mà GV này đứng lớp: dạy chính, dạy thay hoặc trợ giảng. */
+const taughtBy = (teacherId: string) =>
+  or(eq(sessions.teacherId, teacherId), eq(sessions.substituteTeacherId, teacherId), eq(sessions.assistantTeacherId, teacherId))!;
 
 export type SessionRow = Awaited<ReturnType<typeof sessionQuery>>[number];
 
@@ -94,13 +106,11 @@ export async function listSessions(actor: Actor, filters: SessionFilters): Promi
   if (filters.classId) conditions.push(eq(sessions.classId, filters.classId));
   if (filters.roomId) conditions.push(eq(sessions.roomId, filters.roomId));
   if (filters.teacherId) {
-    conditions.push(or(eq(sessions.teacherId, filters.teacherId), eq(sessions.substituteTeacherId, filters.teacherId))!);
+    conditions.push(taughtBy(filters.teacherId));
   }
 
   const allowed = await allowedClassIds(actor);
-  const mine = actor.teacherId
-    ? or(eq(sessions.teacherId, actor.teacherId), eq(sessions.substituteTeacherId, actor.teacherId))!
-    : null;
+  const mine = actor.teacherId ? taughtBy(actor.teacherId) : null;
   if (allowed !== null) {
     // Phạm vi "lớp của mình": buổi mình dạy/dạy thay, cộng các buổi của lớp được phân công.
     if (!mine) return [];
@@ -138,21 +148,160 @@ export async function listTemplates(actor: Actor, classId: string) {
       roomName: rooms.name,
       teacherId: scheduleTemplates.teacherId,
       teacherName: teachers.fullName,
+      assistantTeacherId: scheduleTemplates.assistantTeacherId,
+      assistantName: assistant.fullName,
     })
     .from(scheduleTemplates)
     .innerJoin(timeSlots, eq(timeSlots.id, scheduleTemplates.timeSlotId))
     .leftJoin(rooms, eq(rooms.id, scheduleTemplates.roomId))
     .leftJoin(teachers, eq(teachers.id, scheduleTemplates.teacherId))
+    .leftJoin(assistant, eq(assistant.id, scheduleTemplates.assistantTeacherId))
     .where(eq(scheduleTemplates.classId, classId))
     .orderBy(asc(scheduleTemplates.weekday), asc(timeSlots.defaultStart));
 }
 
-// Thêm/xóa dòng lịch mẫu là một phần của "Sửa lớp".
-export async function createTemplate(actor: Actor, data: z.output<typeof templateInput>) {
+// Thêm/sửa/xóa dòng lịch mẫu là một phần của "Sửa lớp".
+
+/** Trợ giảng phải khác giáo viên chính của cùng dòng lịch mẫu / buổi học. */
+function assertDistinctAssistant(teacherId: string | null | undefined, assistantTeacherId: string | null | undefined) {
+  if (assistantTeacherId && assistantTeacherId === teacherId) {
+    throw new AppError("VALIDATION", "Trợ giảng phải khác giáo viên chính.", { assistantTeacherId: "Phải khác GV chính" });
+  }
+}
+
+/** Thêm dòng lịch mẫu rồi tự sinh các buổi từ hôm nay đến hết khóa cho dòng đó (bỏ ngày nghỉ, báo buổi bị trùng). */
+export async function createTemplate(actor: Actor, data: z.output<typeof templateInput>, now: Date = new Date()): Promise<GenerationResult> {
   assertCan(actor, "classes", "edit");
   await assertClassAccess(actor, data.classId);
-  return createRow(actor, scheduleTemplates, "schedule_templates", data, "classes", "edit");
+  assertDistinctAssistant(data.teacherId, data.assistantTeacherId);
+  return db.transaction(async (tx) => {
+    await lockSchedule(tx);
+    const [cls] = await tx.select({ status: classes.status }).from(classes).where(eq(classes.id, data.classId)).limit(1);
+    if (!cls) throw notFound("lớp học");
+    const [row] = await tx.insert(scheduleTemplates).values(data).returning();
+    await audit(tx, { userId: actor.userId, action: "create", tableName: "schedule_templates", recordId: row!.id, newValue: row });
+    if (cls.status !== "open") return { created: 0, alreadyExisting: 0, conflicts: [], warnings: [] };
+    return withNotices(await generateInTx(tx, actor, data.classId, row!.id, todayIso(now)));
+  });
 }
+
+/**
+ * Sửa dòng lịch mẫu và áp sang các buổi TƯƠNG LAI chưa điểm danh của dòng đó.
+ * Chỉ đổi những trường của buổi còn đúng giá trị cũ của lịch mẫu, nên buổi đã sửa tay riêng được giữ nguyên.
+ * Đổi thứ trong tuần: xóa các buổi tương lai chưa điểm danh của dòng đó rồi sinh lại theo thứ mới.
+ * Buổi bị trùng lịch sau khi đổi thì giữ nguyên và được báo lại.
+ */
+export async function updateTemplate(
+  actor: Actor,
+  input: z.output<typeof templateUpdateInput>,
+  now: Date = new Date(),
+): Promise<GenerationResult & { updated: number }> {
+  assertCan(actor, "classes", "edit");
+  const { id, ...data } = input;
+  assertDistinctAssistant(data.teacherId, data.assistantTeacherId);
+  return db.transaction(async (tx) => {
+    await lockSchedule(tx);
+    const [before] = await tx.select().from(scheduleTemplates).where(eq(scheduleTemplates.id, id)).for("update").limit(1);
+    if (!before) throw notFound("lịch mẫu");
+    await assertClassAccess(actor, before.classId, tx);
+    const [cls] = await tx.select().from(classes).where(eq(classes.id, before.classId)).limit(1);
+    if (!cls) throw notFound("lớp học");
+    const [after] = await tx.update(scheduleTemplates).set(data).where(eq(scheduleTemplates.id, id)).returning();
+    await audit(tx, { userId: actor.userId, action: "update", tableName: "schedule_templates", recordId: id, oldValue: before, newValue: after });
+
+    const result: GenerationResult & { updated: number } = { created: 0, alreadyExisting: 0, conflicts: [], warnings: [], updated: 0 };
+    if (cls.status !== "open") return result;
+    const today = todayIso(now);
+    const upcoming = await tx
+      .select()
+      .from(sessions)
+      .where(
+        and(
+          eq(sessions.templateId, id),
+          gte(sessions.date, today),
+          eq(sessions.status, "planned"),
+          sql`not exists (select 1 from ${attendances} where ${attendances.sessionId} = ${sessions.id})`,
+        ),
+      );
+
+    if (before.weekday !== after!.weekday) {
+      // Đổi thứ: các buổi tương lai chưa điểm danh của dòng này được sinh lại theo thứ mới.
+      if (upcoming.length > 0) {
+        await tx.delete(sessions).where(inArray(sessions.id, upcoming.map((u) => u.id)));
+      }
+      return withNotices({ ...result, ...(await generateInTx(tx, actor, before.classId, id, today)), updated: 0 });
+    }
+
+    // Giá trị cũ / mới mà lịch mẫu áp cho buổi (giờ riêng hoặc giờ của ca, phòng mặc định, GV chính của lớp).
+    const slotTimes = async (slotId: string) => {
+      const [slot] = await tx.select().from(timeSlots).where(eq(timeSlots.id, slotId)).limit(1);
+      return slot ? { start: slot.defaultStart.slice(0, 5), end: slot.defaultEnd.slice(0, 5) } : null;
+    };
+    const [mainTeacher] = await tx
+      .select({ teacherId: classTeachers.teacherId })
+      .from(classTeachers)
+      .where(and(eq(classTeachers.classId, cls.id), eq(classTeachers.role, "main")))
+      .limit(1);
+    const applied = async (t: typeof before) => {
+      const slot = await slotTimes(t.timeSlotId);
+      return {
+        timeSlotId: t.timeSlotId,
+        startTime: (t.startTime ?? slot?.start ?? "").slice(0, 5),
+        endTime: (t.endTime ?? slot?.end ?? "").slice(0, 5),
+        roomId: t.roomId ?? cls.defaultRoomId,
+        teacherId: t.teacherId ?? mainTeacher?.teacherId ?? null,
+        assistantTeacherId: t.assistantTeacherId,
+      };
+    };
+    const oldValues = await applied(before);
+    const newValues = await applied(after!);
+    const busy = await loadBusy(tx, today, cls.endDate);
+
+    for (const s of upcoming) {
+      const patch: Partial<typeof sessions.$inferInsert> = {};
+      // Giờ chỉ đổi khi buổi còn đúng giờ cũ của lịch mẫu (chưa sửa tay); ca đi theo giờ.
+      if (s.startTime.slice(0, 5) === oldValues.startTime && s.endTime.slice(0, 5) === oldValues.endTime) {
+        if (oldValues.startTime !== newValues.startTime || oldValues.endTime !== newValues.endTime || s.timeSlotId !== newValues.timeSlotId) {
+          Object.assign(patch, { startTime: newValues.startTime, endTime: newValues.endTime, timeSlotId: newValues.timeSlotId });
+        }
+      }
+      for (const key of ["roomId", "teacherId", "assistantTeacherId"] as const) {
+        if (s[key] === oldValues[key] && oldValues[key] !== newValues[key]) patch[key] = newValues[key];
+      }
+      if (Object.keys(patch).length === 0) continue;
+      const next = { ...s, ...patch };
+      if (next.assistantTeacherId && next.assistantTeacherId === (next.substituteTeacherId ?? next.teacherId)) {
+        result.conflicts.push({ date: s.date, startTime: s.startTime.slice(0, 5), reason: "Trợ giảng trùng với giáo viên dạy buổi này" });
+        continue;
+      }
+      const conflicts = findConflicts(
+        { id: s.id, date: next.date, startTime: next.startTime, endTime: next.endTime, roomId: next.roomId ?? null, teacherIds: staffOf(next) },
+        busy,
+      );
+      if (conflicts.length > 0) {
+        result.conflicts.push({ date: s.date, startTime: s.startTime.slice(0, 5), reason: [...new Set(conflicts.map(describeConflict))].join("; ") });
+        continue;
+      }
+      await tx.update(sessions).set({ ...patch, updatedAt: new Date() }).where(eq(sessions.id, s.id));
+      const index = busy.findIndex((b) => b.id === s.id);
+      const entry = { id: s.id, date: next.date, startTime: next.startTime, endTime: next.endTime, roomId: next.roomId ?? null, teacherIds: staffOf(next), label: cls.code };
+      if (index >= 0) busy[index] = entry;
+      else busy.push(entry);
+      result.updated++;
+    }
+    if (result.updated > 0) {
+      await audit(tx, {
+        userId: actor.userId,
+        action: "sessions_updated_from_template",
+        tableName: "sessions",
+        recordId: id,
+        newValue: { updated: result.updated, conflicts: result.conflicts.length },
+      });
+    }
+    return withNotices(result);
+  });
+}
+
 /** Xóa dòng lịch mẫu không xóa các buổi đã sinh (template_id của buổi thành null). */
 export async function deleteTemplate(actor: Actor, id: string) {
   assertCan(actor, "classes", "edit");
@@ -178,13 +327,15 @@ async function loadBusy(tx: Tx, from: string, to: string): Promise<BusySession[]
       startTime: sessions.startTime,
       endTime: sessions.endTime,
       roomId: sessions.roomId,
-      teacherId: sql<string | null>`coalesce(${sessions.substituteTeacherId}, ${sessions.teacherId})`,
+      teacherId: sessions.teacherId,
+      substituteTeacherId: sessions.substituteTeacherId,
+      assistantTeacherId: sessions.assistantTeacherId,
       label: classes.code,
     })
     .from(sessions)
     .innerJoin(classes, eq(classes.id, sessions.classId))
     .where(and(between(sessions.date, from, to), ne(sessions.status, "cancelled")));
-  return rows;
+  return rows.map((r) => ({ id: r.id, date: r.date, startTime: r.startTime, endTime: r.endTime, roomId: r.roomId, label: r.label, teacherIds: staffOf(r) }));
 }
 
 type Candidate = {
@@ -193,8 +344,8 @@ type Candidate = {
   startTime: string;
   endTime: string;
   roomId: string | null;
-  /** GV thực dạy (đã tính dạy thay). */
-  teacherId: string | null;
+  /** Người đứng lớp: GV thực dạy (đã tính dạy thay) và trợ giảng. */
+  teacherIds: string[];
 };
 
 /** Trùng GV hoặc phòng theo giờ thực tế → CHẶN. */
@@ -238,7 +389,18 @@ export type GenerationResult = {
   alreadyExisting: number;
   conflicts: { date: string; startTime: string; reason: string }[];
   warnings: string[];
+  /** Thông báo cho người dùng sau khi tự sinh/cập nhật buổi (hiện dạng toast thông tin). */
+  notices?: string[];
 };
+
+/** Kèm thông báo dễ đọc cho kết quả tự sinh/tự cập nhật buổi: số buổi thêm/đổi và từng buổi bị trùng lịch. */
+function withNotices<T extends GenerationResult & { updated?: number }>(result: T): T {
+  const notices: string[] = [];
+  if (result.created > 0) notices.push(`Đã tự thêm ${result.created} buổi vào Thời khóa biểu.`);
+  if (result.updated) notices.push(`Đã cập nhật ${result.updated} buổi sắp tới theo lịch mẫu.`);
+  const skipped = result.conflicts.map((c) => `Bỏ qua buổi ${formatDate(c.date)} ${c.startTime.slice(0, 5)}: ${c.reason}.`);
+  return { ...result, notices, warnings: [...result.warnings, ...skipped] };
+}
 
 /**
  * Sinh buổi học từ lịch mẫu trong khoảng ngày của lớp, bỏ ngày nghỉ.
@@ -250,94 +412,107 @@ export async function generateSessions(actor: Actor, classId: string): Promise<G
   await assertClassAccess(actor, classId);
   return db.transaction(async (tx) => {
     await lockSchedule(tx);
-    const [cls] = await tx.select().from(classes).where(eq(classes.id, classId)).limit(1);
-    if (!cls) throw notFound("lớp học");
-    if (cls.status !== "open") throw new AppError("CONFLICT", "Lớp đã đóng, không thể sinh buổi học.");
-
-    const templates = await tx
-      .select({
-        id: scheduleTemplates.id,
-        weekday: scheduleTemplates.weekday,
-        timeSlotId: scheduleTemplates.timeSlotId,
-        slotStart: timeSlots.defaultStart,
-        slotEnd: timeSlots.defaultEnd,
-        startTime: scheduleTemplates.startTime,
-        endTime: scheduleTemplates.endTime,
-        roomId: scheduleTemplates.roomId,
-        teacherId: scheduleTemplates.teacherId,
-      })
-      .from(scheduleTemplates)
-      .innerJoin(timeSlots, eq(timeSlots.id, scheduleTemplates.timeSlotId))
-      .where(eq(scheduleTemplates.classId, classId));
-    if (templates.length === 0) throw new AppError("VALIDATION", "Lớp chưa có lịch mẫu.");
-
-    const holidayRows = await tx
-      .select({ date: holidays.date })
-      .from(holidays)
-      .where(
-        and(
-          gte(holidays.date, cls.startDate),
-          lte(holidays.date, cls.endDate),
-          or(isNull(holidays.classId), eq(holidays.classId, classId)),
-        ),
-      );
-    const [mainTeacher] = await tx
-      .select({ teacherId: classTeachers.teacherId })
-      .from(classTeachers)
-      .where(and(eq(classTeachers.classId, classId), eq(classTeachers.role, "main")))
-      .limit(1);
-
-    const planned = planSessions({
-      startDate: cls.startDate,
-      endDate: cls.endDate,
-      templates,
-      holidays: new Set(holidayRows.map((h) => h.date)),
-      defaultRoomId: cls.defaultRoomId,
-      defaultTeacherId: mainTeacher?.teacherId ?? null,
-    });
-
-    // Khóa nhận diện buổi đã sinh: dòng lịch mẫu + ngày GỐC (buổi đã dời vẫn được nhận ra).
-    const existing = await tx
-      .select({ templateId: sessions.templateId, date: sessions.date, originalDate: sessions.originalDate })
-      .from(sessions)
-      .where(eq(sessions.classId, classId));
-    const existingKeys = new Set(existing.map((s) => `${s.templateId}|${s.originalDate ?? s.date}`));
-
-    const busy = await loadBusy(tx, cls.startDate, cls.endDate);
-    const result: GenerationResult = { created: 0, alreadyExisting: 0, conflicts: [], warnings: [] };
-    const toInsert: (typeof sessions.$inferInsert)[] = [];
-
-    for (const p of planned) {
-      if (existingKeys.has(`${p.templateId}|${p.date}`)) {
-        result.alreadyExisting++;
-        continue;
-      }
-      const conflicts = findConflicts(p, busy);
-      if (conflicts.length > 0) {
-        result.conflicts.push({ date: p.date, startTime: p.startTime, reason: [...new Set(conflicts.map(describeConflict))].join("; ") });
-        continue;
-      }
-      toInsert.push({ ...p, classId, kind: "regular", status: "planned" });
-      // Buổi vừa lên kế hoạch cũng chiếm GV/phòng đối với các buổi sau trong cùng lần sinh.
-      busy.push({ id: `new-${toInsert.length}`, label: cls.code, ...p });
-    }
-
-    if (toInsert.length > 0) {
-      await tx.insert(sessions).values(toInsert);
-      result.created = toInsert.length;
-      const roomIds = [...new Set(toInsert.map((s) => s.roomId).filter((r): r is string => Boolean(r)))];
-      const headcount = await headcountOf(tx, { id: "", classId, date: cls.startDate, kind: "regular" });
-      for (const roomId of roomIds) result.warnings.push(...(await capacityWarnings(tx, roomId, headcount)));
-    }
-    await audit(tx, {
-      userId: actor.userId,
-      action: "sessions_generated",
-      tableName: "sessions",
-      recordId: classId,
-      newValue: { created: result.created, conflicts: result.conflicts.length },
-    });
-    return result;
+    return generateInTx(tx, actor, classId);
   });
+}
+
+/**
+ * Lõi sinh buổi, chạy trong transaction đã khóa lịch. `templateId`: chỉ sinh cho một dòng lịch mẫu;
+ * `fromDate`: chỉ sinh các buổi từ ngày này trở đi (dùng khi tự sinh sau khi thêm/sửa lịch mẫu).
+ */
+async function generateInTx(tx: Tx, actor: Actor, classId: string, templateId?: string, fromDate?: string): Promise<GenerationResult> {
+  const [cls] = await tx.select().from(classes).where(eq(classes.id, classId)).limit(1);
+  if (!cls) throw notFound("lớp học");
+  if (cls.status !== "open") throw new AppError("CONFLICT", "Lớp đã đóng, không thể sinh buổi học.");
+
+  const templates = await tx
+    .select({
+      id: scheduleTemplates.id,
+      weekday: scheduleTemplates.weekday,
+      timeSlotId: scheduleTemplates.timeSlotId,
+      slotStart: timeSlots.defaultStart,
+      slotEnd: timeSlots.defaultEnd,
+      startTime: scheduleTemplates.startTime,
+      endTime: scheduleTemplates.endTime,
+      roomId: scheduleTemplates.roomId,
+      teacherId: scheduleTemplates.teacherId,
+      assistantTeacherId: scheduleTemplates.assistantTeacherId,
+    })
+    .from(scheduleTemplates)
+    .innerJoin(timeSlots, eq(timeSlots.id, scheduleTemplates.timeSlotId))
+    .where(and(eq(scheduleTemplates.classId, classId), templateId ? eq(scheduleTemplates.id, templateId) : undefined));
+  if (templates.length === 0) throw new AppError("VALIDATION", "Lớp chưa có lịch mẫu.");
+
+  const holidayRows = await tx
+    .select({ date: holidays.date })
+    .from(holidays)
+    .where(
+      and(
+        gte(holidays.date, cls.startDate),
+        lte(holidays.date, cls.endDate),
+        or(isNull(holidays.classId), eq(holidays.classId, classId)),
+      ),
+    );
+  const [mainTeacher] = await tx
+    .select({ teacherId: classTeachers.teacherId })
+    .from(classTeachers)
+    .where(and(eq(classTeachers.classId, classId), eq(classTeachers.role, "main")))
+    .limit(1);
+
+  const planned = planSessions({
+    startDate: fromDate && fromDate > cls.startDate ? fromDate : cls.startDate,
+    endDate: cls.endDate,
+    templates,
+    holidays: new Set(holidayRows.map((h) => h.date)),
+    defaultRoomId: cls.defaultRoomId,
+    defaultTeacherId: mainTeacher?.teacherId ?? null,
+  });
+
+  // Khóa nhận diện buổi đã sinh: dòng lịch mẫu + ngày GỐC (buổi đã dời vẫn được nhận ra).
+  const existing = await tx
+    .select({ templateId: sessions.templateId, date: sessions.date, originalDate: sessions.originalDate })
+    .from(sessions)
+    .where(eq(sessions.classId, classId));
+  const existingKeys = new Set(existing.map((s) => `${s.templateId}|${s.originalDate ?? s.date}`));
+
+  const busy = await loadBusy(tx, cls.startDate, cls.endDate);
+  const result: GenerationResult = { created: 0, alreadyExisting: 0, conflicts: [], warnings: [] };
+  const toInsert: (typeof sessions.$inferInsert)[] = [];
+
+  for (const p of planned) {
+    if (existingKeys.has(`${p.templateId}|${p.date}`)) {
+      result.alreadyExisting++;
+      continue;
+    }
+    if (p.assistantTeacherId && p.assistantTeacherId === p.teacherId) {
+      result.conflicts.push({ date: p.date, startTime: p.startTime, reason: "Trợ giảng trùng với giáo viên chính" });
+      continue;
+    }
+    const conflicts = findConflicts({ ...p, teacherIds: staffOf(p) }, busy);
+    if (conflicts.length > 0) {
+      result.conflicts.push({ date: p.date, startTime: p.startTime, reason: [...new Set(conflicts.map(describeConflict))].join("; ") });
+      continue;
+    }
+    toInsert.push({ ...p, classId, kind: "regular", status: "planned" });
+    // Buổi vừa lên kế hoạch cũng chiếm GV/phòng đối với các buổi sau trong cùng lần sinh.
+    busy.push({ id: `new-${toInsert.length}`, label: cls.code, ...p, teacherIds: staffOf(p) });
+  }
+
+  if (toInsert.length > 0) {
+    await tx.insert(sessions).values(toInsert);
+    result.created = toInsert.length;
+    const roomIds = [...new Set(toInsert.map((s) => s.roomId).filter((r): r is string => Boolean(r)))];
+    const headcount = await headcountOf(tx, { id: "", classId, date: cls.startDate, kind: "regular" });
+    for (const roomId of roomIds) result.warnings.push(...(await capacityWarnings(tx, roomId, headcount)));
+  }
+  await audit(tx, {
+    userId: actor.userId,
+    action: "sessions_generated",
+    tableName: "sessions",
+    recordId: classId,
+    newValue: { created: result.created, conflicts: result.conflicts.length, templateId: templateId ?? null },
+  });
+  return result;
 }
 
 // ---------- Điều chỉnh từng buổi ----------
@@ -360,6 +535,7 @@ async function applyChange(
   const next = { ...before, ...patch };
   let warnings: string[] = [];
   if (next.status !== "cancelled") {
+    assertDistinctAssistant(next.substituteTeacherId ?? next.teacherId, next.assistantTeacherId);
     assertNoConflict(
       {
         id: before.id,
@@ -367,7 +543,7 @@ async function applyChange(
         startTime: next.startTime,
         endTime: next.endTime,
         roomId: next.roomId ?? null,
-        teacherId: next.substituteTeacherId ?? next.teacherId ?? null,
+        teacherIds: staffOf(next),
       },
       await loadBusy(tx, next.date, next.date),
     );
@@ -446,22 +622,28 @@ export async function restoreSession(actor: Actor, sessionId: string): Promise<S
 }
 
 /**
- * Xóa hẳn một buổi xếp sai. Chỉ xóa được khi buổi chưa có điểm danh và chưa ghi sao;
- * buổi đã có dữ liệu thì dùng "Hủy buổi" để giữ lịch sử.
+ * Admin xóa hẳn một buổi (xếp sai, dữ liệu thử), kể cả buổi đã điểm danh/ghi sao: điểm danh và sao của buổi
+ * bị xóa theo, cấp và avatar của học viên được tính lại. Lớp đã đóng (đã chốt tổng kết) thì không xóa được.
  */
-export async function deleteSession(actor: Actor, sessionId: string): Promise<{ date: string }> {
+export async function deleteSession(actor: Actor, sessionId: string): Promise<{ date: string; deletedAttendances: number; deletedStarLogs: number }> {
   assertAdmin(actor);
   return db.transaction(async (tx) => {
     await lockSchedule(tx);
     const before = await loadForChange(tx, actor, sessionId);
-    const [attended] = await tx.select({ id: attendances.id }).from(attendances).where(eq(attendances.sessionId, sessionId)).limit(1);
-    const [starred] = await tx.select({ id: starLogs.id }).from(starLogs).where(eq(starLogs.sessionId, sessionId)).limit(1);
-    if (attended || starred) {
-      throw new AppError("CONFLICT", "Buổi này đã có điểm danh hoặc đã ghi sao nên không xóa được. Hãy dùng \"Hủy buổi\" để giữ lịch sử.");
-    }
+    const [cls] = await tx.select({ status: classes.status }).from(classes).where(eq(classes.id, before.classId)).limit(1);
+    if (cls?.status !== "open") throw new AppError("CONFLICT", "Lớp đã đóng và đã chốt tổng kết nên không xóa buổi học được.");
+    const deletedStarLogs = await purgeSessionStarLogs(tx, actor, sessionId);
+    const removed = await tx.delete(attendances).where(eq(attendances.sessionId, sessionId)).returning({ id: attendances.id });
     await tx.delete(sessions).where(eq(sessions.id, sessionId));
-    await audit(tx, { userId: actor.userId, action: "session_deleted", tableName: "sessions", recordId: sessionId, oldValue: before });
-    return { date: before.date };
+    await audit(tx, {
+      userId: actor.userId,
+      action: "session_deleted",
+      tableName: "sessions",
+      recordId: sessionId,
+      oldValue: before,
+      newValue: { deletedAttendances: removed.length, deletedStarLogs },
+    });
+    return { date: before.date, deletedAttendances: removed.length, deletedStarLogs };
   });
 }
 
@@ -472,6 +654,9 @@ export async function setSubstitute(actor: Actor, input: z.output<typeof session
     await lockSchedule(tx);
     const before = await loadForChange(tx, actor, input.id);
     if (before.status === "cancelled") throw new AppError("CONFLICT", "Buổi đã hủy.");
+    if (input.substituteTeacherId && input.substituteTeacherId === before.assistantTeacherId) {
+      throw new AppError("VALIDATION", "GV dạy thay đang là trợ giảng của buổi này.", { substituteTeacherId: "Đang là trợ giảng" });
+    }
     if (input.substituteTeacherId && input.substituteTeacherId === before.teacherId) {
       throw new AppError("VALIDATION", "GV dạy thay phải khác GV của buổi.", { substituteTeacherId: "Phải khác GV của buổi" });
     }
@@ -503,7 +688,7 @@ export async function createMakeupSession(
     }
 
     assertNoConflict(
-      { date: input.date, startTime: input.startTime, endTime: input.endTime, roomId: input.roomId, teacherId: input.teacherId },
+      { date: input.date, startTime: input.startTime, endTime: input.endTime, roomId: input.roomId, teacherIds: [input.teacherId] },
       await loadBusy(tx, input.date, input.date),
     );
     const [created] = await tx
@@ -570,7 +755,7 @@ export async function createManualSession(
       roomId: input.roomId ?? cls.defaultRoomId,
       teacherId,
     };
-    assertNoConflict(candidate, await loadBusy(tx, input.date, input.date));
+    assertNoConflict({ ...candidate, teacherIds: [teacherId] }, await loadBusy(tx, input.date, input.date));
 
     const [created] = await tx
       .insert(sessions)

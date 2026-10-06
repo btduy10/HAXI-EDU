@@ -238,7 +238,7 @@ describe("quyền theo menu", () => {
 
   it("thời khóa biểu và ghi danh: được tick thì làm được trong phạm vi lớp mình, lớp khác coi như không tồn tại", async () => {
     const scheduler = withPerms(f.actorA, "own", { timetable: FULL, enrollments: FULL });
-    await expect(sessionSvc.updateSession(scheduler, { id: sessionA.id, startTime: "08:30", endTime: "09:30", roomId: null, teacherId: f.teacherA.id, content: null, note: null })).resolves.toBeDefined();
+    await expect(sessionSvc.updateSession(scheduler, { id: sessionA.id, startTime: "08:30", endTime: "09:30", roomId: null, teacherId: f.teacherA.id, assistantTeacherId: null, content: null, note: null })).resolves.toBeDefined();
     await expect(sessionSvc.cancelSession(scheduler, { id: sessionB.id, note: null })).rejects.toMatchObject({ code: "NOT_FOUND" });
     await expect(sessionSvc.deleteSession(scheduler, sessionA.id)).rejects.toMatchObject({ code: "FORBIDDEN" });
 

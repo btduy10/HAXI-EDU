@@ -172,7 +172,7 @@ export async function unlockAttendance(actor: Actor, sessionId: string, now: Dat
 }
 
 /**
- * Buổi đã qua ngày mà chưa điểm danh. GV: các buổi mình thực dạy (đã tính dạy thay).
+ * Buổi đã qua ngày mà chưa điểm danh. GV: các buổi mình thực dạy (đã tính dạy thay) hoặc trợ giảng.
  * Admin và phạm vi "Tất cả lớp": toàn trung tâm.
  */
 export async function listOverdueSessions(actor: Actor, now: Date = new Date()) {
@@ -183,6 +183,7 @@ export async function listOverdueSessions(actor: Actor, now: Date = new Date()) 
       or(
         eq(sessions.substituteTeacherId, actor.teacherId),
         and(isNull(sessions.substituteTeacherId), eq(sessions.teacherId, actor.teacherId)),
+        eq(sessions.assistantTeacherId, actor.teacherId),
       )!,
     );
   }

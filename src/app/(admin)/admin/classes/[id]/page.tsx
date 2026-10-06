@@ -7,9 +7,9 @@ import { Badge } from "@/components/ui/badge";
 import { LinkButton } from "@/components/link-button";
 import { GenerateSessionsButton } from "@/components/generate-sessions-button";
 import { WEEKDAY_LABELS } from "@/lib/dates";
-import { LABELS, formatDate, formatTime, toOptions } from "@/lib/format";
-import { assignTeacherAction, unassignTeacherAction } from "@/server/actions/admin";
-import { createTemplateAction, deleteTemplateAction } from "@/server/actions/schedule";
+import { LABELS, formatDate, formatMoney, formatTime, toOptions } from "@/lib/format";
+import { assignTeacherAction, unassignTeacherAction, updateClassTeacherAction } from "@/server/actions/admin";
+import { createTemplateAction, deleteTemplateAction, updateTemplateAction } from "@/server/actions/schedule";
 import { orNotFound, uuidParam } from "@/server/page";
 import { listRooms, listTeachers, listTimeSlots } from "@/server/services/catalog";
 import { getClass, listClassTeachers } from "@/server/services/classes";
@@ -35,6 +35,14 @@ export default async function ClassDetailPage({ params }: PageProps<"/admin/clas
   ]);
 
   const assignedIds = new Set(assigned.map((a) => a.teacherId));
+  // Lương mỗi buổi chỉ hiện với người xem được Chấm công (service trả null với người khác).
+  const showRate = can("view", "timesheet");
+  const roleFields: Field[] = [
+    { name: "role", label: "Vai trò", type: "select", required: true, options: toOptions(LABELS.classTeacherRole), defaultValue: "main" },
+    ...(showRate
+      ? [{ name: "ratePerSession", label: "Lương mỗi buổi (đồng)", type: "number" as const, hint: "Để trống nếu chưa có. Chấm công dùng để tính thành tiền." }]
+      : []),
+  ];
   const teacherFields: Field[] = [
     {
       name: "teacherId",
@@ -45,8 +53,10 @@ export default async function ClassDetailPage({ params }: PageProps<"/admin/clas
         .filter((t) => t.status === "active" && !assignedIds.has(t.id))
         .map((t) => ({ value: t.id, label: `${t.code} – ${t.fullName}` })),
     },
-    { name: "role", label: "Vai trò", type: "select", required: true, options: toOptions(LABELS.classTeacherRole), defaultValue: "main" },
+    ...roleFields,
   ];
+  const assignedOf = (role: "main" | "assistant") =>
+    assigned.filter((a) => a.role === role).map((a) => ({ value: a.teacherId, label: `${a.code} – ${a.fullName}` }));
 
   const templateFields: Field[] = [
     {
@@ -72,13 +82,18 @@ export default async function ClassDetailPage({ params }: PageProps<"/admin/clas
     },
     {
       name: "teacherId",
-      label: "Giáo viên",
+      label: "Giáo viên chính",
       type: "select",
-      options: assigned.map((a) => ({ value: a.teacherId, label: `${a.code} – ${a.fullName}` })),
-      hint: "Không chọn = GV chính của lớp.",
+      options: assignedOf("main"),
+      hint: "Không chọn = GV chính đầu tiên của lớp. Chỉ liệt kê GV đã phân công vai trò GV chính.",
     },
-    { name: "startTime", label: "Giờ bắt đầu riêng", type: "time", hint: "Để trống = theo giờ mặc định của ca." },
-    { name: "endTime", label: "Giờ kết thúc riêng", type: "time" },
+    {
+      name: "assistantTeacherId",
+      label: "Trợ giảng (nếu có)",
+      type: "select",
+      options: assignedOf("assistant"),
+      hint: "Chỉ liệt kê GV đã phân công vai trò Trợ giảng.",
+    },
   ];
 
   return (    <div className="grid gap-6">
@@ -119,14 +134,21 @@ export default async function ClassDetailPage({ params }: PageProps<"/admin/clas
       <CrudSection
         title="Giáo viên phụ trách"
         addLabel="Phân công"
-        columns={["Họ tên", "Mã GV", "Vai trò"]}
+        columns={showRate ? ["Họ tên", "Mã GV", "Vai trò", "Lương/buổi"] : ["Họ tên", "Mã GV", "Vai trò"]}
         rows={assigned.map((a) => ({
           id: a.id,
-          cells: [a.fullName, a.code, LABELS.classTeacherRole[a.role]],
-          values: {},
+          cells: [
+            a.fullName,
+            a.code,
+            LABELS.classTeacherRole[a.role],
+            ...(showRate ? [a.ratePerSession === null ? "Chưa nhập" : formatMoney(a.ratePerSession)] : []),
+          ],
+          values: { role: a.role, ratePerSession: a.ratePerSession === null ? "" : String(a.ratePerSession) },
         }))}
         fields={teacherFields}
+        editFields={roleFields}
         createAction={canEdit ? assignTeacherAction.bind(null, classId) : undefined}
+        updateAction={canEdit ? updateClassTeacherAction : undefined}
         deleteAction={canEdit ? unassignTeacherAction : undefined}
         emptyText="Chưa phân công giáo viên."
       />
@@ -134,29 +156,37 @@ export default async function ClassDetailPage({ params }: PageProps<"/admin/clas
       <CrudSection
         title="Lịch mẫu hằng tuần"
         addLabel="Thêm"
-        columns={["Thứ", "Ca", "Giờ học", "Phòng", "Giáo viên"]}
+        columns={["Thứ", "Ca", "Phòng", "GV chính", "Trợ giảng"]}
         rows={templates.map((t) => ({
           id: t.id,
           cells: [
             WEEKDAY_LABELS[t.weekday] ?? "",
-            t.slotName,
-            `${formatTime(t.startTime ?? t.slotStart)}–${formatTime(t.endTime ?? t.slotEnd)}${t.startTime ? " (giờ riêng)" : ""}`,
+            `${t.slotName} (${formatTime(t.startTime ?? t.slotStart)}–${formatTime(t.endTime ?? t.slotEnd)})`,
             t.roomName ?? "Phòng mặc định",
-            t.teacherName ?? "GV chính",
+            t.teacherName ?? "GV chính của lớp",
+            t.assistantName ?? "",
           ],
-          values: {},
+          values: {
+            weekday: String(t.weekday),
+            timeSlotId: t.timeSlotId,
+            roomId: t.roomId ?? "",
+            teacherId: t.teacherId ?? "",
+            assistantTeacherId: t.assistantTeacherId ?? "",
+          },
         }))}
         fields={templateFields}
         createAction={canEdit ? createTemplateAction.bind(null, classId) : undefined}
+        updateAction={canEdit ? updateTemplateAction : undefined}
         deleteAction={canEdit ? deleteTemplateAction : undefined}
-        emptyText="Chưa có lịch mẫu. Thêm các buổi học cố định trong tuần rồi sinh buổi học."
+        emptyText="Chưa có lịch mẫu. Thêm các buổi học cố định trong tuần, buổi học sẽ tự có trên Thời khóa biểu."
       />
 
       <section className="grid gap-2">
         <h2 className="text-lg font-semibold">Buổi học</h2>
         <p className="text-sm text-muted-foreground">
-          Sinh buổi trong khoảng {formatDate(cls.startDate)} – {formatDate(cls.endDate)}, bỏ qua ngày nghỉ. Chạy lại không tạo trùng và không
-          ghi đè buổi đã sửa.
+          Thêm hoặc sửa lịch mẫu là buổi học tự có/tự cập nhật trên Thời khóa biểu (từ hôm nay đến {formatDate(cls.endDate)}, bỏ ngày
+          nghỉ; buổi đã dạy và buổi đã sửa riêng được giữ nguyên). Nút dưới đây sinh bổ sung cả khoảng {formatDate(cls.startDate)} –{" "}
+          {formatDate(cls.endDate)}, chạy lại không tạo trùng.
         </p>
         <div className="flex flex-wrap items-start gap-2">
           {canEdit && <GenerateSessionsButton classId={classId} disabled={templates.length === 0 || cls.status !== "open"} />}

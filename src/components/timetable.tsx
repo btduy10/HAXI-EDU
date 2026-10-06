@@ -17,6 +17,7 @@ export type TimetableSession = {
   roomName: string | null;
   teacherName: string | null;
   substituteName: string | null;
+  assistantName: string | null;
   kind: "regular" | "makeup";
   status: "planned" | "done" | "cancelled";
   attendanceCount: number;
@@ -59,6 +60,7 @@ export function SessionCard({ session, href, today }: { session: TimetableSessio
       </p>
       <p className="text-muted-foreground">
         GV: {session.substituteName ? `${session.substituteName} (thay ${session.teacherName ?? "?"})` : (session.teacherName ?? "Chưa phân công")}
+        {session.assistantName && ` · Trợ giảng: ${session.assistantName}`}
       </p>
     </Link>
   );
@@ -81,6 +83,7 @@ function SessionChip({ session, href }: { session: TimetableSession; href: strin
       </span>
       <span className="block truncate text-muted-foreground">
         {session.substituteName ?? session.teacherName ?? "—"}
+        {session.assistantName && ` + ${session.assistantName}`}
         {session.roomName && ` · ${session.roomName}`}
       </span>
     </Link>

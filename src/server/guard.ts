@@ -1,4 +1,4 @@
-import { and, eq, ne } from "drizzle-orm";
+import { and, eq, ne, or } from "drizzle-orm";
 import { db, type DbOrTx } from "@/db";
 import { classTeachers, classes, scheduleTemplates, sessions } from "@/db/schema";
 import {
@@ -54,7 +54,7 @@ export const seesAllClasses = (actor: Actor) => permsOf(actor)?.scope !== "own";
 
 /**
  * Lớp của một giáo viên: được phân công ở Lớp học → Giáo viên, hoặc được xếp dạy bên Thời khóa biểu
- * (lịch mẫu của lớp, hoặc là giáo viên chính của một buổi chưa hủy). Dạy thay chỉ có quyền trên đúng buổi đó.
+ * (GV chính hoặc trợ giảng trong lịch mẫu của lớp, hoặc của một buổi chưa hủy). Dạy thay chỉ có quyền trên đúng buổi đó.
  */
 function teacherClassIds(teacherId: string, tx: DbOrTx, classId?: string) {
   const only = <T extends { classId: typeof classTeachers.classId | typeof sessions.classId | typeof scheduleTemplates.classId }>(t: T) =>
@@ -67,13 +67,21 @@ function teacherClassIds(teacherId: string, tx: DbOrTx, classId?: string) {
       tx
         .select({ classId: scheduleTemplates.classId })
         .from(scheduleTemplates)
-        .where(and(eq(scheduleTemplates.teacherId, teacherId), only(scheduleTemplates))),
+        .where(
+          and(or(eq(scheduleTemplates.teacherId, teacherId), eq(scheduleTemplates.assistantTeacherId, teacherId)), only(scheduleTemplates)),
+        ),
     )
     .union(
       tx
         .select({ classId: sessions.classId })
         .from(sessions)
-        .where(and(eq(sessions.teacherId, teacherId), ne(sessions.status, "cancelled"), only(sessions))),
+        .where(
+          and(
+            or(eq(sessions.teacherId, teacherId), eq(sessions.assistantTeacherId, teacherId)),
+            ne(sessions.status, "cancelled"),
+            only(sessions),
+          ),
+        ),
     );
 }
 
@@ -96,17 +104,22 @@ export async function assertClassAccess(actor: Actor, classId: string, tx: DbOrT
   if (rows.length === 0) throw notFound("lớp học");
 }
 
-/** GV được vào buổi học nếu buổi thuộc lớp của mình, hoặc là GV dạy/dạy thay của chính buổi đó. */
+/** GV được vào buổi học nếu buổi thuộc lớp của mình, hoặc là GV dạy/dạy thay/trợ giảng của chính buổi đó. */
 export async function assertSessionAccess(actor: Actor, sessionId: string, tx: DbOrTx = db) {
   if (seesAllClasses(actor)) return;
   if (!actor.teacherId) throw notFound("buổi học");
   const [row] = await tx
-    .select({ classId: sessions.classId, teacherId: sessions.teacherId, substituteTeacherId: sessions.substituteTeacherId })
+    .select({
+      classId: sessions.classId,
+      teacherId: sessions.teacherId,
+      substituteTeacherId: sessions.substituteTeacherId,
+      assistantTeacherId: sessions.assistantTeacherId,
+    })
     .from(sessions)
     .where(eq(sessions.id, sessionId))
     .limit(1);
   if (!row) throw notFound("buổi học");
-  if (row.teacherId === actor.teacherId || row.substituteTeacherId === actor.teacherId) return;
+  if ([row.teacherId, row.substituteTeacherId, row.assistantTeacherId].includes(actor.teacherId)) return;
   if ((await teacherClassIds(actor.teacherId, tx, row.classId)).length === 0) throw notFound("buổi học");
 }
 

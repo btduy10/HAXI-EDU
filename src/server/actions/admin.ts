@@ -6,6 +6,7 @@ import {
   accountInput,
   classInput,
   classTeacherInput,
+  classTeacherUpdate,
   classUpdate,
   courseInput,
   courseUpdate,
@@ -78,6 +79,11 @@ const withClassId = (classId: unknown, input: unknown) => ({ ...(typeof input ==
 
 export const assignTeacherAction = async (classId: unknown, input: unknown) =>
   runAction(classTeacherInput, withClassId(classId, input), classes.assignTeacher, ADMIN);
+export const updateClassTeacherAction = async (input: unknown) => {
+  // Form sửa dùng chung gửi { id, data }.
+  const value = (typeof input === "object" && input ? input : {}) as { id?: unknown; data?: unknown };
+  return runAction(classTeacherUpdate, { ...(typeof value.data === "object" ? value.data : null), id: value.id }, classes.updateClassTeacher, ADMIN);
+};
 export const unassignTeacherAction = async (input: unknown) =>
   runAction(idOnly, input, (a, d) => classes.unassignTeacher(a, d.id), ADMIN);
 

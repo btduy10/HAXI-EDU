@@ -27,6 +27,7 @@ export function CrudSection({
   columns,
   rows,
   fields,
+  editFields,
   createAction,
   updateAction,
   deleteAction,
@@ -53,6 +54,8 @@ export function CrudSection({
   columns: string[];
   rows: CrudRow[];
   fields: Field[];
+  /** Ô nhập của form sửa nếu khác form thêm (vd. không cho đổi giáo viên của một phân công). */
+  editFields?: Field[];
   createAction?: ActionFn;
   updateAction?: ActionFn;
   deleteAction?: ActionFn;
@@ -169,7 +172,7 @@ export function CrudSection({
           open
           onOpenChange={(open) => !open && setEditing(null)}
           title={editing === "new" ? `${addLabel} ${title.toLowerCase()}` : `Sửa ${title.toLowerCase()}`}
-          fields={fields}
+          fields={editing === "new" ? fields : (editFields ?? fields)}
           initial={editing === "new" ? undefined : editing.values}
           onSubmit={(values) =>
             editing === "new" ? createAction!(values) : updateAction!({ id: editing.id, data: values })

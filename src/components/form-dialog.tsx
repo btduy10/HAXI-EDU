@@ -26,6 +26,8 @@ export type ActionFn = (input: unknown) => Promise<{ ok: true; data: unknown } |
 
 /** Cảnh báo không chặn (vd. vượt sức chứa phòng) mà service trả về kèm kết quả. */
 export function showWarnings(data: unknown) {
+  const notices = (data as { notices?: unknown } | null)?.notices;
+  if (Array.isArray(notices)) for (const n of notices) toast.info(String(n), { duration: 8_000 });
   const warnings = (data as { warnings?: unknown } | null)?.warnings;
   if (Array.isArray(warnings)) for (const w of warnings) toast.warning(String(w), { duration: 10_000 });
   showLevelChanges(data);

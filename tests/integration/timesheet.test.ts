@@ -1,6 +1,7 @@
+import { and, eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/db";
-import { sessions } from "@/db/schema";
+import { classTeachers, sessions } from "@/db/schema";
 import { teacherTimesheet, timesheetDoc } from "@/server/services/timesheet";
 import { type Fixture, resetDb, seedFixture } from "./helpers";
 
@@ -30,8 +31,8 @@ describe("chấm công giáo viên", () => {
     const { rows, summary } = await teacherTimesheet(f.admin, january, now);
     expect(rows).toHaveLength(5);
     expect(summary).toEqual([
-      { teacherId: f.teacherA.id, teacherCode: "GVA", teacherName: "Giáo viên A", taught: 1, substitute: 0, minutes: 90, pending: 1, upcoming: 1 },
-      { teacherId: f.teacherB.id, teacherCode: "GVB", teacherName: "Giáo viên B", taught: 2, substitute: 1, minutes: 150, pending: 0, upcoming: 0 },
+      { teacherId: f.teacherA.id, teacherCode: "GVA", teacherName: "Giáo viên A", taught: 1, substitute: 0, assistant: 0, minutes: 90, pending: 1, upcoming: 1, amount: 0, missingRate: 1 },
+      { teacherId: f.teacherB.id, teacherCode: "GVB", teacherName: "Giáo viên B", taught: 2, substitute: 1, assistant: 0, minutes: 150, pending: 0, upcoming: 0, amount: 0, missingRate: 2 },
     ]);
     expect(rows.filter((r) => r.teacherId === f.teacherA.id).map((r) => [r.date, r.state])).toEqual([
       ["2026-01-06", "taught"],
@@ -47,6 +48,26 @@ describe("chấm công giáo viên", () => {
 
     const course = await teacherTimesheet(f.admin, { from: f.classA.startDate, to: f.classA.endDate, classId: f.classA.id }, now);
     expect(course.summary.map((s) => [s.teacherCode, s.taught])).toEqual([["GVA", 2], ["GVB", 1]]);
+  });
+
+  it("tính công trợ giảng riêng và thành tiền theo lương/buổi của phân công", async () => {
+    // GV A dạy chính lớp A 300.000đ/buổi; GV B trợ giảng lớp A 150.000đ/buổi (B dạy chính lớp B chưa nhập lương).
+    await db.update(classTeachers).set({ ratePerSession: 300_000 }).where(eq(classTeachers.teacherId, f.teacherA.id));
+    await db.insert(classTeachers).values({ classId: f.classA.id, teacherId: f.teacherB.id, role: "assistant", ratePerSession: 150_000 });
+    await db.update(sessions).set({ assistantTeacherId: f.teacherB.id }).where(and(eq(sessions.classId, f.classA.id), eq(sessions.date, "2026-01-06")));
+
+    const { rows, summary } = await teacherTimesheet(f.admin, january, now);
+    const a = summary.find((s) => s.teacherId === f.teacherA.id)!;
+    const b = summary.find((s) => s.teacherId === f.teacherB.id)!;
+    expect(a).toMatchObject({ taught: 1, assistant: 0, amount: 300_000, missingRate: 0 });
+    // B: dạy chính lớp B (chưa có lương), dạy thay lớp A ngày 13 (150.000 theo phân công ở lớp A), trợ giảng ngày 06.
+    expect(b).toMatchObject({ taught: 2, substitute: 1, assistant: 1, amount: 300_000, missingRate: 1 });
+    expect(rows.filter((r) => r.date === "2026-01-06").map((r) => [r.teacherCode, r.role, r.rate])).toEqual([
+      ["GVA", "main", 300_000],
+      ["GVB", "assistant", 150_000],
+    ]);
+    const onlyB = await teacherTimesheet(f.admin, { ...january, teacherId: f.teacherB.id }, now);
+    expect(onlyB.rows.map((r) => r.role).sort()).toEqual(["assistant", "main", "substitute"]);
   });
 
   it("chỉ Admin xem được", async () => {

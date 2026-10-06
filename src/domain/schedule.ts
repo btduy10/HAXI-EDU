@@ -20,6 +20,7 @@ export type TemplateForGeneration = {
   endTime: string | null;
   roomId: string | null;
   teacherId: string | null;
+  assistantTeacherId: string | null;
 };
 
 export type PlannedSession = {
@@ -30,6 +31,7 @@ export type PlannedSession = {
   endTime: string;
   roomId: string | null;
   teacherId: string | null;
+  assistantTeacherId: string | null;
 };
 
 /**
@@ -59,6 +61,7 @@ export function planSessions(input: {
         endTime: hhmm(t.endTime ?? t.slotEnd),
         roomId: t.roomId ?? input.defaultRoomId,
         teacherId: t.teacherId ?? input.defaultTeacherId,
+        assistantTeacherId: t.assistantTeacherId,
       });
     }
   }
@@ -71,23 +74,29 @@ export type BusySession = {
   startTime: string;
   endTime: string;
   roomId: string | null;
-  /** GV thực dạy: GV dạy thay nếu có, nếu không là GV của buổi. */
-  teacherId: string | null;
+  /** Những người đứng lớp: GV thực dạy (GV dạy thay nếu có, nếu không là GV của buổi) và trợ giảng. */
+  teacherIds: string[];
   label: string;
 };
+
+/** Danh sách người đứng lớp của một buổi, dùng để kiểm tra trùng lịch. */
+export function staffOf(s: { teacherId: string | null; substituteTeacherId?: string | null; assistantTeacherId?: string | null }): string[] {
+  const main = s.substituteTeacherId ?? s.teacherId;
+  return [...new Set([main, s.assistantTeacherId].filter((id): id is string => Boolean(id)))];
+}
 
 export type Conflict = { kind: "teacher" | "room"; with: BusySession };
 
 /** Tìm xung đột GV/phòng theo khoảng giờ THỰC TẾ (không theo tên ca). */
 export function findConflicts(
-  candidate: { id?: string; date: string; startTime: string; endTime: string; roomId: string | null; teacherId: string | null },
+  candidate: { id?: string; date: string; startTime: string; endTime: string; roomId: string | null; teacherIds: string[] },
   others: BusySession[],
 ): Conflict[] {
   const conflicts: Conflict[] = [];
   for (const other of others) {
     if (other.id === candidate.id || other.date !== candidate.date) continue;
     if (!timesOverlap(candidate.startTime, candidate.endTime, other.startTime, other.endTime)) continue;
-    if (candidate.teacherId && candidate.teacherId === other.teacherId) conflicts.push({ kind: "teacher", with: other });
+    if (candidate.teacherIds.some((id) => other.teacherIds.includes(id))) conflicts.push({ kind: "teacher", with: other });
     if (candidate.roomId && candidate.roomId === other.roomId) conflicts.push({ kind: "room", with: other });
   }
   return conflicts;

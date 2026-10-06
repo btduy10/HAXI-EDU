@@ -50,6 +50,13 @@
       "when": 1791262457476,
       "tag": "0006_gift_redemptions",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1791326937794,
+      "tag": "0007_class_staffing",
+      "breakpoints": true
     }
   ]
 }

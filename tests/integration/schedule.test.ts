@@ -1,7 +1,7 @@
 import { and, asc, eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/db";
-import { auditLogs, classes, enrollments, holidays, rooms, scheduleTemplates, sessions, timeSlots } from "@/db/schema";
+import { attendances, auditLogs, classes, enrollments, holidays, levels, rooms, scheduleTemplates, sessions, starLogs, timeSlots } from "@/db/schema";
 import * as attendance from "@/server/services/attendance";
 import * as catalog from "@/server/services/catalog";
 import * as svc from "@/server/services/sessions";
@@ -58,7 +58,7 @@ describe("sinh buổi học", () => {
     await template(f.classA.id, 2, morning.id);
     await svc.generateSessions(f.admin, f.classA.id);
     const [first, second] = await sessionsOf(f.classA.id);
-    await svc.updateSession(f.admin, { id: first!.id, startTime: "10:00", endTime: "11:45", roomId: f.room.id, teacherId: f.teacherA.id, content: null, note: null });
+    await svc.updateSession(f.admin, { id: first!.id, startTime: "10:00", endTime: "11:45", roomId: f.room.id, teacherId: f.teacherA.id, assistantTeacherId: null, content: null, note: null });
 
     const after = await sessionsOf(f.classA.id);
     expect(after.find((s) => s.id === first!.id)).toMatchObject({ startTime: "10:00:00", endTime: "11:45:00" });
@@ -118,6 +118,7 @@ describe("trùng lịch theo giờ thực tế", () => {
       endTime: s.endTime.slice(0, 5),
       roomId: s.roomId,
       teacherId: s.teacherId,
+      assistantTeacherId: s.assistantTeacherId,
       content: null,
       note: null,
       ...patch,
@@ -238,10 +239,10 @@ describe("trùng lịch theo giờ thực tế", () => {
   it("GV không được sinh buổi hay điều chỉnh lịch", async () => {
     const denied = { code: "FORBIDDEN" };
     await expect(svc.generateSessions(f.actorA, f.classA.id)).rejects.toMatchObject(denied);
-    await expect(edit(a, {}).then(() => svc.updateSession(f.actorA, { id: a.id, startTime: "07:00", endTime: "08:00", roomId: null, teacherId: null, content: null, note: null }))).rejects.toMatchObject(denied);
+    await expect(edit(a, {}).then(() => svc.updateSession(f.actorA, { id: a.id, startTime: "07:00", endTime: "08:00", roomId: null, teacherId: null, assistantTeacherId: null, content: null, note: null }))).rejects.toMatchObject(denied);
     await expect(svc.cancelSession(f.actorA, { id: a.id, note: null })).rejects.toMatchObject(denied);
     await expect(svc.setSubstitute(f.actorA, { id: b.id, substituteTeacherId: f.teacherA.id })).rejects.toMatchObject(denied);
-    await expect(svc.createTemplate(f.actorA, { classId: f.classA.id, weekday: 1, timeSlotId: morning.id, roomId: null, teacherId: null, startTime: null, endTime: null })).rejects.toMatchObject(denied);
+    await expect(svc.createTemplate(f.actorA, { classId: f.classA.id, weekday: 1, timeSlotId: morning.id, roomId: null, teacherId: null, assistantTeacherId: null, startTime: null, endTime: null })).rejects.toMatchObject(denied);
     await expect(attendance.unlockAttendance(f.actorA, a.id)).rejects.toMatchObject(denied);
   });
 
@@ -350,18 +351,31 @@ describe("điểm danh", () => {
     await expect(svc.cancelSession(f.admin, { id: first.id, note: null })).rejects.toMatchObject({ code: "CONFLICT" });
   });
 
-  it("Admin xóa buổi xếp sai: có nhật ký, sinh lại lịch tạo lại buổi; buổi đã điểm danh không xóa được; GV không xóa được", async () => {
+  it("Admin xóa buổi xếp sai, kể cả buổi đã điểm danh và ghi sao (xóa kèm); lớp đã đóng thì không; GV không xóa được", async () => {
     await expect(svc.deleteSession(f.actorA, later.id)).rejects.toMatchObject({ code: "FORBIDDEN" });
-    await expect(svc.deleteSession(f.admin, later.id)).resolves.toEqual({ date: "2026-02-10" });
+    await expect(svc.deleteSession(f.admin, later.id)).resolves.toEqual({ date: "2026-02-10", deletedAttendances: 0, deletedStarLogs: 0 });
     expect(await db.select().from(sessions).where(eq(sessions.id, later.id))).toEqual([]);
     const [log] = await db.select().from(auditLogs).where(eq(auditLogs.action, "session_deleted"));
     expect(log).toMatchObject({ userId: f.admin.userId, recordId: later.id, oldValue: { date: "2026-02-10" } });
     await expect(svc.deleteSession(f.admin, later.id)).rejects.toMatchObject({ code: "NOT_FOUND" });
 
+    // Buổi đã điểm danh và có sao: xóa luôn điểm danh và sao của buổi.
+    await db.insert(levels).values({ levelNo: 1, name: "Tân binh", minStars: 0, frameColor: "#b08d57" });
+    const second = (await sessionsOf(f.classA.id))[1]!;
     const sheet = await attendance.getAttendanceSheet(f.actorA, first.id, at("2026-01-06"));
     await attendance.saveAttendance(f.actorA, { sessionId: first.id, content: null, entries: entries(sheet.rows) }, at("2026-01-06"));
-    await expect(svc.deleteSession(f.admin, first.id)).rejects.toMatchObject({ code: "CONFLICT" });
-    expect(await db.select().from(sessions).where(eq(sessions.id, first.id))).toHaveLength(1);
+    const studentId = sheet.rows[0]!.studentId;
+    await db.insert(starLogs).values([
+      { sessionId: first.id, studentId, stars: 3 },
+      { sessionId: second.id, studentId, stars: 2 }, // buổi khác: giữ
+    ]);
+    await expect(svc.deleteSession(f.admin, first.id)).resolves.toMatchObject({ deletedAttendances: sheet.rows.length, deletedStarLogs: 1 });
+    expect(await db.select().from(attendances).where(eq(attendances.sessionId, first.id))).toEqual([]);
+    expect((await db.select().from(starLogs)).map((l) => l.stars)).toEqual([2]);
+
+    await db.update(classes).set({ status: "closed" }).where(eq(classes.id, f.classA.id));
+    await expect(svc.deleteSession(f.admin, second.id)).rejects.toMatchObject({ code: "CONFLICT" });
+    expect(await db.select().from(sessions).where(eq(sessions.id, second.id))).toHaveLength(1);
   });
 
   it("buổi quá hạn: GV chỉ thấy buổi mình thực dạy, bỏ qua buổi đã hủy và đã điểm danh", async () => {

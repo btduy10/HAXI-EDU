@@ -193,6 +193,17 @@ export async function purgeStudentStarLogs(tx: Tx, actor: Actor, studentId: stri
   return purgeLogs(tx, actor, studentId, targets.map((t) => t.id));
 }
 
+/** Dùng khi Admin xóa hẳn một buổi học: xóa mọi lần ghi sao của buổi, tính lại cấp/avatar từng học viên. Trả về số dòng đã xóa. */
+export async function purgeSessionStarLogs(tx: Tx, actor: Actor, sessionId: string): Promise<number> {
+  assertAdmin(actor);
+  const rows = await tx.select({ id: starLogs.id, studentId: starLogs.studentId }).from(starLogs).where(eq(starLogs.sessionId, sessionId));
+  const byStudent = new Map<string, string[]>();
+  for (const r of rows) byStudent.set(r.studentId, [...(byStudent.get(r.studentId) ?? []), r.id]);
+  let deleted = 0;
+  for (const [studentId, ids] of byStudent) deleted += await purgeLogs(tx, actor, studentId, ids);
+  return deleted;
+}
+
 /**
  * Admin xóa hẳn lịch sử sao của một học viên: một lần ghi (`logId`, xóa cả cặp ghi–hoàn tác) hoặc toàn bộ.
  * Sao thuộc lớp đã đóng được giữ lại vì tổng kết của lớp đã chốt theo số liệu đó.

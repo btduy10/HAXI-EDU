@@ -13,6 +13,7 @@ import {
   sessionRescheduleInput,
   sessionSubstituteInput,
   templateInput,
+  templateUpdateInput,
 } from "@/lib/validation/schedule";
 import { runAction } from "../action";
 import * as attendance from "../services/attendance";
@@ -22,7 +23,14 @@ const ADMIN = "/admin";
 const withClassId = (classId: unknown, input: unknown) => ({ ...(typeof input === "object" ? input : null), classId });
 
 export const createTemplateAction = async (classId: unknown, input: unknown) =>
-  runAction(templateInput, withClassId(classId, input), sessions.createTemplate, ADMIN);
+  runAction(templateInput, withClassId(classId, input), (a, d) => sessions.createTemplate(a, d), ADMIN);
+/** Form sửa dùng chung gửi { id, data }. */
+const flatten = (input: unknown) => {
+  const value = (typeof input === "object" && input ? input : {}) as { id?: unknown; data?: unknown };
+  return { ...(typeof value.data === "object" ? value.data : null), id: value.id };
+};
+export const updateTemplateAction = async (input: unknown) =>
+  runAction(templateUpdateInput, flatten(input), (a, d) => sessions.updateTemplate(a, d), ADMIN);
 export const deleteTemplateAction = async (input: unknown) =>
   runAction(idOnly, input, (a, d) => sessions.deleteTemplate(a, d.id), ADMIN);
 export const generateSessionsAction = async (input: unknown) =>

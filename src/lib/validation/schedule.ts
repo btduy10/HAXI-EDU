@@ -8,20 +8,27 @@ const optTime = z
 
 const startBeforeEnd = { path: ["endTime"], message: "Giờ kết thúc phải sau giờ bắt đầu" };
 
+const templateFields = {
+  weekday: intIn(1, 7),
+  timeSlotId: id,
+  roomId: optId,
+  teacherId: optId,
+  assistantTeacherId: optId,
+  startTime: optTime,
+  endTime: optTime,
+};
+const bothOrNeither = (v: { startTime: string | null; endTime: string | null }) => (v.startTime === null) === (v.endTime === null);
+const bothOrNeitherMessage = { path: ["endTime"], message: "Nhập cả giờ bắt đầu và kết thúc, hoặc để trống cả hai" };
+
 export const templateInput = z
-  .object({
-    classId: id,
-    weekday: intIn(1, 7),
-    timeSlotId: id,
-    roomId: optId,
-    teacherId: optId,
-    startTime: optTime,
-    endTime: optTime,
-  })
-  .refine((v) => (v.startTime === null) === (v.endTime === null), {
-    path: ["endTime"],
-    message: "Nhập cả giờ bắt đầu và kết thúc, hoặc để trống cả hai",
-  })
+  .object({ classId: id, ...templateFields })
+  .refine(bothOrNeither, bothOrNeitherMessage)
+  .refine((v) => !v.startTime || !v.endTime || v.startTime < v.endTime, startBeforeEnd);
+
+/** Sửa một dòng lịch mẫu (không đổi lớp). */
+export const templateUpdateInput = z
+  .object({ id, ...templateFields })
+  .refine(bothOrNeither, bothOrNeitherMessage)
   .refine((v) => !v.startTime || !v.endTime || v.startTime < v.endTime, startBeforeEnd);
 
 export const classIdInput = z.object({ classId: id });
@@ -34,6 +41,7 @@ export const sessionEditInput = z
     endTime: timeOfDay,
     roomId: optId,
     teacherId: optId,
+    assistantTeacherId: optId,
     content: optText(500),
     note: optText(500),
   })

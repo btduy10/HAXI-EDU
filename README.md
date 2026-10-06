@@ -100,10 +100,13 @@ Nguyên tắc: mọi hàm trong `server/services` nhận `actor` lấy từ phi�
 
 ### Thời khóa biểu và điểm danh
 
-- **Lịch mẫu & sinh buổi:** mỗi lớp nhiều dòng lịch mỗi tuần (thứ + ca, có thể đặt giờ/phòng/GV riêng). Sinh buổi trong khoảng ngày của lớp, bỏ ngày nghỉ toàn trung tâm và ngày nghỉ riêng của lớp. Chạy lại không tạo trùng, không ghi đè buổi đã sửa.
+- **Phân công giáo viên:** mỗi GV của lớp có vai trò GV chính hoặc Trợ giảng và lương mỗi buổi (sửa được). Lương chỉ hiện với người xem được Chấm công.
+- **Lịch mẫu & sinh buổi:** mỗi lớp nhiều dòng lịch mỗi tuần: thứ, ca, phòng, GV chính, trợ giảng (nếu có). Thêm dòng lịch mẫu là tự sinh buổi từ hôm nay đến hết khóa; sửa dòng lịch mẫu thì các buổi sắp tới chưa điểm danh tự đổi theo (chỉ những phần chưa sửa tay; đổi thứ thì sinh lại). Buổi bị trùng lịch được bỏ qua và báo lại. Nút "Sinh buổi" sinh bổ sung cả khoảng ngày của lớp, bỏ ngày nghỉ, chạy lại không tạo trùng.
 - **Giờ riêng từng buổi:** giờ được sao chép từ ca lúc sinh; sửa một buổi không đổi ca gốc hay buổi khác, sửa ca không đổi buổi đã sinh.
-- **Trùng lịch:** so theo khoảng giờ thực tế của GV thực dạy (đã tính dạy thay) và phòng. Trùng thì **chặn**; vượt sức chứa phòng thì **cảnh báo** nhưng vẫn lưu. Hai buổi nối tiếp nhau không tính là trùng.
-- **Điều chỉnh:** dời buổi (giữ ngày gốc), hủy/khôi phục, GV dạy thay (lưu cả GV gốc và GV thay), buổi bù chỉ gồm học viên được chọn.
+- **Trùng lịch:** so theo khoảng giờ thực tế của GV thực dạy (đã tính dạy thay), trợ giảng và phòng. Trùng thì **chặn**; vượt sức chứa phòng thì **cảnh báo** nhưng vẫn lưu. Hai buổi nối tiếp nhau không tính là trùng.
+- **Điều chỉnh:** sửa riêng một buổi (giờ, phòng, GV chính, trợ giảng), dời buổi (giữ ngày gốc), hủy/khôi phục, GV dạy thay (lưu cả GV gốc và GV thay), buổi bù chỉ gồm học viên được chọn. Admin xóa hẳn được buổi xếp sai, kể cả buổi đã điểm danh/ghi sao: điểm danh và sao của buổi bị xóa theo, cấp và avatar được tính lại; lớp đã đóng thì không xóa.
+- **Trợ giảng** thấy lớp ở "Lớp của tôi", có buổi trong TKB của mình và được điểm danh, ghi sao các buổi mình trợ giảng.
+- **Chấm công:** mỗi buổi đã điểm danh là một công cho người thực dạy và một công trợ giảng cho trợ giảng; Thành tiền = tổng lương/buổi theo phân công ở lớp đó (công chưa có mức lương được báo riêng). Xuất Excel tổng hợp hoặc từng giáo viên.
 - **Thời khóa biểu:** lưới tuần thứ × ca và lịch tháng; Admin lọc theo GV/lớp/phòng; xuất Excel/PDF.
 - **Điểm danh trên điện thoại:** danh sách chỉ gồm học viên đang ghi danh tại ngày học, mặc định "Có mặt", lưu cả lớp một lần.
 - **Khóa sửa điểm danh** sau N ngày (mặc định 7, sửa ở trang Cấu hình). Chỉ Admin mở khóa, mỗi lần 24 giờ.

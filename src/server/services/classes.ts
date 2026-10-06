@@ -2,10 +2,10 @@ import { and, asc, count, desc, eq, gte, inArray, lt, sql } from "drizzle-orm";
 import type { z } from "zod";
 import { db } from "@/db";
 import { attendances, classTeachers, classes, courses, enrollments, rooms, sessions, students, teachers } from "@/db/schema";
-import type { classInput, classTeacherInput, enrollInput, leaveInput } from "@/lib/validation/entities";
+import type { classInput, classTeacherInput, classTeacherUpdate, enrollInput, leaveInput } from "@/lib/validation/entities";
 import { audit } from "../audit";
 import { AppError, notFound, translateDbError } from "../errors";
-import { type Actor, allowedClassIds, assertAdmin, assertCan, assertCanAny, assertClassAccess } from "../guard";
+import { type Actor, allowedClassIds, assertAdmin, assertCan, assertCanAny, assertClassAccess, can } from "../guard";
 import { createRow, deleteRow, updateRow } from "./crud";
 import { purgeStudentStarLogs } from "./stars";
 
@@ -89,6 +89,8 @@ export async function listClassTeachers(actor: Actor, classId: string) {
       code: teachers.code,
       fullName: teachers.fullName,
       role: classTeachers.role,
+      // Lương là thông tin nhạy cảm: chỉ người xem được Chấm công (và Admin) mới nhận.
+      ratePerSession: can(actor, "timesheet", "view") ? classTeachers.ratePerSession : sql<number | null>`null`,
     })
     .from(classTeachers)
     .innerJoin(teachers, eq(teachers.id, classTeachers.teacherId))
@@ -101,6 +103,21 @@ export async function assignTeacher(actor: Actor, data: z.output<typeof classTea
   assertCan(actor, "classes", "edit");
   await assertClassAccess(actor, data.classId);
   return createRow(actor, classTeachers, "class_teachers", data, "classes", "edit");
+}
+export async function updateClassTeacher(actor: Actor, data: z.output<typeof classTeacherUpdate>) {
+  assertCan(actor, "classes", "edit");
+  return db.transaction(async (tx) => {
+    const [before] = await tx.select().from(classTeachers).where(eq(classTeachers.id, data.id)).limit(1);
+    if (!before) throw notFound("phân công");
+    await assertClassAccess(actor, before.classId, tx);
+    const [row] = await tx
+      .update(classTeachers)
+      .set({ role: data.role, ratePerSession: data.ratePerSession })
+      .where(eq(classTeachers.id, data.id))
+      .returning();
+    await audit(tx, { userId: actor.userId, action: "update", tableName: "class_teachers", recordId: data.id, oldValue: before, newValue: row });
+    return row!;
+  });
 }
 export async function unassignTeacher(actor: Actor, id: string) {
   assertCan(actor, "classes", "edit");

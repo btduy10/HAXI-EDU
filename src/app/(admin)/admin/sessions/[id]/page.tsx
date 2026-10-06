@@ -37,7 +37,8 @@ export default async function SessionDetailPage({ params }: PageProps<"/admin/se
     ["Ngày", `${WEEKDAY_LABELS[isoWeekday(session.date)]}, ${formatDate(session.date)}`],
     ["Giờ học", `${start}–${end}${session.slotName ? ` (${session.slotName})` : ""}`],
     ["Phòng", session.roomName ?? "Chưa chọn"],
-    ["Giáo viên", session.teacherName ?? "Chưa phân công"],
+    ["Giáo viên chính", session.teacherName ?? "Chưa phân công"],
+    ["Trợ giảng", session.assistantName ?? "Không có"],
     ...(session.substituteName ? ([["GV dạy thay", session.substituteName]] as [string, string][]) : []),
     ...(session.originalDate ? ([["Ngày gốc", formatDate(session.originalDate)]] as [string, string][]) : []),
     ...(session.content ? ([["Nội dung", session.content]] as [string, string][]) : []),
@@ -83,12 +84,13 @@ export default async function SessionDetailPage({ params }: PageProps<"/admin/se
             label="Sửa buổi này"
             variant="outline"
             title="Sửa riêng buổi này"
-            description="Chỉ thay đổi buổi này. Ca học gốc và các buổi khác giữ nguyên."
+            description="Chỉ thay đổi buổi này (đổi GV chính, trợ giảng cho linh động). Ca học gốc, lịch mẫu và các buổi khác giữ nguyên."
             fields={[
               { name: "startTime", label: "Giờ bắt đầu", type: "time", required: true },
               { name: "endTime", label: "Giờ kết thúc", type: "time", required: true },
               { name: "roomId", label: "Phòng", type: "select", options: roomOptions },
-              { name: "teacherId", label: "Giáo viên", type: "select", options: teacherOptions },
+              { name: "teacherId", label: "Giáo viên chính", type: "select", options: teacherOptions },
+              { name: "assistantTeacherId", label: "Trợ giảng (nếu có)", type: "select", options: teacherOptions, hint: "Để trống = buổi này không có trợ giảng." },
               { name: "content", label: "Nội dung buổi học", type: "textarea" },
               { name: "note", label: "Ghi chú", type: "textarea" },
             ]}
@@ -97,6 +99,7 @@ export default async function SessionDetailPage({ params }: PageProps<"/admin/se
               endTime: end,
               roomId: session.roomId ?? "",
               teacherId: session.teacherId ?? "",
+              assistantTeacherId: session.assistantTeacherId ?? "",
               content: session.content ?? "",
               note: session.note ?? "",
             }}
@@ -131,7 +134,7 @@ export default async function SessionDetailPage({ params }: PageProps<"/admin/se
                 name: "substituteTeacherId",
                 label: "GV dạy thay",
                 type: "select",
-                options: teacherOptions.filter((t) => t.value !== session.teacherId),
+                options: teacherOptions.filter((t) => t.value !== session.teacherId && t.value !== session.assistantTeacherId),
               },
             ]}
             initial={{ substituteTeacherId: session.substituteTeacherId ?? "" }}
@@ -162,11 +165,15 @@ export default async function SessionDetailPage({ params }: PageProps<"/admin/se
             successMessage="Đã khôi phục buổi học."
           />
         )}
-        {role === "admin" && session.attendanceCount === 0 && (
+        {role === "admin" && session.classStatus === "open" && (
           <ConfirmButton
             label="Xóa buổi"
             variant="destructive"
-            confirmText="Xóa hẳn buổi học này khỏi thời khóa biểu? Không hoàn tác được."
+            confirmText={
+              session.attendanceCount > 0 || session.starLogCount > 0
+                ? `Xóa hẳn buổi học này? Sẽ xóa luôn ${session.attendanceCount} lượt điểm danh và ${session.starLogCount} lần ghi sao của buổi; cấp và avatar của học viên được tính lại. Không hoàn tác được.`
+                : "Xóa hẳn buổi học này khỏi thời khóa biểu? Không hoàn tác được."
+            }
             action={deleteSessionAction}
             input={{ id }}
             successMessage="Đã xóa buổi học."
