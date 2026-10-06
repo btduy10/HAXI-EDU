@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/db";
 import { sessions } from "@/db/schema";
-import { teacherTimesheet } from "@/server/services/timesheet";
+import { teacherTimesheet, timesheetDoc } from "@/server/services/timesheet";
 import { type Fixture, resetDb, seedFixture } from "./helpers";
 
 let f: Fixture;
@@ -51,5 +51,29 @@ describe("chấm công giáo viên", () => {
 
   it("chỉ Admin xem được", async () => {
     await expect(teacherTimesheet(f.actorA, january, now)).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+});
+
+describe("xuất chấm công", () => {
+  it("tệp tổng hợp gồm mọi giáo viên kèm dòng tổng; tệp riêng chỉ có một giáo viên", async () => {
+    const all = await timesheetDoc(f.admin, january, now);
+    expect(all.filename).toBe("cham-cong-tong-hop-2026-01-01-2026-01-31");
+    const [summary, detail] = all.sections;
+    expect(summary!.columns.map((c) => c.header).slice(0, 3)).toEqual(["STT", "Mã GV", "Giáo viên"]);
+    // GV A: 1 công; GV B: 2 công (1 dạy thay); dòng cuối là tổng cộng.
+    expect(summary!.rows.map((r) => [r[1], r[3], r[4]])).toEqual([
+      [f.teacherA.code, 1, 0],
+      [f.teacherB.code, 2, 1],
+      ["", 3, 1],
+    ]);
+    expect(detail!.columns.map((c) => c.header).slice(0, 3)).toEqual(["STT", "Thứ", "Ngày"]);
+    expect(detail!.rows[0]!.slice(1, 3)).toEqual(["Thứ Ba", "06/01/2026"]);
+
+    const own = await timesheetDoc(f.admin, { ...january, teacherId: f.teacherB.id }, now);
+    expect(own.filename).toBe(`cham-cong-${f.teacherB.code}-2026-01-01-2026-01-31`);
+    expect(own.sections[0]!.rows).toHaveLength(1);
+    expect(new Set(own.sections[1]!.rows.map((r) => r[4]))).toEqual(new Set([f.teacherB.code]));
+    // Vai trò Giáo viên mặc định không có menu Chấm công.
+    await expect(timesheetDoc(f.actorA, january, now)).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 });

@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { WEEKDAY_SHORT, addMonths, endOfMonth, isoWeekday, parseIsoDate, startOfMonth } from "@/lib/dates";
+import { WEEKDAY_LABELS, addMonths, endOfMonth, isoWeekday, parseIsoDate, startOfMonth } from "@/lib/dates";
 import { formatDate, formatTime, todayIso } from "@/lib/format";
 import { listTeachers } from "@/server/services/catalog";
 import { listClasses } from "@/server/services/classes";
@@ -48,6 +48,14 @@ export default async function TimesheetPage({ searchParams }: PageProps<"/admin/
     return `/admin/timesheet?${query}`;
   };
   const lastMonth = addMonths(today, -1);
+  // Xuất Excel theo đúng khoảng ngày và lớp đang xem; có teacherId thì là tệp riêng của giáo viên đó.
+  const exportHref = (teacherId?: string) => {
+    const query = new URLSearchParams({ format: "xlsx", from, to });
+    if (teacherId) query.set("teacherId", teacherId);
+    if (cls) query.set("classId", cls.id);
+    return `/api/export/timesheet?${query}`;
+  };
+  const exportClass = "inline-flex h-9 items-center rounded-lg border px-3 text-sm font-medium hover:bg-muted";
 
   return (
     <div className="grid gap-4">
@@ -108,9 +116,17 @@ export default async function TimesheetPage({ searchParams }: PageProps<"/admin/
       </div>
 
       <section className="grid gap-2">
-        <h2 className="font-semibold">
-          Tổng công từ {formatDate(from)} đến {formatDate(to)}
-        </h2>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="font-semibold">
+            Tổng công từ {formatDate(from)} đến {formatDate(to)}
+          </h2>
+          {summary.length > 0 && !teacher && (
+            // Tải tệp: dùng thẻ <a> thường để trình duyệt tự tải về, không qua router.
+            <a href={exportHref()} download className={exportClass}>
+              Xuất Excel tổng hợp
+            </a>
+          )}
+        </div>
         {summary.length === 0 ? (
           <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
             Không có buổi dạy nào trong khoảng thời gian này.
@@ -121,34 +137,42 @@ export default async function TimesheetPage({ searchParams }: PageProps<"/admin/
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-14 text-center">STT</TableHead>
+                  <TableHead>Mã GV</TableHead>
                   <TableHead>Giáo viên</TableHead>
                   <TableHead className="text-center">Số công</TableHead>
                   <TableHead className="text-center">Trong đó dạy thay</TableHead>
                   <TableHead className="text-center">Số giờ</TableHead>
                   <TableHead className="text-center">Chưa điểm danh</TableHead>
+                  <TableHead>Xuất file riêng</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {summary.map((s, index) => (
                   <TableRow key={s.teacherId}>
                     <TableCell className="text-center text-muted-foreground tabular-nums">{index + 1}</TableCell>
-                    <TableCell className="whitespace-normal">
-                      {s.teacherName} <span className="text-muted-foreground">({s.teacherCode})</span>
-                    </TableCell>
+                    <TableCell>{s.teacherCode}</TableCell>
+                    <TableCell className="whitespace-normal">{s.teacherName}</TableCell>
                     <TableCell className="text-center font-semibold tabular-nums">{s.taught}</TableCell>
                     <TableCell className="text-center tabular-nums">{s.substitute}</TableCell>
                     <TableCell className="text-center tabular-nums">{hours(s.minutes)}</TableCell>
                     <TableCell className="text-center tabular-nums">{s.pending}</TableCell>
+                    <TableCell>
+                      <a href={exportHref(s.teacherId)} download className={exportClass} aria-label={`Xuất Excel của ${s.teacherName}`}>
+                        Excel
+                      </a>
+                    </TableCell>
                   </TableRow>
                 ))}
                 {summary.length > 1 && (
                   <TableRow className="font-semibold">
+                    <TableCell />
                     <TableCell />
                     <TableCell>Tổng cộng</TableCell>
                     <TableCell className="text-center tabular-nums">{total.taught}</TableCell>
                     <TableCell className="text-center tabular-nums">{total.substitute}</TableCell>
                     <TableCell className="text-center tabular-nums">{hours(total.minutes)}</TableCell>
                     <TableCell className="text-center tabular-nums">{total.pending}</TableCell>
+                    <TableCell />
                   </TableRow>
                 )}
               </TableBody>
@@ -167,6 +191,7 @@ export default async function TimesheetPage({ searchParams }: PageProps<"/admin/
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-14 text-center">STT</TableHead>
+                  <TableHead>Thứ</TableHead>
                   <TableHead>Ngày</TableHead>
                   <TableHead>Giờ</TableHead>
                   <TableHead>Giáo viên</TableHead>
@@ -180,9 +205,8 @@ export default async function TimesheetPage({ searchParams }: PageProps<"/admin/
                 {rows.map((r, index) => (
                   <TableRow key={r.id}>
                     <TableCell className="text-center text-muted-foreground tabular-nums">{index + 1}</TableCell>
-                    <TableCell>
-                      {WEEKDAY_SHORT[isoWeekday(r.date)]}, {formatDate(r.date)}
-                    </TableCell>
+                    <TableCell>{WEEKDAY_LABELS[isoWeekday(r.date)]}</TableCell>
+                    <TableCell>{formatDate(r.date)}</TableCell>
                     <TableCell className="tabular-nums">
                       {formatTime(r.startTime)}–{formatTime(r.endTime)}
                     </TableCell>
