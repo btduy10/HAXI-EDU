@@ -1,8 +1,7 @@
 import type { Metadata } from "next";
+import { AutoSubmitSelect } from "@/components/auto-submit-select";
 import { ClassReportCharts, ClassReportTable, ExportLinks } from "@/components/class-report";
-import { selectClass } from "@/components/form-dialog";
 import { LinkButton } from "@/components/link-button";
-import { Button } from "@/components/ui/button";
 import { LABELS } from "@/lib/format";
 import { listClasses } from "@/server/services/classes";
 import { getClassReport } from "@/server/services/summaries";
@@ -20,21 +19,19 @@ export default async function ReportsPage({ searchParams }: PageProps<"/admin/re
   return (
     <div className="grid gap-4">
       <h1 className="text-lg font-semibold">Báo cáo lớp</h1>
-      <form className="flex flex-col gap-2 sm:flex-row sm:items-end">
-        <label className="grid flex-1 gap-1.5 text-sm font-medium">
+      <form>
+        {/* Chọn lớp là hiện báo cáo ngay. Màn hình rộng: ô chọn chỉ chiếm nửa chiều ngang. */}
+        <label className="grid gap-1.5 text-sm font-medium sm:w-1/2">
           Lớp học
-          <select name="classId" defaultValue={current?.id ?? ""} className={selectClass}>
+          <AutoSubmitSelect name="classId" defaultValue={current?.id ?? ""}>
             <option value="">— Chọn lớp —</option>
             {classes.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.code} – {c.name} ({LABELS.classStatus[c.status]})
               </option>
             ))}
-          </select>
+          </AutoSubmitSelect>
         </label>
-        <Button type="submit" variant="outline" className="h-11">
-          Xem
-        </Button>
       </form>
       {current && report && (
         <section className="grid gap-3">
