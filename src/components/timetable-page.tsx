@@ -146,6 +146,7 @@ export async function TimetablePage({
       {view === "week" ? (
         options && canAdd ? (
           <ManualScheduler
+            defaults={filters}
             options={{
               slots: slots.map((s) => ({ value: s.id, label: `${s.name} (${s.defaultStart.slice(0, 5)}–${s.defaultEnd.slice(0, 5)})` })),
               classes: options[1].filter((c) => c.status === "open").map((c) => ({ value: c.id, label: `${c.code} – ${c.name}` })),

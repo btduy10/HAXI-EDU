@@ -1,4 +1,4 @@
-import { and, asc, between, eq, gte, inArray, isNull, lte, ne, or, sql } from "drizzle-orm";
+import { and, asc, between, desc, eq, gte, inArray, isNull, lte, ne, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import type { z } from "zod";
 import { db, type Tx } from "@/db";
@@ -120,6 +120,20 @@ export async function listSessions(actor: Actor, filters: SessionFilters): Promi
   return sessionQuery()
     .where(and(...conditions))
     .orderBy(asc(sessions.date), asc(sessions.startTime));
+}
+
+/**
+ * Ngày của buổi học sắp tới gần nhất (chưa hủy) của lớp, tính từ `from`; không còn buổi nào thì lấy buổi gần nhất đã qua.
+ * Dùng để mở Thời khóa biểu đúng tuần có buổi của lớp.
+ */
+export async function nextSessionDate(actor: Actor, classId: string, from: string): Promise<string | null> {
+  assertCan(actor, "timetable", "view");
+  await assertClassAccess(actor, classId);
+  const base = and(eq(sessions.classId, classId), ne(sessions.status, "cancelled"));
+  const [next] = await db.select({ date: sessions.date }).from(sessions).where(and(base, gte(sessions.date, from))).orderBy(asc(sessions.date)).limit(1);
+  if (next) return next.date;
+  const [last] = await db.select({ date: sessions.date }).from(sessions).where(base).orderBy(desc(sessions.date)).limit(1);
+  return last?.date ?? null;
 }
 
 export async function getSession(actor: Actor, sessionId: string): Promise<SessionRow> {

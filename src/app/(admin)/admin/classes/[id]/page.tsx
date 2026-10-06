@@ -7,13 +7,13 @@ import { Badge } from "@/components/ui/badge";
 import { LinkButton } from "@/components/link-button";
 import { GenerateSessionsButton } from "@/components/generate-sessions-button";
 import { WEEKDAY_LABELS } from "@/lib/dates";
-import { LABELS, formatDate, formatMoney, formatTime, toOptions } from "@/lib/format";
+import { LABELS, formatDate, formatMoney, formatTime, toOptions, todayIso } from "@/lib/format";
 import { assignTeacherAction, unassignTeacherAction, updateClassTeacherAction } from "@/server/actions/admin";
 import { createTemplateAction, deleteTemplateAction, updateTemplateAction } from "@/server/actions/schedule";
 import { orNotFound, uuidParam } from "@/server/page";
 import { listRooms, listTeachers, listTimeSlots } from "@/server/services/catalog";
 import { getClass, listClassTeachers } from "@/server/services/classes";
-import { listTemplates } from "@/server/services/sessions";
+import { listTemplates, nextSessionDate } from "@/server/services/sessions";
 import { listClassProgress } from "@/server/services/stars";
 import { requireMenu } from "@/server/session";
 
@@ -33,6 +33,10 @@ export default async function ClassDetailPage({ params }: PageProps<"/admin/clas
     listTimeSlots(actor),
     listRooms(actor),
   ]);
+
+  // "Xem thời khóa biểu lớp" mở đúng tuần có buổi sắp tới của lớp, lọc theo lớp.
+  const timetableDate = can("view", "timetable") ? await nextSessionDate(actor, classId, todayIso()) : null;
+  const timetableHref = `/admin/timetable?${new URLSearchParams({ view: "week", classId, ...(timetableDate ? { date: timetableDate } : {}) })}`;
 
   const assignedIds = new Set(assigned.map((a) => a.teacherId));
   // Lương mỗi buổi chỉ hiện với người xem được Chấm công (service trả null với người khác).
@@ -189,9 +193,15 @@ export default async function ClassDetailPage({ params }: PageProps<"/admin/clas
           {formatDate(cls.endDate)}, chạy lại không tạo trùng.
         </p>
         <div className="flex flex-wrap items-start gap-2">
-          {canEdit && <GenerateSessionsButton classId={classId} disabled={templates.length === 0 || cls.status !== "open"} />}
+          {canEdit && (
+            <GenerateSessionsButton
+              classId={classId}
+              disabled={templates.length === 0 || cls.status !== "open"}
+              timetableHref={can("view", "timetable") ? timetableHref : undefined}
+            />
+          )}
           {can("view", "timetable") && (
-            <LinkButton variant="outline" className="h-10" href={`/admin/timetable?classId=${classId}`}>
+            <LinkButton variant="outline" className="h-10" href={timetableHref}>
               Xem thời khóa biểu lớp
             </LinkButton>
           )}

@@ -17,7 +17,16 @@ const SchedulerContext = createContext<((target: Target) => void) | null>(null);
  * Bọc quanh lưới thời khóa biểu của Admin: giữ một hộp thoại "xếp buổi học" dùng chung,
  * các ô trong lưới chỉ cần gọi mở với ngày và ca của mình.
  */
-export function ManualScheduler({ options, children }: { options: Options; children: React.ReactNode }) {
+export function ManualScheduler({
+  options,
+  defaults,
+  children,
+}: {
+  options: Options;
+  /** Giá trị điền sẵn khi Thời khóa biểu đang lọc theo lớp / giáo viên / phòng. */
+  defaults?: { classId?: string; teacherId?: string; roomId?: string };
+  children: React.ReactNode;
+}) {
   const [target, setTarget] = useState<Target | null>(null);
 
   const fields: Field[] = [
@@ -40,6 +49,7 @@ export function ManualScheduler({ options, children }: { options: Options; child
           title="Xếp buổi học"
           description={`${WEEKDAY_LABELS[isoWeekday(target.date)]}, ${formatDate(target.date)}${slotLabel ? ` · ${slotLabel}` : ""}`}
           fields={fields}
+          initial={Object.fromEntries(Object.entries(defaults ?? {}).filter(([, v]) => v))}
           submitLabel="Xếp vào lịch"
           successMessage="Đã xếp buổi học."
           onSubmit={(values) =>

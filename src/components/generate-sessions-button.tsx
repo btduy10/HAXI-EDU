@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { toast } from "sonner";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { LinkButton } from "@/components/link-button";
 import { formatDate } from "@/lib/format";
 import { generateSessionsAction } from "@/server/actions/schedule";
 
@@ -14,7 +15,16 @@ type Result = {
   warnings: string[];
 };
 
-export function GenerateSessionsButton({ classId, disabled }: { classId: string; disabled?: boolean }) {
+export function GenerateSessionsButton({
+  classId,
+  disabled,
+  timetableHref,
+}: {
+  classId: string;
+  disabled?: boolean;
+  /** Thời khóa biểu lọc theo lớp, mở đúng tuần có buổi sắp tới (trang tính lại sau khi sinh buổi). */
+  timetableHref?: string;
+}) {
   const [result, setResult] = useState<Result | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -50,6 +60,13 @@ export function GenerateSessionsButton({ classId, disabled }: { classId: string;
                 ))}
                 {result.conflicts.length > 20 && <li>… và {result.conflicts.length - 20} buổi khác</li>}
               </ul>
+            </AlertDescription>
+          )}
+          {timetableHref && (
+            <AlertDescription>
+              <LinkButton variant="outline" className="mt-2 h-9 w-fit" href={timetableHref}>
+                Xem trên Thời khóa biểu
+              </LinkButton>
             </AlertDescription>
           )}
         </Alert>
