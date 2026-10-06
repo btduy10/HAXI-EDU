@@ -6,6 +6,7 @@ import {
   awardInput,
   criteriaInput,
   criteriaUpdate,
+  deleteStarLogsInput,
   giftAvatarInput,
   levelInput,
   levelUpdate,
@@ -41,3 +42,4 @@ export const awardStarsAction = async (input: unknown) => runAction(awardInput, 
 export const undoStarAction = async (input: unknown) => runAction(undoInput, input, (a, d) => stars.undoStarLog(a, d.logId), ALL);
 export const setStudentAvatarAction = async (input: unknown) =>
   runAction(setAvatarInput, input, (a, d) => avatars.setStudentAvatar(a, d.studentId, d.avatarId), ALL);
+export const deleteStarLogsAction = async (input: unknown) => runAction(deleteStarLogsInput, input, stars.deleteStudentStarLogs, ALL);

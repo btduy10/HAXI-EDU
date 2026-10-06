@@ -161,11 +161,25 @@ async function syncAfterChange(tx: Tx, actor: Actor, studentIds: string[], befor
   return changes;
 }
 
-/**
- * Ngoại lệ duy nhất của sổ cái chỉ-thêm: xóa hẳn lịch sử sao của một học viên ở các buổi cho trước,
- * khi Admin xóa một dòng ghi danh nhập sai. Gọi trong transaction của thao tác xóa đó; sau khi xóa thì
- * tính lại cấp và avatar của học viên. Trả về số dòng sao đã xóa.
- */
+// ---------- Ngoại lệ của sổ cái chỉ-thêm: Admin xóa hẳn lịch sử sao ----------
+
+/** Xóa các dòng sao theo id (kèm bản ghi hoàn tác trỏ tới chúng), rồi tính lại cấp và avatar. Trả về số dòng đã xóa. */
+async function purgeLogs(tx: Tx, actor: Actor, studentId: string, ids: string[]): Promise<number> {
+  assertAdmin(actor);
+  if (ids.length === 0) return 0;
+  const before = await rawSums(tx, [studentId]);
+  // Trigger ở CSDL chỉ cho DELETE khi cờ này bật; cờ chỉ có hiệu lực trong giao dịch hiện tại và được tắt ngay sau khi xóa.
+  await tx.execute(sql`select set_config('haxi.star_logs_admin_delete', 'on', true)`);
+  const removed = await tx
+    .delete(starLogs)
+    .where(and(eq(starLogs.studentId, studentId), or(inArray(starLogs.id, ids), inArray(starLogs.reversesLogId, ids))))
+    .returning({ id: starLogs.id });
+  await tx.execute(sql`select set_config('haxi.star_logs_admin_delete', 'off', true)`);
+  await syncAfterChange(tx, actor, [studentId], before);
+  return removed.length;
+}
+
+/** Dùng khi Admin xóa một dòng ghi danh nhập sai: xóa lịch sử sao của học viên ở các buổi cho trước (gọi trong transaction đó). */
 export async function purgeStudentStarLogs(tx: Tx, actor: Actor, studentId: string, sessionIds: string[]): Promise<number> {
   assertAdmin(actor);
   if (sessionIds.length === 0) return 0;
@@ -173,19 +187,42 @@ export async function purgeStudentStarLogs(tx: Tx, actor: Actor, studentId: stri
     .select({ id: starLogs.id })
     .from(starLogs)
     .where(and(eq(starLogs.studentId, studentId), inArray(starLogs.sessionId, sessionIds)));
-  if (targets.length === 0) return 0;
-  const ids = targets.map((t) => t.id);
-  const before = await rawSums(tx, [studentId]);
-  // Trigger ở CSDL chỉ cho DELETE khi cờ này bật; cờ chỉ có hiệu lực trong giao dịch hiện tại và được tắt ngay sau khi xóa.
-  await tx.execute(sql`select set_config('haxi.star_logs_admin_delete', 'on', true)`);
-  // Xóa cả bản ghi hoàn tác trỏ tới các dòng bị xóa.
-  const removed = await tx
-    .delete(starLogs)
-    .where(or(inArray(starLogs.id, ids), inArray(starLogs.reversesLogId, ids)))
-    .returning({ id: starLogs.id });
-  await tx.execute(sql`select set_config('haxi.star_logs_admin_delete', 'off', true)`);
-  await syncAfterChange(tx, actor, [studentId], before);
-  return removed.length;
+  return purgeLogs(tx, actor, studentId, targets.map((t) => t.id));
+}
+
+/**
+ * Admin xóa hẳn lịch sử sao của một học viên: một lần ghi (`logId`, xóa cả cặp ghi–hoàn tác) hoặc toàn bộ.
+ * Sao thuộc lớp đã đóng được giữ lại vì tổng kết của lớp đã chốt theo số liệu đó.
+ */
+export async function deleteStudentStarLogs(actor: Actor, data: { studentId: string; logId?: string }) {
+  assertAdmin(actor);
+  return db.transaction(async (tx) => {
+    const rows = await tx
+      .select({ id: starLogs.id, reversesLogId: starLogs.reversesLogId, stars: starLogs.stars, classStatus: classes.status })
+      .from(starLogs)
+      .leftJoin(sessions, eq(sessions.id, starLogs.sessionId))
+      .leftJoin(classes, eq(classes.id, sessions.classId))
+      .where(eq(starLogs.studentId, data.studentId));
+    let targets = rows.filter((r) => r.classStatus !== "closed");
+    if (data.logId) {
+      const picked = rows.find((r) => r.id === data.logId);
+      if (!picked) throw notFound("lần ghi sao");
+      if (picked.classStatus === "closed") throw new AppError("CONFLICT", "Lớp đã đóng và đã chốt tổng kết nên không xóa được sao của lớp này.");
+      // Chọn bản ghi hoàn tác thì xóa cả lần ghi gốc; chọn lần ghi gốc thì purgeLogs xóa cả bản hoàn tác.
+      targets = rows.filter((r) => r.id === picked.id || r.id === picked.reversesLogId);
+    }
+    const deleted = await purgeLogs(tx, actor, data.studentId, targets.map((t) => t.id));
+    if (deleted > 0) {
+      await audit(tx, {
+        userId: actor.userId,
+        action: data.logId ? "star_log_deleted" : "star_logs_deleted_all",
+        tableName: "star_logs",
+        recordId: data.logId ?? data.studentId,
+        newValue: { studentId: data.studentId, deleted },
+      });
+    }
+    return { deleted, keptClosed: data.logId ? 0 : rows.length - targets.length };
+  });
 }
 
 /** Sau khi Admin sửa bảng cấp hoặc kho avatar: đồng bộ lại avatar của mọi học viên. */

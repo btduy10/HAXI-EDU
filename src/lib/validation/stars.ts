@@ -42,5 +42,6 @@ export const awardInput = z.object({
 });
 
 export const undoInput = z.object({ logId: id });
+export const deleteStarLogsInput = z.object({ studentId: id, logId: id.optional() });
 export const setAvatarInput = z.object({ studentId: id, avatarId: id });
 export const giftAvatarInput = z.object({ studentId: id, avatarId: id });
