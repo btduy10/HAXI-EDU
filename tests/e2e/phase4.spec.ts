@@ -264,8 +264,15 @@ test("Phân quyền: Admin mở menu Học viên cho Giáo viên trực; Giáo v
   await page.goto("/admin/settings");
   await expect(page.getByRole("heading", { name: "Phân quyền" })).toBeVisible();
   const box = (name: string) => page.getByRole("checkbox", { name, exact: true });
-  await expect(box("Giáo viên trực: Xem Điểm danh")).toBeChecked();
+  // Một bảng duy nhất: chọn vai trò ở ô "Vai trò"; danh sách giáo viên của vai trò lấy từ menu Giáo viên.
+  const roleSelect = page.getByLabel("Vai trò", { exact: true });
+  await expect(roleSelect.locator("option")).toHaveText(["Giáo viên (2 giáo viên)", "Giáo viên trực (0 giáo viên)"]);
+  await expect(page.getByText(/Giáo viên mang vai trò này: .*Nguyễn Thị Lan/)).toBeVisible();
   await expect(box("Giáo viên: Thêm Sao & Avatar")).toBeChecked();
+  await expect(box("Giáo viên trực: Xem Điểm danh")).toHaveCount(0);
+  await roleSelect.selectOption("duty_teacher");
+  await expect(page.getByText("Chưa có giáo viên nào mang vai trò này.")).toBeVisible();
+  await expect(box("Giáo viên trực: Xem Điểm danh")).toBeChecked();
   await box("Giáo viên trực: Sửa Khóa học").check();
   await expect(box("Giáo viên trực: Xem Khóa học")).toBeChecked();
   await box("Giáo viên trực: Xem Khóa học").uncheck();
@@ -276,8 +283,20 @@ test("Phân quyền: Admin mở menu Học viên cho Giáo viên trực; Giáo v
   await page.getByRole("button", { name: "Lưu phân quyền" }).click();
   await expect(page.getByText("Đã lưu phân quyền.")).toBeVisible();
 
-  // Tạo tài khoản Giáo viên trực (không cần gắn với hồ sơ giáo viên).
+  // Menu Giáo viên có cột Vai trò; đổi GV02 sang Giáo viên trực thì bảng phân quyền đếm theo.
+  await page.goto("/admin/teachers");
+  await expect(page.locator("ul:visible > li").first()).toContainText("Vai trò:");
+  await page.getByRole("button", { name: "Sửa Trần Văn Minh" }).click();
+  await page.locator("#f-role").selectOption({ label: "Giáo viên trực" });
+  await page.getByRole("button", { name: "Lưu" }).click();
+  await expect(page.getByText("Đã lưu.")).toBeVisible();
+  await expectNoHorizontalScroll(page);
+  await page.goto("/admin/settings");
+  await expect(page.getByLabel("Vai trò", { exact: true }).locator("option")).toHaveText(["Giáo viên (1 giáo viên)", "Giáo viên trực (1 giáo viên)"]);
   await page.goto("/admin/accounts");
+  await expect(page.getByRole("listitem").filter({ hasText: "gv.minh" }).getByText("Giáo viên trực", { exact: true })).toBeVisible();
+
+  // Tạo tài khoản Giáo viên trực (không cần gắn với hồ sơ giáo viên).
   await page.getByRole("button", { name: "Thêm tài khoản" }).click();
   await page.locator("#f-username").fill("truc.ban");
   await page.locator("#f-name").fill("Trực ban");

@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { and, asc, count, eq, ne } from "drizzle-orm";
 import type { z } from "zod";
-import { db } from "@/db";
+import { db, type DbOrTx } from "@/db";
 import { account, session, teachers, twoFactor, user } from "@/db/schema";
 import type { accountEditInput, accountInput } from "@/lib/validation/entities";
 import { audit } from "../audit";
@@ -31,6 +31,16 @@ export async function listAccounts(actor: Actor) {
     .orderBy(asc(user.role), asc(user.username));
 }
 
+/**
+ * Tài khoản gắn với một giáo viên lấy vai trò theo cột Vai trò của giáo viên đó (menu Giáo viên).
+ * Quản trị và tài khoản không gắn giáo viên giữ vai trò đã chọn.
+ */
+async function roleFor(tx: DbOrTx, chosen: "admin" | "teacher" | "duty_teacher", teacherId: string | null) {
+  if (chosen === "admin" || !teacherId) return chosen;
+  const [teacher] = await tx.select({ role: teachers.role }).from(teachers).where(eq(teachers.id, teacherId)).limit(1);
+  return teacher?.role ?? chosen;
+}
+
 /** Tạo tài khoản với mật khẩu tạm; người dùng bắt buộc đổi ở lần đăng nhập đầu. */
 export async function createAccount(actor: Actor, data: z.output<typeof accountInput>) {
   assertAdmin(actor);
@@ -38,6 +48,7 @@ export async function createAccount(actor: Actor, data: z.output<typeof accountI
   const id = randomUUID();
   try {
     return await db.transaction(async (tx) => {
+      const role = await roleFor(tx, data.role, data.teacherId);
       await tx.insert(user).values({
         id,
         name: data.name,
@@ -45,7 +56,7 @@ export async function createAccount(actor: Actor, data: z.output<typeof accountI
         displayUsername: data.username,
         // Better Auth yêu cầu email; hệ thống không dùng email nên sinh địa chỉ nội bộ.
         email: `${data.username}@haxi.local`,
-        role: data.role,
+        role,
         teacherId: data.role === "admin" ? null : data.teacherId,
         mustChangePassword: true,
       });
@@ -55,7 +66,7 @@ export async function createAccount(actor: Actor, data: z.output<typeof accountI
         action: "account_created",
         tableName: "user",
         recordId: id,
-        newValue: { username: data.username, role: data.role, teacherId: data.teacherId },
+        newValue: { username: data.username, role, teacherId: data.teacherId },
       });
       return { id };
     });
@@ -79,6 +90,7 @@ export async function updateAccount(actor: Actor, data: z.output<typeof accountE
       const [before] = await tx.select().from(user).where(eq(user.id, data.id)).for("update").limit(1);
       if (!before) throw notFound("tài khoản");
       const teacherId = data.role === "admin" ? null : data.teacherId;
+      const role = await roleFor(tx, data.role, teacherId);
 
       if (before.role !== data.role) {
         if (data.id === actor.userId) throw new AppError("CONFLICT", "Không thể tự đổi vai trò của chính mình.", { role: "Không tự đổi được" });
@@ -100,13 +112,13 @@ export async function updateAccount(actor: Actor, data: z.output<typeof accountE
           username: data.username,
           displayUsername: data.username,
           email: `${data.username}@haxi.local`,
-          role: data.role,
+          role,
           teacherId,
           updatedAt: new Date(),
         })
         .where(eq(user.id, data.id))
         .returning();
-      const sensitive = before.role !== data.role || before.username !== data.username || before.teacherId !== teacherId;
+      const sensitive = before.role !== role || before.username !== data.username || before.teacherId !== teacherId;
       if (sensitive) await tx.delete(session).where(and(eq(session.userId, data.id), ne(session.userId, actor.userId)));
       const pick = (u: typeof before) => ({ username: u.username, name: u.name, role: u.role, teacherId: u.teacherId });
       await audit(tx, {

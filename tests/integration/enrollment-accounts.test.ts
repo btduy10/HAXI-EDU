@@ -58,7 +58,7 @@ describe("danh mục và nhật ký", () => {
   });
 
   it("trùng mã báo lỗi CONFLICT, xóa dữ liệu đang dùng bị chặn", async () => {
-    await expect(catalog.createTeacher(f.admin, { code: "GVA", fullName: "Trùng", phone: null, email: null, status: "active" })).rejects.toMatchObject({ code: "CONFLICT" });
+    await expect(catalog.createTeacher(f.admin, { code: "GVA", fullName: "Trùng", phone: null, email: null, status: "active", role: "teacher" })).rejects.toMatchObject({ code: "CONFLICT" });
     await expect(catalog.deleteCourse(f.admin, f.course.id)).rejects.toMatchObject({ code: "CONFLICT" });
   });
 });

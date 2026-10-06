@@ -17,6 +17,7 @@ import { requirePageUser } from "@/server/session";
 
 export const metadata: Metadata = { title: "Tài khoản" };
 
+const ROLE_HINT = "Tài khoản gắn với giáo viên sẽ lấy vai trò Giáo viên / Giáo viên trực theo cột Vai trò ở menu Giáo viên.";
 const PASSWORD_HINT = "Mật khẩu tạm, tối thiểu 8 ký tự gồm chữ và số. Người dùng phải đổi ở lần đăng nhập đầu.";
 
 export default async function AccountsPage() {
@@ -33,7 +34,8 @@ export default async function AccountsPage() {
       name: "teacherId",
       label: "Giáo viên (với vai trò Giáo viên)",
       type: "select",
-      options: teachers.filter((t) => !linked.has(t.id)).map((t) => ({ value: t.id, label: `${t.code} – ${t.fullName}` })),
+      options: teachers.filter((t) => !linked.has(t.id)).map((t) => ({ value: t.id, label: `${t.code} – ${t.fullName} (${LABELS.role[t.role]})` })),
+      hint: ROLE_HINT,
     },
     { name: "password", label: "Mật khẩu tạm", type: "password", required: true, hint: PASSWORD_HINT },
   ];
@@ -89,7 +91,8 @@ export default async function AccountsPage() {
                       type: "select",
                       options: teachers
                         .filter((t) => t.id === a.teacherId || !linked.has(t.id))
-                        .map((t) => ({ value: t.id, label: `${t.code} – ${t.fullName}` })),
+                        .map((t) => ({ value: t.id, label: `${t.code} – ${t.fullName} (${LABELS.role[t.role]})` })),
+                      hint: ROLE_HINT,
                     },
                   ]}
                   initial={{ username: a.username, name: a.name, role: a.role, teacherId: a.teacherId ?? "" }}

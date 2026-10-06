@@ -1,10 +1,11 @@
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/db";
-import { auditLogs, sessions, students as studentsTable } from "@/db/schema";
+import { auditLogs, sessions, students as studentsTable, teachers as teachersTable, user as userTable } from "@/db/schema";
 import { DEFAULT_PERMISSIONS, type Menu, type MenuPermission, type RolePermissions, normalizePermissions } from "@/lib/permissions";
 import { type Actor, can } from "@/server/guard";
 import { getPermissionConfig } from "@/server/settings";
+import * as accounts from "@/server/services/accounts";
 import * as attendance from "@/server/services/attendance";
 import * as catalog from "@/server/services/catalog";
 import * as classes from "@/server/services/classes";
@@ -76,6 +77,37 @@ describe("bảng phân quyền", () => {
     expect(can(f.actorA, "attendance", "add")).toBe(true);
     expect(can(f.actorA, "students", "view")).toBe(false);
     expect(can({ ...f.actorA, role: "khác" as never }, "students", "view")).toBe(false);
+  });
+});
+
+describe("vai trò lấy từ cột Vai trò của giáo viên", () => {
+  const teacherB = (role: "teacher" | "duty_teacher") => ({ code: "GVB", fullName: "Giáo viên B", phone: null, email: null, status: "active" as const, role });
+  const roleOf = async (userId: string) => (await db.select({ role: userTable.role }).from(userTable).where(eq(userTable.id, userId)))[0]!.role;
+
+  it("Admin đổi vai trò giáo viên thì tài khoản gắn kèm đổi theo; tài khoản mới cũng lấy theo giáo viên", async () => {
+    await catalog.updateTeacher(f.admin, f.teacherB.id, teacherB("duty_teacher"));
+    expect(await roleOf(f.actorB.userId)).toBe("duty_teacher");
+    expect(await roleOf(f.actorA.userId)).toBe("teacher");
+    expect(await roleOf(f.admin.userId)).toBe("admin");
+    const [log] = await db.select().from(auditLogs).where(eq(auditLogs.action, "account_role_synced"));
+    expect(log).toMatchObject({ recordId: f.actorB.userId, newValue: { role: "duty_teacher" } });
+
+    // Tạo lại tài khoản cho giáo viên B với lựa chọn "Giáo viên": vẫn nhận vai trò của giáo viên.
+    await accounts.deleteAccount(f.admin, f.actorB.userId);
+    const { id } = await accounts.createAccount(f.admin, { username: "gv.b2", name: "B", role: "teacher", teacherId: f.teacherB.id, password: "MatKhauTam123" });
+    expect(await roleOf(id)).toBe("duty_teacher");
+    await catalog.updateTeacher(f.admin, f.teacherB.id, teacherB("teacher"));
+    expect(await roleOf(id)).toBe("teacher");
+  });
+
+  it("người không phải Admin, dù được tick Sửa Giáo viên, không đổi được vai trò (không tự nâng quyền)", async () => {
+    const editor = withPerms(f.actorB, "own", { teachers: FULL });
+    await catalog.updateTeacher(editor, f.teacherB.id, { ...teacherB("duty_teacher"), fullName: "Tên mới" });
+    const [stored] = await db.select().from(teachersTable).where(eq(teachersTable.id, f.teacherB.id));
+    expect(stored).toMatchObject({ fullName: "Tên mới", role: "teacher" });
+    expect(await roleOf(f.actorB.userId)).toBe("teacher");
+    const created = await catalog.createTeacher(editor, { ...teacherB("duty_teacher"), code: "GVC" });
+    expect(created.role).toBe("teacher");
   });
 });
 

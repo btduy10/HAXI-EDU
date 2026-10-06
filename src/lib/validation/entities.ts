@@ -23,6 +23,7 @@ export const teacherInput = z.object({
   phone: optPhone,
   email: optEmail,
   status: z.enum(["active", "inactive"]).default("active"),
+  role: z.enum(["teacher", "duty_teacher"]).default("teacher"),
 });
 
 export const studentInput = z.object({

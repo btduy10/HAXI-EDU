@@ -22,6 +22,13 @@
       "when": 1791246181445,
       "tag": "0002_duty_teacher_role",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1791247491943,
+      "tag": "0003_teacher_role",
+      "breakpoints": true
     }
   ]
 }
