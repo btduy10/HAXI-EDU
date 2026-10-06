@@ -1,6 +1,6 @@
-import { and, eq, or } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 import { db, type DbOrTx } from "@/db";
-import { classTeachers, classes, sessions } from "@/db/schema";
+import { classTeachers, classes, scheduleTemplates, sessions } from "@/db/schema";
 import {
   DEFAULT_PERMISSIONS,
   NO_PERMISSIONS,
@@ -52,55 +52,62 @@ export function assertSignedIn(actor: Actor) {
 /** Admin, hoặc vai trò được cấu hình phạm vi "Tất cả lớp". */
 export const seesAllClasses = (actor: Actor) => permsOf(actor)?.scope !== "own";
 
+/**
+ * Lớp của một giáo viên: được phân công ở Lớp học → Giáo viên, hoặc được xếp dạy bên Thời khóa biểu
+ * (lịch mẫu của lớp, hoặc là giáo viên chính của một buổi chưa hủy). Dạy thay chỉ có quyền trên đúng buổi đó.
+ */
+function teacherClassIds(teacherId: string, tx: DbOrTx, classId?: string) {
+  const only = <T extends { classId: typeof classTeachers.classId | typeof sessions.classId | typeof scheduleTemplates.classId }>(t: T) =>
+    classId ? eq(t.classId, classId) : undefined;
+  return tx
+    .select({ classId: classTeachers.classId })
+    .from(classTeachers)
+    .where(and(eq(classTeachers.teacherId, teacherId), only(classTeachers)))
+    .union(
+      tx
+        .select({ classId: scheduleTemplates.classId })
+        .from(scheduleTemplates)
+        .where(and(eq(scheduleTemplates.teacherId, teacherId), only(scheduleTemplates))),
+    )
+    .union(
+      tx
+        .select({ classId: sessions.classId })
+        .from(sessions)
+        .where(and(eq(sessions.teacherId, teacherId), ne(sessions.status, "cancelled"), only(sessions))),
+    );
+}
+
 /** Danh sách lớp trong phạm vi của người dùng. null = không giới hạn (Admin hoặc phạm vi "Tất cả lớp"). */
 export async function allowedClassIds(actor: Actor, tx: DbOrTx = db): Promise<string[] | null> {
   if (seesAllClasses(actor)) return null;
   if (!actor.teacherId) return [];
-  const rows = await tx
-    .select({ classId: classTeachers.classId })
-    .from(classTeachers)
-    .where(eq(classTeachers.teacherId, actor.teacherId));
+  const rows = await teacherClassIds(actor.teacherId, tx);
   return rows.map((r) => r.classId);
 }
 
 /**
- * Chống IDOR: GV chỉ truy cập lớp mình được phân công.
+ * Chống IDOR: GV chỉ truy cập lớp mình được phân công hoặc được xếp dạy.
  * Trả NOT_FOUND thay vì FORBIDDEN để không lộ sự tồn tại của lớp khác.
  */
 export async function assertClassAccess(actor: Actor, classId: string, tx: DbOrTx = db) {
   if (seesAllClasses(actor)) return;
   if (!actor.teacherId) throw notFound("lớp học");
-  const [row] = await tx
-    .select({ id: classTeachers.id })
-    .from(classTeachers)
-    .where(and(eq(classTeachers.classId, classId), eq(classTeachers.teacherId, actor.teacherId)))
-    .limit(1);
-  if (!row) throw notFound("lớp học");
+  const rows = await teacherClassIds(actor.teacherId, tx, classId);
+  if (rows.length === 0) throw notFound("lớp học");
 }
 
-/** GV được vào buổi học nếu thuộc lớp, hoặc là GV dạy/dạy thay của chính buổi đó. */
+/** GV được vào buổi học nếu buổi thuộc lớp của mình, hoặc là GV dạy/dạy thay của chính buổi đó. */
 export async function assertSessionAccess(actor: Actor, sessionId: string, tx: DbOrTx = db) {
   if (seesAllClasses(actor)) return;
   if (!actor.teacherId) throw notFound("buổi học");
   const [row] = await tx
-    .select({ id: sessions.id })
+    .select({ classId: sessions.classId, teacherId: sessions.teacherId, substituteTeacherId: sessions.substituteTeacherId })
     .from(sessions)
-    .leftJoin(
-      classTeachers,
-      and(eq(classTeachers.classId, sessions.classId), eq(classTeachers.teacherId, actor.teacherId)),
-    )
-    .where(
-      and(
-        eq(sessions.id, sessionId),
-        or(
-          eq(classTeachers.teacherId, actor.teacherId),
-          eq(sessions.teacherId, actor.teacherId),
-          eq(sessions.substituteTeacherId, actor.teacherId),
-        ),
-      ),
-    )
+    .where(eq(sessions.id, sessionId))
     .limit(1);
   if (!row) throw notFound("buổi học");
+  if (row.teacherId === actor.teacherId || row.substituteTeacherId === actor.teacherId) return;
+  if ((await teacherClassIds(actor.teacherId, tx, row.classId)).length === 0) throw notFound("buổi học");
 }
 
 export const unauthenticated = () => new AppError("UNAUTHENTICATED", "Vui lòng đăng nhập.");

@@ -1,3 +1,4 @@
+import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { assertClassAccess, assertSessionAccess } from "@/server/guard";
 import * as accounts from "@/server/services/accounts";
@@ -68,6 +69,27 @@ describe("phân quyền theo lớp (chống IDOR)", () => {
 });
 
 describe("chức năng chỉ dành cho Admin", () => {
+  it("GV được xếp dạy bên Thời khóa biểu thì thấy lớp đó ở Lớp của tôi; dạy thay hoặc buổi đã hủy thì không", async () => {
+    const codes = async () => (await classes.listClasses(f.actorA)).map((c) => c.code).sort();
+    const base = { classId: f.classB.id, startTime: "08:00", endTime: "09:30" };
+    // Dạy thay một buổi của lớp B: chỉ vào được buổi đó, không thấy lớp B.
+    const [sub] = await db.insert(sessions).values({ ...base, date: "2026-01-12", teacherId: f.teacherB.id, substituteTeacherId: f.teacherA.id }).returning();
+    await expect(assertSessionAccess(f.actorA, sub!.id)).resolves.toBeUndefined();
+    expect(await codes()).toEqual(["A"]);
+    // Buổi đã hủy không tính.
+    const [own] = await db.insert(sessions).values({ ...base, date: "2026-01-14", teacherId: f.teacherA.id, status: "cancelled" }).returning();
+    expect(await codes()).toEqual(["A"]);
+    await expect(assertClassAccess(f.actorA, f.classB.id)).rejects.toMatchObject({ code: "NOT_FOUND" });
+
+    // Là giáo viên của một buổi của lớp B → lớp B vào danh sách, xem được học viên và các buổi khác của lớp.
+    await db.update(sessions).set({ status: "planned" }).where(eq(sessions.id, own!.id));
+    expect(await codes()).toEqual(["A", "B"]);
+    await expect(classes.getClass(f.actorA, f.classB.id)).resolves.toMatchObject({ code: "B" });
+    expect((await students.listClassStudents(f.actorA, f.classB.id)).length).toBe(2);
+    const [otherDay] = await db.insert(sessions).values({ ...base, date: "2026-01-19", teacherId: f.teacherB.id }).returning();
+    await expect(assertSessionAccess(f.actorA, otherDay!.id)).resolves.toBeUndefined();
+  });
+
   it("GV bị từ chối ở mọi service quản trị", async () => {
     const denied = { code: "FORBIDDEN" };
     // Danh sách giáo viên dùng cho ô chọn: không có quyền xem menu Giáo viên thì không nhận điện thoại, email.
