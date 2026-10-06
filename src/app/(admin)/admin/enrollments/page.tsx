@@ -108,7 +108,7 @@ export default async function EnrollmentsPage({ searchParams }: PageProps<"/admi
                       <ConfirmButton
                         label="Xóa"
                         variant="destructive"
-                        confirmText={`Xóa hẳn ghi danh của ${e.fullName} ở lớp ${current.code}? Không hoàn tác được.`}
+                        confirmText={`Xóa hẳn ghi danh của ${e.fullName} ở lớp ${current.code}? Điểm danh của em ở lớp này trong thời gian ghi danh cũng bị xóa; sao đã ghi vẫn giữ. Không hoàn tác được.`}
                         action={deleteEnrollmentAction}
                         input={{ id: e.id }}
                         successMessage="Đã xóa ghi danh."

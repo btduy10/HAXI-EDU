@@ -1,7 +1,7 @@
 import { and, asc, count, desc, eq, gte, inArray, lt, sql } from "drizzle-orm";
 import type { z } from "zod";
 import { db } from "@/db";
-import { attendances, classTeachers, classes, courses, enrollments, rooms, sessions, starLogs, students, teachers } from "@/db/schema";
+import { attendances, classTeachers, classes, courses, enrollments, rooms, sessions, students, teachers } from "@/db/schema";
 import type { classInput, classTeacherInput, enrollInput, leaveInput } from "@/lib/validation/entities";
 import { audit } from "../audit";
 import { AppError, notFound, translateDbError } from "../errors";
@@ -193,8 +193,8 @@ export async function leaveEnrollment(actor: Actor, data: z.output<typeof leaveI
 }
 
 /**
- * Xóa hẳn một dòng ghi danh nhập sai (chỉ Admin). Học viên đã có điểm danh hoặc sao ở lớp trong thời gian
- * ghi danh này thì không xóa được — dùng "Cho rời lớp" để giữ lịch sử.
+ * Xóa hẳn một dòng ghi danh nhập sai (chỉ Admin), kèm điểm danh của học viên ở các buổi của lớp
+ * trong thời gian ghi danh đó. Sao đã ghi vẫn được giữ vì sổ sao chỉ thêm, không xóa.
  */
 export async function deleteEnrollment(actor: Actor, id: string) {
   assertAdmin(actor);
@@ -204,30 +204,30 @@ export async function deleteEnrollment(actor: Actor, id: string) {
     const [cls] = await tx.select({ status: classes.status }).from(classes).where(eq(classes.id, before.classId)).limit(1);
     if (cls?.status !== "open") throw new AppError("CONFLICT", "Lớp đã đóng và đã chốt tổng kết nên không xóa ghi danh được.");
 
-    const inPeriod = and(
-      eq(sessions.classId, before.classId),
-      gte(sessions.date, before.joinedAt),
-      before.leftAt ? lt(sessions.date, before.leftAt) : undefined,
-    );
-    const [[attended], [starred]] = await Promise.all([
-      tx
-        .select({ id: attendances.id })
-        .from(attendances)
-        .innerJoin(sessions, eq(sessions.id, attendances.sessionId))
-        .where(and(eq(attendances.studentId, before.studentId), inPeriod))
-        .limit(1),
-      tx
-        .select({ id: starLogs.id })
-        .from(starLogs)
-        .innerJoin(sessions, eq(sessions.id, starLogs.sessionId))
-        .where(and(eq(starLogs.studentId, before.studentId), inPeriod))
-        .limit(1),
-    ]);
-    if (attended || starred) {
-      throw new AppError("CONFLICT", "Học viên đã có điểm danh hoặc sao ở lớp này nên không xóa được. Hãy dùng \"Cho rời lớp\" để giữ lịch sử.");
-    }
+    const inPeriod = tx
+      .select({ id: sessions.id })
+      .from(sessions)
+      .where(
+        and(
+          eq(sessions.classId, before.classId),
+          gte(sessions.date, before.joinedAt),
+          before.leftAt ? lt(sessions.date, before.leftAt) : undefined,
+        ),
+      );
+    const removed = await tx
+      .delete(attendances)
+      .where(and(eq(attendances.studentId, before.studentId), inArray(attendances.sessionId, inPeriod)))
+      .returning({ id: attendances.id });
 
     await tx.delete(enrollments).where(eq(enrollments.id, id));
-    await audit(tx, { userId: actor.userId, action: "delete", tableName: "enrollments", recordId: id, oldValue: before });
+    await audit(tx, {
+      userId: actor.userId,
+      action: "delete",
+      tableName: "enrollments",
+      recordId: id,
+      oldValue: before,
+      newValue: { deletedAttendances: removed.length },
+    });
+    return { deletedAttendances: removed.length };
   });
 }
