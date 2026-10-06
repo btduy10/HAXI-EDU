@@ -19,3 +19,13 @@ export function uuidParam(value: string): string {
   if (!UUID.test(value)) notFound();
   return value;
 }
+
+/**
+ * Trang buổi học ở khu vực giảng dạy: mở từ Thời khóa biểu (link kèm ?tkb=<ngày>) thì nút Quay lại về đúng tuần đó,
+ * còn lại về Tổng quan. Chỉ nhận giá trị đúng dạng ngày để không tạo link tùy ý.
+ */
+export function teacherSessionBack(raw: string | string[] | undefined): { backHref: string; tabQuery: string } {
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return { backHref: "/teacher/dashboard", tabQuery: "" };
+  return { backHref: `/teacher/timetable?date=${value}`, tabQuery: `?tkb=${value}` };
+}

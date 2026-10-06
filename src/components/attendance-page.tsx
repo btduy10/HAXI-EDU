@@ -16,11 +16,13 @@ export async function AttendancePage({
   actor,
   sessionId,
   backHref,
+  tabQuery,
   area,
 }: {
   actor: Actor;
   sessionId: string;
   backHref: string;
+  tabQuery?: string;
   area: "admin" | "teacher";
 }) {
   const session = await orNotFound(getSession(actor, sessionId));
@@ -45,7 +47,7 @@ export async function AttendancePage({
         </div>
       </div>
 
-      <SessionTabs area={area} sessionId={sessionId} active="attendance" show={{ attendance: true, stars: can(actor, "stars", "view") }} />
+      <SessionTabs area={area} sessionId={sessionId} active="attendance" query={tabQuery} show={{ attendance: true, stars: can(actor, "stars", "view") }} />
 
       {sheet.locked && isAdmin(actor) && (
         <ConfirmButton

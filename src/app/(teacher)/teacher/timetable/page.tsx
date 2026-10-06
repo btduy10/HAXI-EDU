@@ -12,7 +12,7 @@ export default async function TeacherTimetablePage({ searchParams }: PageProps<"
       params={await searchParams}
       basePath="/teacher/timetable"
       title="TKB của tôi"
-      sessionHref={(s) => `/teacher/sessions/${s.id}/attendance`}
+      sessionHref={(s) => `/teacher/sessions/${s.id}/attendance?tkb=${s.date}`}
     />
   );
 }

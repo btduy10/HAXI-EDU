@@ -125,10 +125,10 @@ async function LevelsTab({ admin }: { admin: boolean }) {
       </div>
       <CrudSection
         title="Cấp bậc"
-        columns={["Tên cấp", "Cấp số", "Từ số sao", "Màu khung"]}
+        columns={admin ? ["Tên cấp", "Cấp số", "Từ số sao", "Màu khung"] : ["Tên cấp", "Cấp số", "Từ số sao"]}
         rows={levels.map((l) => ({
           id: l.id,
-          cells: [l.name, String(l.levelNo), String(l.minStars), l.frameColor],
+          cells: [l.name, String(l.levelNo), String(l.minStars), ...(admin ? [l.frameColor] : [])],
           values: { levelNo: String(l.levelNo), name: l.name, minStars: String(l.minStars), frameColor: l.frameColor },
         }))}
         fields={fields}

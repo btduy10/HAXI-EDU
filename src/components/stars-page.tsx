@@ -14,11 +14,13 @@ export async function StarsPage({
   actor,
   sessionId,
   backHref,
+  tabQuery,
   area,
 }: {
   actor: Actor;
   sessionId: string;
   backHref: string;
+  tabQuery?: string;
   area: "admin" | "teacher";
 }) {
   const session = await orNotFound(getSession(actor, sessionId));
@@ -40,7 +42,7 @@ export async function StarsPage({
           {formatTime(session.endTime)}
         </p>
       </div>
-      <SessionTabs area={area} sessionId={sessionId} active="stars" show={{ attendance: can(actor, "attendance", "view"), stars: true }} />
+      <SessionTabs area={area} sessionId={sessionId} active="stars" query={tabQuery} show={{ attendance: can(actor, "attendance", "view"), stars: true }} />
 
       {blocked ? (
         <Alert>

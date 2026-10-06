@@ -7,6 +7,7 @@ export function SessionTabs({
   sessionId,
   active,
   show,
+  query = "",
 }: {
   /** Khu vực đang đứng: trang quản lý hay khu vực giảng dạy. */
   area: "admin" | "teacher";
@@ -14,18 +15,20 @@ export function SessionTabs({
   active: "attendance" | "stars";
   /** Các tab người dùng được xem (theo phân quyền). */
   show: { attendance: boolean; stars: boolean };
+  /** Tham số giữ lại khi đổi tab (vd. "?tkb=2026-10-06" để nút Quay lại vẫn về Thời khóa biểu). */
+  query?: string;
 }) {
   const role = area;
   const tabs = [
     {
       key: "attendance" as const,
       label: "Điểm danh",
-      href: role === "admin" ? `/admin/attendance/${sessionId}` : `/teacher/sessions/${sessionId}/attendance`,
+      href: role === "admin" ? `/admin/attendance/${sessionId}` : `/teacher/sessions/${sessionId}/attendance${query}`,
     },
     {
       key: "stars" as const,
       label: "Ghi sao",
-      href: role === "admin" ? `/admin/sessions/${sessionId}/stars` : `/teacher/sessions/${sessionId}/stars`,
+      href: role === "admin" ? `/admin/sessions/${sessionId}/stars` : `/teacher/sessions/${sessionId}/stars${query}`,
     },
   ].filter((t) => show[t.key]);
   if (tabs.length < 2) return null;
