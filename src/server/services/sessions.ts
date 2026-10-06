@@ -6,6 +6,7 @@ import {
   attendances,
   classTeachers,
   classes,
+  courses,
   enrollments,
   holidays,
   rooms,
@@ -183,19 +184,93 @@ function assertDistinctAssistant(teacherId: string | null | undefined, assistant
   }
 }
 
-/** Thêm dòng lịch mẫu rồi tự sinh các buổi từ hôm nay đến hết khóa cho dòng đó (bỏ ngày nghỉ, báo buổi bị trùng). */
+type TemplateRow = typeof scheduleTemplates.$inferSelect;
+type ClassRow = typeof classes.$inferSelect;
+
+/** Giá trị một dòng lịch mẫu áp cho buổi học: giờ riêng hoặc giờ của ca, phòng mặc định, GV chính của lớp. */
+async function templateApplier(tx: Tx, cls: ClassRow) {
+  const [mainTeacher] = await tx
+    .select({ teacherId: classTeachers.teacherId })
+    .from(classTeachers)
+    .where(and(eq(classTeachers.classId, cls.id), eq(classTeachers.role, "main")))
+    .limit(1);
+  const slotRows = await tx.select().from(timeSlots);
+  const slotOf = new Map(slotRows.map((s) => [s.id, s]));
+  return (t: TemplateRow) => {
+    const slot = slotOf.get(t.timeSlotId);
+    return {
+      timeSlotId: t.timeSlotId,
+      startTime: (t.startTime ?? slot?.defaultStart ?? "").slice(0, 5),
+      endTime: (t.endTime ?? slot?.defaultEnd ?? "").slice(0, 5),
+      roomId: t.roomId ?? cls.defaultRoomId,
+      teacherId: t.teacherId ?? mainTeacher?.teacherId ?? null,
+      assistantTeacherId: t.assistantTeacherId,
+    };
+  };
+}
+
+/** Buổi sắp tới còn "nguyên như lịch mẫu sinh ra": chưa diễn ra, chưa điểm danh/ghi sao, chưa dời, chưa sửa tay. */
+async function untouchedFutureSessions(tx: Tx, cls: ClassRow, from: string, apply: (t: TemplateRow) => ReturnType<Awaited<ReturnType<typeof templateApplier>>>) {
+  const templates = await tx.select().from(scheduleTemplates).where(eq(scheduleTemplates.classId, cls.id));
+  const valuesOf = new Map(templates.map((t) => [t.id, apply(t)]));
+  const rows = await tx
+    .select()
+    .from(sessions)
+    .where(
+      and(
+        eq(sessions.classId, cls.id),
+        gte(sessions.date, from),
+        eq(sessions.status, "planned"),
+        eq(sessions.kind, "regular"),
+        isNull(sessions.originalDate),
+        isNull(sessions.substituteTeacherId),
+        sql`not exists (select 1 from ${attendances} where ${attendances.sessionId} = ${sessions.id})`,
+        sql`not exists (select 1 from ${starLogs} where ${starLogs.sessionId} = ${sessions.id})`,
+      ),
+    );
+  return rows.filter((s) => {
+    const v = s.templateId ? valuesOf.get(s.templateId) : undefined;
+    return (
+      v !== undefined &&
+      !s.content &&
+      !s.note &&
+      s.startTime.slice(0, 5) === v.startTime &&
+      s.endTime.slice(0, 5) === v.endTime &&
+      s.roomId === v.roomId &&
+      s.teacherId === v.teacherId &&
+      s.assistantTeacherId === v.assistantTeacherId
+    );
+  });
+}
+
+/**
+ * Xếp lại các buổi sắp tới của cả lớp theo toàn bộ lịch mẫu (sau khi thêm dòng lịch mẫu hoặc đổi thứ):
+ * bỏ các buổi sắp tới còn nguyên như lịch mẫu sinh ra rồi sinh lại theo thứ tự ngày, đủ số buổi của khóa học.
+ * Buổi đã dạy, đã điểm danh/ghi sao, đã dời hay sửa tay được giữ nguyên.
+ */
+async function reflowClass(tx: Tx, actor: Actor, cls: ClassRow, from: string): Promise<GenerationResult> {
+  const apply = await templateApplier(tx, cls);
+  const stale = await untouchedFutureSessions(tx, cls, from, apply);
+  if (stale.length > 0) await tx.delete(sessions).where(inArray(sessions.id, stale.map((s) => s.id)));
+  const result = await generateInTx(tx, actor, cls.id, undefined, from);
+  // Buổi xóa rồi sinh lại đúng chỗ cũ không tính là "tạo mới".
+  const recreated = Math.min(stale.length, result.created);
+  return { ...result, created: result.created - recreated, alreadyExisting: result.alreadyExisting + recreated };
+}
+
+/** Thêm dòng lịch mẫu rồi tự xếp lại các buổi sắp tới của lớp cho đủ số buổi của khóa học (bỏ ngày nghỉ, báo buổi bị trùng). */
 export async function createTemplate(actor: Actor, data: z.output<typeof templateInput>, now: Date = new Date()): Promise<GenerationResult> {
   assertCan(actor, "classes", "edit");
   await assertClassAccess(actor, data.classId);
   assertDistinctAssistant(data.teacherId, data.assistantTeacherId);
   return db.transaction(async (tx) => {
     await lockSchedule(tx);
-    const [cls] = await tx.select({ status: classes.status }).from(classes).where(eq(classes.id, data.classId)).limit(1);
+    const [cls] = await tx.select().from(classes).where(eq(classes.id, data.classId)).limit(1);
     if (!cls) throw notFound("lớp học");
     const [row] = await tx.insert(scheduleTemplates).values(data).returning();
     await audit(tx, { userId: actor.userId, action: "create", tableName: "schedule_templates", recordId: row!.id, newValue: row });
     if (cls.status !== "open") return { created: 0, alreadyExisting: 0, conflicts: [], warnings: [] };
-    return withNotices(await generateInTx(tx, actor, data.classId, row!.id, todayIso(now)));
+    return withNotices(await reflowClass(tx, actor, cls, todayIso(now)));
   });
 }
 
@@ -238,37 +313,18 @@ export async function updateTemplate(
         ),
       );
 
+    const applied = await templateApplier(tx, cls);
+    const oldValues = applied(before);
+    const newValues = applied(after!);
+
     if (before.weekday !== after!.weekday) {
-      // Đổi thứ: các buổi tương lai chưa điểm danh của dòng này được sinh lại theo thứ mới.
+      // Đổi thứ: buổi sắp tới chưa điểm danh của dòng này được bỏ, rồi xếp lại cả lớp theo lịch mẫu mới cho đủ số buổi khóa học.
       if (upcoming.length > 0) {
         await tx.delete(sessions).where(inArray(sessions.id, upcoming.map((u) => u.id)));
       }
-      return withNotices({ ...result, ...(await generateInTx(tx, actor, before.classId, id, today)), updated: 0 });
+      return withNotices({ ...result, ...(await reflowClass(tx, actor, cls, today)), updated: 0 });
     }
 
-    // Giá trị cũ / mới mà lịch mẫu áp cho buổi (giờ riêng hoặc giờ của ca, phòng mặc định, GV chính của lớp).
-    const slotTimes = async (slotId: string) => {
-      const [slot] = await tx.select().from(timeSlots).where(eq(timeSlots.id, slotId)).limit(1);
-      return slot ? { start: slot.defaultStart.slice(0, 5), end: slot.defaultEnd.slice(0, 5) } : null;
-    };
-    const [mainTeacher] = await tx
-      .select({ teacherId: classTeachers.teacherId })
-      .from(classTeachers)
-      .where(and(eq(classTeachers.classId, cls.id), eq(classTeachers.role, "main")))
-      .limit(1);
-    const applied = async (t: typeof before) => {
-      const slot = await slotTimes(t.timeSlotId);
-      return {
-        timeSlotId: t.timeSlotId,
-        startTime: (t.startTime ?? slot?.start ?? "").slice(0, 5),
-        endTime: (t.endTime ?? slot?.end ?? "").slice(0, 5),
-        roomId: t.roomId ?? cls.defaultRoomId,
-        teacherId: t.teacherId ?? mainTeacher?.teacherId ?? null,
-        assistantTeacherId: t.assistantTeacherId,
-      };
-    };
-    const oldValues = await applied(before);
-    const newValues = await applied(after!);
     const busy = await loadBusy(tx, today, cls.endDate);
 
     for (const s of upcoming) {
@@ -403,6 +459,9 @@ export type GenerationResult = {
   alreadyExisting: number;
   conflicts: { date: string; startTime: string; reason: string }[];
   warnings: string[];
+  /** Số buổi theo khóa học và số buổi lớp đang có (không tính buổi hủy, buổi bù). */
+  courseSessions?: number;
+  scheduled?: number;
   /** Thông báo cho người dùng sau khi tự sinh/cập nhật buổi (hiện dạng toast thông tin). */
   notices?: string[];
 };
@@ -438,6 +497,8 @@ async function generateInTx(tx: Tx, actor: Actor, classId: string, templateId?: 
   const [cls] = await tx.select().from(classes).where(eq(classes.id, classId)).limit(1);
   if (!cls) throw notFound("lớp học");
   if (cls.status !== "open") throw new AppError("CONFLICT", "Lớp đã đóng, không thể sinh buổi học.");
+  const [course] = await tx.select({ totalSessions: courses.totalSessions }).from(courses).where(eq(courses.id, cls.courseId)).limit(1);
+  const courseSessions = course?.totalSessions ?? 0;
 
   const templates = await tx
     .select({
@@ -484,13 +545,16 @@ async function generateInTx(tx: Tx, actor: Actor, classId: string, templateId?: 
 
   // Khóa nhận diện buổi đã sinh: dòng lịch mẫu + ngày GỐC (buổi đã dời vẫn được nhận ra).
   const existing = await tx
-    .select({ templateId: sessions.templateId, date: sessions.date, originalDate: sessions.originalDate })
+    .select({ templateId: sessions.templateId, date: sessions.date, originalDate: sessions.originalDate, kind: sessions.kind, status: sessions.status })
     .from(sessions)
     .where(eq(sessions.classId, classId));
   const existingKeys = new Set(existing.map((s) => `${s.templateId}|${s.originalDate ?? s.date}`));
+  // Số buổi của lớp không vượt số buổi của khóa học: buổi thường chưa hủy đã có được tính trước.
+  const counted = existing.filter((s) => s.kind === "regular" && s.status !== "cancelled").length;
+  const room = Math.max(0, courseSessions - counted);
 
   const busy = await loadBusy(tx, cls.startDate, cls.endDate);
-  const result: GenerationResult = { created: 0, alreadyExisting: 0, conflicts: [], warnings: [] };
+  const result: GenerationResult = { created: 0, alreadyExisting: 0, conflicts: [], warnings: [], courseSessions };
   const toInsert: (typeof sessions.$inferInsert)[] = [];
 
   for (const p of planned) {
@@ -498,6 +562,7 @@ async function generateInTx(tx: Tx, actor: Actor, classId: string, templateId?: 
       result.alreadyExisting++;
       continue;
     }
+    if (toInsert.length >= room) break;
     if (p.assistantTeacherId && p.assistantTeacherId === p.teacherId) {
       result.conflicts.push({ date: p.date, startTime: p.startTime, reason: "Trợ giảng trùng với giáo viên chính" });
       continue;
@@ -512,6 +577,12 @@ async function generateInTx(tx: Tx, actor: Actor, classId: string, templateId?: 
     busy.push({ id: `new-${toInsert.length}`, label: cls.code, ...p, teacherIds: staffOf(p) });
   }
 
+  result.scheduled = counted + toInsert.length;
+  if (result.scheduled < courseSessions && !fromDate) {
+    result.warnings.push(
+      `Khóa học có ${courseSessions} buổi nhưng lớp mới xếp được ${result.scheduled} buổi trong thời gian ${formatDate(cls.startDate)} – ${formatDate(cls.endDate)}. Hãy kéo dài ngày kết thúc của lớp hoặc thêm lịch mẫu.`,
+    );
+  }
   if (toInsert.length > 0) {
     await tx.insert(sessions).values(toInsert);
     result.created = toInsert.length;

@@ -100,6 +100,25 @@ describe("lịch mẫu tự sinh và tự cập nhật thời khóa biểu", () 
   });
 });
 
+describe("số buổi theo khóa học", () => {
+  it("chỉ xếp đủ số buổi của khóa học; thêm lịch mẫu thứ hai thì các buổi sắp tới tự xếp lại xen kẽ", async () => {
+    // Khóa học của lớp A có 10 buổi; hôm nay 01/02.
+    const first = await svc.createTemplate(f.admin, templateInput(f.classA.id), now);
+    expect(first.created).toBe(9); // Thứ Ba 03/02 → 31/03 chỉ có 9 buổi
+    expect(first.scheduled).toBe(9);
+    await svc.createTemplate(f.admin, templateInput(f.classA.id, { weekday: 4 }), now);
+    const list = await sessionsOf(f.classA.id);
+    expect(list).toHaveLength(10);
+    // Xếp theo thứ tự ngày: Thứ Ba 03/02, Thứ Năm 05/02, … đến đủ 10 buổi.
+    expect(list.map((s) => s.date)).toEqual([
+      "2026-02-03", "2026-02-05", "2026-02-10", "2026-02-12", "2026-02-17",
+      "2026-02-19", "2026-02-24", "2026-02-26", "2026-03-03", "2026-03-05",
+    ]);
+    // Bấm "Sinh buổi" lại không tạo thêm khi đã đủ số buổi.
+    expect((await svc.generateSessions(f.admin, f.classA.id)).created).toBe(0);
+  });
+});
+
 describe("trợ giảng và phân công", () => {
   it("trợ giảng được xếp vào buổi của lớp khác thì thấy lớp đó, vào được buổi và có buổi trong TKB của mình", async () => {
     // C chỉ được phân công ở lớp A; lớp B chưa liên quan.

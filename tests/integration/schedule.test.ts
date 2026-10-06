@@ -81,10 +81,13 @@ describe("sinh buổi học", () => {
     // Lớp B khác tên ca nhưng 09:00–10:30 chồng lên 08:00–09:30 trong cùng phòng Lab.
     await template(f.classB.id, 2, late.id);
     const result = await svc.generateSessions(f.admin, f.classB.id);
-    expect(result.created).toBe(0);
-    expect(result.conflicts.length).toBeGreaterThan(5);
+    // Khóa học 10 buổi: lớp A chiếm 10 Thứ Ba đầu (06/01–10/03); 10 Thứ Ba đó của lớp B bị trùng phòng,
+    // lớp B được xếp vào 3 Thứ Ba còn lại trong thời gian lớp (17/03–31/03).
+    expect(result.conflicts).toHaveLength(10);
     expect(result.conflicts[0]!.reason).toContain("Phòng");
-    expect(await sessionsOf(f.classB.id)).toEqual([]);
+    expect(result.created).toBe(3);
+    expect((await sessionsOf(f.classB.id)).map((x) => x.date)).toEqual(["2026-03-17", "2026-03-24", "2026-03-31"]);
+    expect(result.warnings.join(" ")).toContain("mới xếp được 3 buổi");
   });
 
   it("cảnh báo (không chặn) khi sĩ số vượt sức chứa phòng", async () => {

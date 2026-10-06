@@ -188,16 +188,15 @@ export default async function ClassDetailPage({ params }: PageProps<"/admin/clas
       <section className="grid gap-2">
         <h2 className="text-lg font-semibold">Buổi học</h2>
         <p className="text-sm text-muted-foreground">
-          Thêm hoặc sửa lịch mẫu là buổi học tự có/tự cập nhật trên Thời khóa biểu (từ hôm nay đến {formatDate(cls.endDate)}, bỏ ngày
-          nghỉ; buổi đã dạy và buổi đã sửa riêng được giữ nguyên). Nút dưới đây sinh bổ sung cả khoảng {formatDate(cls.startDate)} –{" "}
-          {formatDate(cls.endDate)}, chạy lại không tạo trùng.
+          Buổi học được xếp theo lịch mẫu trong thời gian {formatDate(cls.startDate)} – {formatDate(cls.endDate)}, bỏ ngày nghỉ, đủ số buổi
+          của khóa học. Thêm hoặc sửa lịch mẫu là các buổi sắp tới tự xếp lại (buổi đã dạy và buổi đã sửa riêng được giữ nguyên). Bấm
+          nút dưới đây để xếp bổ sung khi còn thiếu buổi; chạy lại không tạo trùng.
         </p>
         <div className="flex flex-wrap items-start gap-2">
           {canEdit && (
             <GenerateSessionsButton
               classId={classId}
               disabled={templates.length === 0 || cls.status !== "open"}
-              timetableHref={can("view", "timetable") ? timetableHref : undefined}
             />
           )}
           {can("view", "timetable") && (
