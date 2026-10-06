@@ -26,7 +26,7 @@ export const PERMISSION_MENUS = [
   { key: "timetable", label: "Thời khóa biểu", href: "/admin/timetable", actions: ["view", "add", "edit"], hint: "Thêm = xếp buổi, buổi bù; Sửa = sửa, dời, hủy, khôi phục, dạy thay." },
   { key: "attendance", label: "Điểm danh", href: "/admin/attendance", actions: ["view", "add", "edit"], hint: "Thêm = điểm danh buổi chưa điểm danh; Sửa = sửa điểm danh đã lưu." },
   { key: "stars", label: "Sao & Avatar", href: "/admin/stars", actions: ["view", "add", "edit"], hint: "Thêm = ghi sao; Sửa = hoàn tác sao, đổi avatar. Tiêu chí, cấp bậc, kho avatar chỉ Admin chỉnh." },
-  { key: "rewards", label: "Quà & Tổng kết", href: "/admin/rewards", actions: ["view", "add", "edit"], hint: "Thêm = quà, mốc quà; Sửa = sửa quà, đóng lớp, duyệt và trao quà." },
+  { key: "rewards", label: "Quà & Tổng kết", href: "/admin/rewards", actions: ["view", "add", "edit"], hint: "Thêm = quà, mốc quà; Sửa = sửa quà, đóng lớp, duyệt và trao quà, đổi quà bằng sao cho học viên." },
   { key: "timesheet", label: "Chấm công", href: "/admin/timesheet", actions: ["view"], hint: "Phạm vi “lớp của mình” chỉ thấy công của chính mình." },
   { key: "reports", label: "Báo cáo", href: "/admin/reports", actions: ["view"], hint: "Gồm cả xuất Excel/PDF." },
 ] as const satisfies readonly { key: string; label: string; href: string; actions: readonly PermissionAction[]; hint: string }[];

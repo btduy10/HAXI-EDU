@@ -376,3 +376,23 @@ export const giftHandovers = pgTable(
   },
   (t) => [uniqueIndex("gift_handovers_summary_uniq").on(t.summaryId)],
 );
+
+// Đổi quà trong khóa học: mỗi dòng là một lần đổi, `stars` là số sao đã dùng (chụp từ mốc quà lúc đổi).
+// Sao còn lại của học viên = tổng sao tích lũy − tổng `stars` ở bảng này; tổng tích lũy và cấp bậc không đổi.
+export const giftRedemptions = pgTable(
+  "gift_redemptions",
+  {
+    id: id(),
+    studentId: uuid("student_id")
+      .notNull()
+      .references(() => students.id, { onDelete: "cascade" }),
+    classId: uuid("class_id").references(() => classes.id, { onDelete: "set null" }),
+    giftId: uuid("gift_id")
+      .notNull()
+      .references(() => gifts.id),
+    stars: integer("stars").notNull(),
+    redeemedBy: text("redeemed_by").references(() => user.id, { onDelete: "set null" }),
+    redeemedAt: timestamp("redeemed_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("gift_redemptions_student_idx").on(t.studentId), check("gift_redemptions_stars_chk", sql`${t.stars} > 0`)],
+);

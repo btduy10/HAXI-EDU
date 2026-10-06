@@ -202,7 +202,7 @@ export async function listTiers(actor: Actor) {
 export const createTier = (actor: Actor, data: z.output<typeof tierInput>) => createRow(actor, rewardTiers, "reward_tiers", data, "rewards");
 export const deleteTier = (actor: Actor, id: string) => deleteRow(actor, rewardTiers, "reward_tiers", id);
 
-async function tiersFor(tx: DbOrTx, cls: { id: string; courseId: string }): Promise<RewardTier[]> {
+export async function tiersFor(tx: DbOrTx, cls: { id: string; courseId: string }): Promise<RewardTier[]> {
   return tx
     .select()
     .from(rewardTiers)

@@ -22,6 +22,7 @@ export const tierInput = z
 
 export const classIdOnly = z.object({ classId: id });
 export const approveInput = z.object({ classId: id, summaryIds: z.array(id).min(1, "Chọn ít nhất một học viên").max(500) });
+export const redeemInput = z.object({ studentId: id, tierId: id });
 export const handoverIdInput = z.object({ handoverId: id });
 
 export const settingsInput = z.object({

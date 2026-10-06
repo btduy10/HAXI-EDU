@@ -5,16 +5,20 @@ import { AvatarPicker } from "@/components/avatar-picker";
 import { Badge } from "@/components/ui/badge";
 import { LABELS, formatDate, formatDateTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { cancelRedemptionAction, redeemGiftAction } from "@/server/actions/rewards";
 import { deleteStarLogsAction, giftAvatarAction } from "@/server/actions/stars";
 import type { Actor } from "@/server/guard";
 import { orNotFound } from "@/server/page";
 import { listGiftedAvatars } from "@/server/services/avatars";
+import { getRedemptionInfo } from "@/server/services/redemptions";
 import { getStudentStarProfile } from "@/server/services/stars";
 
 /** Hồ sơ sao & avatar của một học viên, dùng chung cho Admin và GV (service kiểm tra quyền). */
 export async function StudentStarProfile({ actor, studentId, backHref }: { actor: Actor; studentId: string; backHref: string }) {
   const profile = await orNotFound(getStudentStarProfile(actor, studentId));
   const { student, progress } = profile;
+  // getStudentStarProfile đã kiểm tra quyền xem học viên này.
+  const redemption = await getRedemptionInfo(actor, studentId);
   const admin = actor.role === "admin";
   const attended = profile.attendance.filter((a) => a.status === "present" || a.status === "late" || a.status === "left_early").length;
   const giftable =
@@ -37,6 +41,18 @@ export async function StudentStarProfile({ actor, studentId, backHref }: { actor
             <LevelProgress progress={progress} />
           </div>
         </div>
+        <dl className="grid grid-cols-3 gap-2 text-center text-sm">
+          {[
+            { label: "Tổng sao tích lũy", value: redemption.total },
+            { label: "Đã đổi quà", value: redemption.spent },
+            { label: "Sao còn lại", value: redemption.balance },
+          ].map((item) => (
+            <div key={item.label} className="rounded-lg border p-2">
+              <dt className="text-xs text-muted-foreground">{item.label}</dt>
+              <dd className="text-lg font-semibold tabular-nums">{item.value}</dd>
+            </div>
+          ))}
+        </dl>
       </div>
 
       <section className="grid gap-2">
@@ -62,15 +78,70 @@ export async function StudentStarProfile({ actor, studentId, backHref }: { actor
       </section>
 
       <section className="grid gap-2">
-        <h2 className="font-medium">Quà</h2>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="font-medium">Quà</h2>
+          {redemption.canRedeem && redemption.options.length > 0 && (
+            <FormDialogButton
+              label="Đổi quà"
+              title={`Đổi quà cho ${student.fullName}`}
+              description={`Sao còn lại: ${redemption.balance}. Đổi quà trừ số sao theo mốc quà; tổng sao tích lũy và cấp bậc không đổi.`}
+              fields={[
+                {
+                  name: "tierId",
+                  label: "Quà",
+                  type: "select",
+                  required: true,
+                  options: redemption.options.map((o) => ({ value: o.tierId, label: `${o.giftName} – ${o.minStars} sao (còn ${o.stock})` })),
+                },
+              ]}
+              fixed={{ studentId }}
+              action={redeemGiftAction}
+              submitLabel="Đổi quà"
+              successMessage="Đã đổi quà."
+            />
+          )}
+        </div>
+        {redemption.canRedeem && redemption.options.length === 0 && (
+          <p className="text-sm text-muted-foreground">Chưa có quà nào đổi được: chưa đủ sao theo mốc quà, kho hết quà, hoặc lớp chưa có mốc quà.</p>
+        )}
+        {redemption.history.length > 0 && (
+          <ul className="grid gap-1.5">
+            {redemption.history.map((r) => (
+              <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm">
+                <span className="min-w-0">
+                  {r.giftName}
+                  <span className="block text-xs text-muted-foreground">
+                    {r.classCode ? `Lớp ${r.classCode} · ` : ""}đổi lúc {formatDateTime(r.redeemedAt)}
+                    {r.redeemedByName ? ` · ${r.redeemedByName}` : ""}
+                  </span>
+                </span>
+                <span className="flex items-center gap-2">
+                  <span className="font-semibold text-red-600 tabular-nums">−{r.stars} sao</span>
+                  {admin && (
+                    <ConfirmButton
+                      label="Hủy"
+                      className="h-9"
+                      confirmText={`Hủy lần đổi quà "${r.giftName}"? Học viên được trả lại ${r.stars} sao và kho được cộng lại 1 quà.`}
+                      action={cancelRedemptionAction}
+                      input={{ id: r.id }}
+                      successMessage="Đã hủy lần đổi quà."
+                    />
+                  )}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
         {profile.gifts.length === 0 ? (
-          <p className="rounded-lg border border-dashed p-4 text-center text-sm text-muted-foreground">Chưa đổi quà.</p>
+          redemption.history.length === 0 && (
+            <p className="rounded-lg border border-dashed p-4 text-center text-sm text-muted-foreground">Chưa đổi quà.</p>
+          )
         ) : (
           <ul className="grid gap-1.5">
             {profile.gifts.map((g) => (
               <li key={g.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm">
                 <span className="min-w-0">
-                  {g.giftName} <span className="text-muted-foreground">· lớp {g.classCode}</span>
+                  {g.giftName} <span className="text-muted-foreground">· quà tổng kết lớp {g.classCode}</span>
                 </span>
                 <Badge variant={g.status === "given" ? "secondary" : "outline"}>
                   {LABELS.handoverStatus[g.status]}

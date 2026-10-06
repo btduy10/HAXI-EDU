@@ -8,6 +8,7 @@ import postgres from "postgres";
 // GIỮ LẠI: tài khoản Quản trị (mật khẩu, 2FA, phiên đăng nhập), cấp bậc, kho avatar, tiêu chí sao, cấu hình và bảng phân quyền.
 // XÓA: mọi tài khoản không phải Quản trị và toàn bộ các bảng bên dưới.
 const WIPED_TABLES = [
+  "gift_redemptions",
   "gift_handovers",
   "course_summaries",
   "reward_tiers",

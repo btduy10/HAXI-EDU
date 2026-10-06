@@ -124,6 +124,7 @@ Nguyên tắc: mọi hàm trong `server/services` nhận `actor` lấy từ phi�
 - **Chuyên cần** = (có mặt + đi trễ + về sớm) ÷ số buổi đã dạy mà học viên thuộc danh sách; không kể buổi hủy và buổi chưa dạy.
 - **Xếp hạng** theo tổng sao của lớp, đồng hạng kiểu 1-2-2-4.
 - **Mốc quà** theo khóa học hoặc riêng cho lớp (lớp có mốc riêng thì không dùng mốc của khóa). Mỗi học viên nhận quà của mốc cao nhất đạt được.
+- **Đổi quà bằng sao trong khóa học:** ở hồ sơ học viên, người có quyền Sửa ở menu Quà & Tổng kết (theo Cấu hình → Phân quyền) đổi quà cho học viên bất cứ lúc nào em đủ sao theo Mốc quà của lớp đang học. Mỗi lần đổi trừ "sao còn lại" đúng bằng mốc sao và trừ 1 tồn kho; tổng sao tích lũy, cấp bậc và avatar không đổi. Chỉ Admin hủy được lần đổi ghi nhầm (trả lại sao và tồn kho).
 - **Quy trình trao quà:** hệ thống đề xuất → Admin chọn và duyệt → ghi nhận đã trao (ngày, người trao, trừ tồn kho). Có bảng số lượng quà cần chuẩn bị so với tồn kho.
 - **Báo cáo lớp** (Admin mọi lớp, GV lớp mình): sao của lớp, số buổi theo từng trạng thái điểm danh, chuyên cần, xếp hạng.
 - **Xuất Excel/PDF:** thời khóa biểu, báo cáo lớp, tổng kết (kèm danh sách trao quà có cột ký nhận để in). Mỗi lần xuất được ghi vào nhật ký.

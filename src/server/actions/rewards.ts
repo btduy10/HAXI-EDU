@@ -2,8 +2,9 @@
 
 import { permissionConfigInput } from "@/lib/permissions";
 import { idOnly } from "@/lib/validation/common";
-import { approveInput, classIdOnly, giftInput, giftUpdate, handoverIdInput, settingsInput, tierInput } from "@/lib/validation/rewards";
+import { approveInput, classIdOnly, giftInput, giftUpdate, handoverIdInput, redeemInput, settingsInput, tierInput } from "@/lib/validation/rewards";
 import { runAction } from "../action";
+import * as redemptions from "../services/redemptions";
 import * as reports from "../services/reports";
 import * as summaries from "../services/summaries";
 
@@ -25,6 +26,11 @@ export const markGiftGivenAction = async (input: unknown) =>
   runAction(handoverIdInput, input, (a, d) => summaries.markGiftGiven(a, d.handoverId), ADMIN);
 export const cancelApprovalAction = async (input: unknown) =>
   runAction(handoverIdInput, input, (a, d) => summaries.cancelApproval(a, d.handoverId), ADMIN);
+
+// Đổi quà làm ngay trong hồ sơ học viên (cả khu vực giảng dạy lẫn quản lý).
+export const redeemGiftAction = async (input: unknown) => runAction(redeemInput, input, (a, d) => redemptions.redeemGift(a, d), "/");
+export const cancelRedemptionAction = async (input: unknown) =>
+  runAction(idOnly, input, (a, d) => redemptions.cancelRedemption(a, d.id), "/");
 
 export const updateSettingsAction = async (input: unknown) => runAction(settingsInput, input, reports.updateSettings, ADMIN);
 // Đổi quyền ảnh hưởng cả khu vực giảng dạy nên làm mới toàn bộ.

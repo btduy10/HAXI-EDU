@@ -43,6 +43,13 @@
       "when": 1791250947084,
       "tag": "0005_star_logs_admin_delete",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1791262457476,
+      "tag": "0006_gift_redemptions",
+      "breakpoints": true
     }
   ]
 }
