@@ -2,7 +2,8 @@ import Link from "next/link";
 import { ConfirmButton, FormDialogButton } from "@/components/action-buttons";
 import { AvatarBadge, LevelProgress } from "@/components/avatar";
 import { AvatarPicker } from "@/components/avatar-picker";
-import { formatDate, formatDateTime } from "@/lib/format";
+import { Badge } from "@/components/ui/badge";
+import { LABELS, formatDate, formatDateTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { deleteStarLogsAction, giftAvatarAction } from "@/server/actions/stars";
 import type { Actor } from "@/server/guard";
@@ -15,6 +16,7 @@ export async function StudentStarProfile({ actor, studentId, backHref }: { actor
   const profile = await orNotFound(getStudentStarProfile(actor, studentId));
   const { student, progress } = profile;
   const admin = actor.role === "admin";
+  const attended = profile.attendance.filter((a) => a.status === "present" || a.status === "late" || a.status === "left_early").length;
   const giftable =
     actor.role === "admin"
       ? (await listGiftedAvatars(actor)).gifted.filter((g) => !progress.giftedAvatarIds.includes(g.id))
@@ -57,6 +59,57 @@ export async function StudentStarProfile({ actor, studentId, backHref }: { actor
           )}
         </div>
         <AvatarPicker studentId={studentId} currentId={progress.avatar?.id ?? null} frameColor={progress.level.frameColor} avatars={profile.avatars} />
+      </section>
+
+      <section className="grid gap-2">
+        <h2 className="font-medium">Quà</h2>
+        {profile.gifts.length === 0 ? (
+          <p className="rounded-lg border border-dashed p-4 text-center text-sm text-muted-foreground">Chưa đổi quà.</p>
+        ) : (
+          <ul className="grid gap-1.5">
+            {profile.gifts.map((g) => (
+              <li key={g.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm">
+                <span className="min-w-0">
+                  {g.giftName} <span className="text-muted-foreground">· lớp {g.classCode}</span>
+                </span>
+                <Badge variant={g.status === "given" ? "secondary" : "outline"}>
+                  {LABELS.handoverStatus[g.status]}
+                  {g.givenAt ? ` ${formatDateTime(g.givenAt)}` : ""}
+                </Badge>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section className="grid gap-2">
+        <h2 className="font-medium">
+          Buổi đã học{" "}
+          <span className="text-sm font-normal text-muted-foreground">
+            (có mặt {attended}/{profile.attendance.length} buổi đã điểm danh)
+          </span>
+        </h2>
+        {profile.attendance.length === 0 ? (
+          <p className="rounded-lg border border-dashed p-4 text-center text-sm text-muted-foreground">Chưa có buổi nào được điểm danh.</p>
+        ) : (
+          <ul className="grid gap-1.5">
+            {profile.attendance.map((a) => (
+              <li key={a.sessionId} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm">
+                <span className="min-w-0">
+                  {formatDate(a.date)} <span className="text-muted-foreground">· {a.classCode}</span>
+                </span>
+                <span className="flex items-center gap-2">
+                  {a.stars !== 0 && (
+                    <span className={cn("font-semibold tabular-nums", a.stars > 0 ? "text-emerald-600" : "text-red-600")}>
+                      {a.stars > 0 ? `+${a.stars}` : a.stars} sao
+                    </span>
+                  )}
+                  <Badge variant={a.status === "absent" || a.status === "excused" ? "outline" : "secondary"}>{LABELS.attendanceStatus[a.status]}</Badge>
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
 
       <section className="grid gap-2">

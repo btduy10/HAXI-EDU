@@ -27,6 +27,8 @@ export const LABELS = {
   classStatus: { open: "Đang mở", closed: "Đã đóng" },
   classTeacherRole: { main: "GV chính", assistant: "Trợ giảng" },
   enrollmentStatus: { active: "Đang học", left: "Đã rời lớp" },
+  attendanceStatus: { present: "Có mặt", late: "Đi trễ", left_early: "Về sớm", excused: "Vắng có phép", absent: "Vắng" },
+  handoverStatus: { pending: "Đã duyệt, chờ trao", given: "Đã trao" },
   role: { admin: "Quản trị", teacher: "Giáo viên", duty_teacher: "Giáo viên trực" },
 } as const;
 

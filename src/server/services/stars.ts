@@ -1,12 +1,15 @@
-import { and, asc, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import type { z } from "zod";
 import { db, type DbOrTx, type Tx } from "@/db";
 import {
+  attendances,
   avatars,
-  classTeachers,
   classes,
+  courseSummaries,
   enrollments,
+  giftHandovers,
+  gifts,
   levels,
   sessions,
   starCriteria,
@@ -442,12 +445,16 @@ export async function assertStudentAccess(actor: Actor, studentId: string, tx: D
     return;
   }
   if (!actor.teacherId) throw notFound("học viên");
-  const [own] = await tx
-    .select({ id: enrollments.id })
-    .from(enrollments)
-    .innerJoin(classTeachers, and(eq(classTeachers.classId, enrollments.classId), eq(classTeachers.teacherId, actor.teacherId)))
-    .where(and(eq(enrollments.studentId, studentId), eq(enrollments.status, "active")))
-    .limit(1);
+  // Lớp của GV: được phân công hoặc được xếp dạy bên Thời khóa biểu (xem allowedClassIds).
+  const mine = (await allowedClassIds(actor, tx)) ?? [];
+  const [own] =
+    mine.length === 0
+      ? []
+      : await tx
+          .select({ id: enrollments.id })
+          .from(enrollments)
+          .where(and(eq(enrollments.studentId, studentId), eq(enrollments.status, "active"), inArray(enrollments.classId, mine)))
+          .limit(1);
   if (own) return;
   const [covering] = await tx
     .select({ id: sessions.id })
@@ -525,11 +532,44 @@ export async function listClassProgress(actor: Actor, classId: string) {
 /** Hồ sơ sao của một học viên: tiến độ, avatar chọn được và lịch sử ghi sao. */
 export async function getStudentStarProfile(actor: Actor, studentId: string) {
   await assertStudentAccess(actor, studentId);
-  const [[student], progress, avatarList, logs] = await Promise.all([
+  // Buổi học và quà chỉ lấy trong các lớp thuộc phạm vi của người xem (Admin, phạm vi "Tất cả lớp": mọi lớp).
+  const allowed = await allowedClassIds(actor);
+  const inScope = (column: typeof sessions.classId | typeof courseSummaries.classId) =>
+    allowed === null ? undefined : allowed.length === 0 ? sql`false` : inArray(column, allowed);
+  const [[student], progress, avatarList, logs, attendance, giftRows] = await Promise.all([
     db.select({ id: students.id, code: students.code, fullName: students.fullName }).from(students).where(eq(students.id, studentId)).limit(1),
     progressOf(db, [studentId]),
     loadAvatars(),
     logQuery().where(eq(starLogs.studentId, studentId)).orderBy(desc(starLogs.recordedAt), desc(starLogs.id)).limit(100),
+    db
+      .select({
+        sessionId: sessions.id,
+        date: sessions.date,
+        startTime: sessions.startTime,
+        classCode: classes.code,
+        status: attendances.status,
+        stars: sql<number>`coalesce((select sum(l.stars) from star_logs l where l.session_id = ${sessions.id} and l.student_id = ${attendances.studentId}), 0)::int`,
+      })
+      .from(attendances)
+      .innerJoin(sessions, eq(sessions.id, attendances.sessionId))
+      .innerJoin(classes, eq(classes.id, sessions.classId))
+      .where(and(eq(attendances.studentId, studentId), ne(sessions.status, "cancelled"), inScope(sessions.classId)))
+      .orderBy(desc(sessions.date), desc(sessions.startTime))
+      .limit(100),
+    db
+      .select({
+        id: giftHandovers.id,
+        giftName: gifts.name,
+        classCode: classes.code,
+        status: giftHandovers.status,
+        givenAt: giftHandovers.givenAt,
+      })
+      .from(giftHandovers)
+      .innerJoin(courseSummaries, eq(courseSummaries.id, giftHandovers.summaryId))
+      .innerJoin(gifts, eq(gifts.id, giftHandovers.giftId))
+      .innerJoin(classes, eq(classes.id, courseSummaries.classId))
+      .where(and(eq(courseSummaries.studentId, studentId), inScope(courseSummaries.classId)))
+      .orderBy(desc(courseSummaries.finalizedAt)),
   ]);
   const mine = progress.get(studentId)!;
   const gifted = new Set(mine.giftedAvatarIds);
@@ -537,6 +577,8 @@ export async function getStudentStarProfile(actor: Actor, studentId: string) {
     student: student!,
     progress: mine,
     logs,
+    attendance,
+    gifts: giftRows,
     avatars: avatarList
       // Avatar tặng riêng chỉ hiện với học viên đã được tặng.
       .filter((a) => a.active && (a.unlockType === "by_level" || gifted.has(a.id)))

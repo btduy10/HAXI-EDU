@@ -1,7 +1,7 @@
 import { eq, sql } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/db";
-import { appSettings, auditLogs, avatars, classes, levels, sessions, starCriteria, starLogs, students } from "@/db/schema";
+import { appSettings, attendances, auditLogs, avatars, classes, levels, sessions, starCriteria, starLogs, students } from "@/db/schema";
 import { DEFAULT_PERMISSIONS } from "@/lib/permissions";
 import * as avatarSvc from "@/server/services/avatars";
 import * as stars from "@/server/services/stars";
@@ -91,6 +91,28 @@ describe("ghi sao", () => {
     await expect(stars.getStudentStarProfile(f.actorB, a1())).rejects.toMatchObject({ code: "NOT_FOUND" });
     await expect(stars.listClassProgress(f.actorB, f.classA.id)).rejects.toMatchObject({ code: "NOT_FOUND" });
     expect((await progress(a1())).total).toBe(3);
+  });
+});
+
+describe("hồ sơ học viên", () => {
+  it("hiện buổi đã học kèm sao từng buổi; GV chỉ được xếp dạy bên TKB cũng xem được, GV khác thì không", async () => {
+    await db.insert(attendances).values([
+      { sessionId: sessionA.id, studentId: a1(), status: "present" },
+      { sessionId: sessionA2.id, studentId: a1(), status: "absent" },
+    ]);
+    await give("+3", [a1()]);
+    const profile = await stars.getStudentStarProfile(f.actorA, a1());
+    expect(profile.attendance.map((a) => [a.date, a.status, a.stars])).toEqual([
+      ["2026-01-13", "absent", 0],
+      ["2026-01-06", "present", 3],
+    ]);
+    expect(profile.gifts).toEqual([]);
+    expect(profile.progress.total).toBe(3);
+
+    await expect(stars.getStudentStarProfile(f.actorB, a1())).rejects.toMatchObject({ code: "NOT_FOUND" });
+    // GV B được xếp dạy một buổi của lớp A → xem được hồ sơ học viên lớp A.
+    await db.insert(sessions).values({ classId: f.classA.id, date: "2026-01-20", startTime: "08:00", endTime: "09:30", teacherId: f.teacherB.id });
+    expect((await stars.getStudentStarProfile(f.actorB, a1())).attendance).toHaveLength(2);
   });
 });
 
