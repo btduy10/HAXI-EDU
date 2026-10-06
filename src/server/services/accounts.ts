@@ -8,6 +8,7 @@ import { audit } from "../audit";
 import { AppError, notFound, translateDbError } from "../errors";
 import { type Actor, assertAdmin } from "../guard";
 import { hashPassword } from "../password";
+import { assertKnownRole } from "../settings";
 
 const LOCKED_FOREVER = new Date("9999-12-31T00:00:00Z");
 
@@ -35,7 +36,8 @@ export async function listAccounts(actor: Actor) {
  * Tài khoản gắn với một giáo viên lấy vai trò theo cột Vai trò của giáo viên đó (menu Giáo viên).
  * Quản trị và tài khoản không gắn giáo viên giữ vai trò đã chọn.
  */
-async function roleFor(tx: DbOrTx, chosen: "admin" | "teacher" | "duty_teacher", teacherId: string | null) {
+async function roleFor(tx: DbOrTx, chosen: string, teacherId: string | null) {
+  await assertKnownRole(chosen, tx, true);
   if (chosen === "admin" || !teacherId) return chosen;
   const [teacher] = await tx.select({ role: teachers.role }).from(teachers).where(eq(teachers.id, teacherId)).limit(1);
   return teacher?.role ?? chosen;

@@ -3,10 +3,14 @@ import { z } from "zod";
 // Phân quyền theo vai trò, do Admin tick trong trang Cấu hình. Dùng chung cho máy chủ và giao diện.
 // Admin luôn có toàn quyền. Xóa dữ liệu, Tài khoản, Nhật ký, Cấu hình luôn chỉ dành cho Admin.
 
-export const MANAGED_ROLES = ["teacher", "duty_teacher"] as const;
-export type ManagedRole = (typeof MANAGED_ROLES)[number];
-export type UserRole = "admin" | ManagedRole;
-
+// Vai trò: "admin" (Quản trị, cố định) và các vai trò được phân quyền. Hai vai trò có sẵn không xóa được;
+// Admin tạo thêm vai trò khác trong Cấu hình → Phân quyền. Khóa vai trò lưu ở tài khoản và hồ sơ giáo viên.
+export const BUILTIN_ROLES = ["teacher", "duty_teacher"] as const;
+export type UserRole = string;
+export const ADMIN_LABEL = "Quản trị";
+export const ROLE_KEY = /^[a-z][a-z0-9_]{1,39}$/;
+export const MAX_ROLES = 20;
+export const ROLE_LABEL_MAX = 40;
 export const PERMISSION_ACTIONS = ["view", "add", "edit"] as const;
 export type PermissionAction = (typeof PERMISSION_ACTIONS)[number];
 export const ACTION_LABELS: Record<PermissionAction, string> = { view: "Xem", add: "Thêm", edit: "Sửa" };
@@ -31,9 +35,10 @@ export type Menu = (typeof PERMISSION_MENUS)[number]["key"];
 export type ClassScope = "own" | "all";
 export type MenuPermission = Record<PermissionAction, boolean>;
 export type RolePermissions = { scope: ClassScope; menus: Record<Menu, MenuPermission> };
-export type PermissionConfig = Record<ManagedRole, RolePermissions>;
+/** Một vai trò trong Cấu hình: tên hiển thị + quyền. */
+export type RoleConfig = RolePermissions & { label: string };
+export type PermissionConfig = Record<string, RoleConfig>;
 
-export const ROLE_LABELS: Record<UserRole, string> = { admin: "Quản trị", teacher: "Giáo viên", duty_teacher: "Giáo viên trực" };
 export const SCOPE_LABELS: Record<ClassScope, string> = { own: "Chỉ lớp của mình", all: "Tất cả lớp" };
 
 const NONE: MenuPermission = { view: false, add: false, edit: false };
@@ -41,29 +46,54 @@ const FULL: MenuPermission = { view: true, add: true, edit: true };
 const menusWith = (granted: Partial<Record<Menu, MenuPermission>>) =>
   Object.fromEntries(PERMISSION_MENUS.map((m) => [m.key, { ...(granted[m.key] ?? NONE) }])) as Record<Menu, MenuPermission>;
 
+/** Không có quyền gì: dùng cho vai trò lạ hoặc đã bị xóa, và làm điểm bắt đầu cho vai trò mới tạo. */
+export const NO_PERMISSIONS: RolePermissions = { scope: "own", menus: menusWith({}) };
+
 /** Mặc định: Giáo viên điểm danh và chấm sao lớp mình; Giáo viên trực thấy mọi lớp và hỗ trợ điểm danh. */
 export const DEFAULT_PERMISSIONS: PermissionConfig = {
-  teacher: { scope: "own", menus: menusWith({ attendance: FULL, stars: FULL }) },
-  duty_teacher: { scope: "all", menus: menusWith({ attendance: FULL }) },
+  teacher: { label: "Giáo viên", scope: "own", menus: menusWith({ attendance: FULL, stars: FULL }) },
+  duty_teacher: { label: "Giáo viên trực", scope: "all", menus: menusWith({ attendance: FULL }) },
 };
 
+export const isBuiltinRole = (role: string) => (BUILTIN_ROLES as readonly string[]).includes(role);
+export const roleLabel = (config: PermissionConfig, role: string) =>
+  role === "admin" ? ADMIN_LABEL : Object.hasOwn(config, role) ? config[role]!.label : "Vai trò đã xóa";
+/** Lựa chọn vai trò cho ô chọn (không gồm Quản trị). */
+export const roleOptions = (config: PermissionConfig) => Object.entries(config).map(([value, role]) => ({ value, label: role.label }));
+
 const menuPermission = z.object({ view: z.boolean(), add: z.boolean(), edit: z.boolean() });
-const rolePermissions = z.object({
+const roleConfig = z.object({
+  label: z.string().trim().min(1, "Bắt buộc nhập tên vai trò").max(ROLE_LABEL_MAX, `Tối đa ${ROLE_LABEL_MAX} ký tự`),
   scope: z.enum(["own", "all"]),
   menus: z.object(Object.fromEntries(PERMISSION_MENUS.map((m) => [m.key, menuPermission])) as Record<Menu, typeof menuPermission>),
 });
-export const permissionConfigInput = z.object({ teacher: rolePermissions, duty_teacher: rolePermissions });
+export const permissionConfigInput = z
+  .record(z.string().regex(ROLE_KEY), roleConfig)
+  .refine((v) => Object.keys(v).length <= MAX_ROLES, `Tối đa ${MAX_ROLES} vai trò`)
+  .refine((v) => !("admin" in v), "Không sửa được vai trò Quản trị");
 
 /**
- * Chuẩn hóa cấu hình đọc từ CSDL hoặc gửi từ form: thiếu/sai thì lấy mặc định;
- * không có Xem thì không có Thêm/Sửa; bỏ các thao tác menu không hỗ trợ.
+ * Chuẩn hóa cấu hình đọc từ CSDL hoặc gửi từ form: hai vai trò có sẵn luôn tồn tại (thiếu/sai thì lấy mặc định,
+ * tên cố định); vai trò tự tạo phải có khóa và tên hợp lệ; không có Xem thì không có Thêm/Sửa;
+ * bỏ các thao tác menu không hỗ trợ.
  */
 export function normalizePermissions(value: unknown): PermissionConfig {
   const source = (value && typeof value === "object" ? value : {}) as Record<string, unknown>;
-  const out = {} as PermissionConfig;
-  for (const role of MANAGED_ROLES) {
-    const fallback = DEFAULT_PERMISSIONS[role];
-    const raw = (source[role] && typeof source[role] === "object" ? source[role] : {}) as { scope?: unknown; menus?: Record<string, unknown> };
+  const custom = Object.keys(source).filter((key) => key !== "admin" && !isBuiltinRole(key) && ROLE_KEY.test(key));
+  const out: PermissionConfig = {};
+  for (const role of [...BUILTIN_ROLES, ...custom].slice(0, MAX_ROLES)) {
+    const fallback = DEFAULT_PERMISSIONS[role] ?? NO_PERMISSIONS;
+    const raw = (source[role] && typeof source[role] === "object" ? source[role] : {}) as {
+      label?: unknown;
+      scope?: unknown;
+      menus?: Record<string, unknown>;
+    };
+    const label = isBuiltinRole(role)
+      ? DEFAULT_PERMISSIONS[role]!.label
+      : typeof raw.label === "string"
+        ? raw.label.trim().slice(0, ROLE_LABEL_MAX)
+        : "";
+    if (!label) continue;
     const rawMenus = raw.menus && typeof raw.menus === "object" ? raw.menus : {};
     const menus = {} as Record<Menu, MenuPermission>;
     for (const menu of PERMISSION_MENUS) {
@@ -73,7 +103,7 @@ export function normalizePermissions(value: unknown): PermissionConfig {
       const view = item.view && supported.includes("view");
       menus[menu.key] = { view, add: view && item.add && supported.includes("add"), edit: view && item.edit && supported.includes("edit") };
     }
-    out[role] = { scope: raw.scope === "own" || raw.scope === "all" ? raw.scope : fallback.scope, menus };
+    out[role] = { label, scope: raw.scope === "own" || raw.scope === "all" ? raw.scope : fallback.scope, menus };
   }
   return out;
 }

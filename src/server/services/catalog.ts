@@ -5,6 +5,7 @@ import { classes, courses, holidays, rooms, teachers, timeSlots, user } from "@/
 import type { courseInput, holidayInput, roomInput, teacherInput, timeSlotInput } from "@/lib/validation/entities";
 import { audit } from "../audit";
 import { type Actor, assertSignedIn, can, isAdmin } from "../guard";
+import { assertKnownRole } from "../settings";
 import { createRow, deleteRow, updateRow } from "./crud";
 
 // Danh mục dùng chung: giáo viên, khóa học, phòng, ca học, ngày nghỉ.
@@ -18,8 +19,10 @@ export async function listTeachers(actor: Actor) {
 }
 // Cột Vai trò (Giáo viên / Giáo viên trực) quyết định quyền của tài khoản gắn kèm, nên chỉ Admin đặt được:
 // người khác thêm giáo viên thì luôn là "Giáo viên", sửa thì giữ nguyên vai trò đang có.
-export const createTeacher = (actor: Actor, data: z.output<typeof teacherInput>) =>
-  createRow(actor, teachers, "teachers", isAdmin(actor) ? data : { ...data, role: "teacher" as const }, "teachers");
+export async function createTeacher(actor: Actor, data: z.output<typeof teacherInput>) {
+  if (isAdmin(actor)) await assertKnownRole(data.role);
+  return createRow(actor, teachers, "teachers", isAdmin(actor) ? data : { ...data, role: "teacher" }, "teachers");
+}
 
 export async function updateTeacher(actor: Actor, id: string, data: z.output<typeof teacherInput>) {
   if (!isAdmin(actor)) {
@@ -27,6 +30,7 @@ export async function updateTeacher(actor: Actor, id: string, data: z.output<typ
     delete patch.role;
     return updateRow(actor, teachers, "teachers", id, patch, "teachers");
   }
+  await assertKnownRole(data.role);
   const row = await updateRow(actor, teachers, "teachers", id, data, "teachers");
   // Tài khoản (không phải Quản trị) gắn với giáo viên này nhận vai trò mới ngay ở yêu cầu kế tiếp.
   const synced = await db

@@ -1,7 +1,6 @@
-import { bigint, boolean, index, integer, jsonb, pgEnum, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { bigint, boolean, index, integer, jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { teachers } from "./teachers";
 
-export const userRole = pgEnum("user_role", ["admin", "teacher", "duty_teacher"]);
 
 // Bảng do Better Auth quản lý (thay cho bảng `users` trong đặc tả).
 // password_hash nằm ở `account.password`, totp_secret nằm ở `two_factor.secret`.
@@ -14,7 +13,8 @@ export const user = pgTable("user", {
   username: text("username").notNull().unique(),
   displayUsername: text("display_username"),
   twoFactorEnabled: boolean("two_factor_enabled").notNull().default(false),
-  role: userRole("role").notNull().default("teacher"),
+  // "admin" hoặc khóa của một vai trò trong Cấu hình → Phân quyền (vai trò do Admin tự tạo nên không dùng enum).
+  role: text("role").notNull().default("teacher"),
   teacherId: uuid("teacher_id").references(() => teachers.id, { onDelete: "set null" }),
   mustChangePassword: boolean("must_change_password").notNull().default(true),
   lockedUntil: timestamp("locked_until", { withTimezone: true }),

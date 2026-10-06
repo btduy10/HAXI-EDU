@@ -266,7 +266,7 @@ test("Phân quyền: Admin mở menu Học viên cho Giáo viên trực; Giáo v
   const box = (name: string) => page.getByRole("checkbox", { name, exact: true });
   // Một bảng duy nhất: chọn vai trò ở ô "Vai trò"; danh sách giáo viên của vai trò lấy từ menu Giáo viên.
   const roleSelect = page.getByLabel("Vai trò", { exact: true });
-  await expect(roleSelect.locator("option")).toHaveText(["Giáo viên (2 giáo viên)", "Giáo viên trực (0 giáo viên)"]);
+  await expect(roleSelect.locator("option")).toHaveText(["Giáo viên (2 tài khoản)", "Giáo viên trực (0 tài khoản)"]);
   await expect(page.getByText(/Giáo viên mang vai trò này: .*Nguyễn Thị Lan/)).toBeVisible();
   await expect(box("Giáo viên: Thêm Sao & Avatar")).toBeChecked();
   await expect(box("Giáo viên trực: Xem Điểm danh")).toHaveCount(0);
@@ -292,9 +292,46 @@ test("Phân quyền: Admin mở menu Học viên cho Giáo viên trực; Giáo v
   await expect(page.getByText("Đã lưu.")).toBeVisible();
   await expectNoHorizontalScroll(page);
   await page.goto("/admin/settings");
-  await expect(page.getByLabel("Vai trò", { exact: true }).locator("option")).toHaveText(["Giáo viên (1 giáo viên)", "Giáo viên trực (1 giáo viên)"]);
+  await expect(page.getByLabel("Vai trò", { exact: true }).locator("option")).toHaveText(["Giáo viên (1 tài khoản)", "Giáo viên trực (1 tài khoản)"]);
+
+  // Tạo vai trò mới "Lễ tân": đổi tên, tick Xem Ghi danh, lưu. Vai trò mới có ngay trong ô chọn khi tạo tài khoản.
+  await page.getByRole("button", { name: "Thêm vai trò" }).click();
+  await expect(page.getByLabel("Tên vai trò")).toHaveValue("Vai trò mới");
+  await page.getByLabel("Tên vai trò").fill("Lễ tân");
+  await box("Lễ tân: Thêm Ghi danh").check();
+  await expect(box("Lễ tân: Xem Ghi danh")).toBeChecked();
+  await expect(page.getByRole("button", { name: "Xóa vai trò" })).toBeEnabled();
+  await page.getByRole("button", { name: "Lưu phân quyền" }).click();
+  await expect(page.getByText("Đã lưu phân quyền.")).toBeVisible();
+  await expectNoHorizontalScroll(page);
+  await page.screenshot({ path: "test-results/shots/roles-360.png", fullPage: true });
+
   await page.goto("/admin/accounts");
   await expect(page.getByRole("listitem").filter({ hasText: "gv.minh" }).getByText("Giáo viên trực", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Thêm tài khoản" }).click();
+  await page.locator("#f-username").fill("le.tan");
+  await page.locator("#f-name").fill("Lễ tân trung tâm");
+  await page.locator("#f-role").selectOption({ label: "Lễ tân" });
+  await page.locator("#f-password").fill("MatKhauTam88");
+  await page.getByRole("button", { name: "Lưu" }).click();
+  await expect(page.getByText("Đã tạo tài khoản.")).toBeVisible();
+  // Lọc theo vai trò: chỉ còn tài khoản Lễ tân. Vai trò đang có người dùng thì không xóa được.
+  await page.getByLabel("Lọc theo vai trò").selectOption({ label: "Lễ tân" });
+  await expect(page).toHaveURL(/role=role_/);
+  await expect(page.locator("ul:visible > li")).toHaveCount(1);
+  await expect(page.locator("ul:visible > li")).toContainText("le.tan");
+  await expectNoHorizontalScroll(page);
+  await page.goto("/admin/settings");
+  await page.getByLabel("Vai trò", { exact: true }).selectOption({ label: "Lễ tân (1 tài khoản)" });
+  await expect(page.getByRole("button", { name: "Xóa vai trò" })).toBeDisabled();
+  // Bảng tài khoản trên màn hình rộng.
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto("/admin/accounts");
+  await expect(page.getByRole("columnheader", { name: "Đăng nhập gần nhất" })).toBeVisible();
+  await expect(page.getByRole("row").filter({ hasText: "le.tan" }).getByText("Lễ tân", { exact: true })).toBeVisible();
+  await page.screenshot({ path: "test-results/shots/accounts-table-1280.png", fullPage: true });
+  await page.setViewportSize({ width: 360, height: 740 });
+  await page.goto("/admin/accounts");
 
   // Tạo tài khoản Giáo viên trực (không cần gắn với hồ sơ giáo viên).
   await page.getByRole("button", { name: "Thêm tài khoản" }).click();

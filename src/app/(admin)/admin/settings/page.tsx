@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { FormDialogButton } from "@/components/action-buttons";
 import { PermissionMatrix } from "@/components/permission-matrix";
 import { updatePermissionsAction, updateSettingsAction } from "@/server/actions/rewards";
+import { listAccounts } from "@/server/services/accounts";
 import { listTeachers } from "@/server/services/catalog";
 import { readPermissions, readSettings } from "@/server/services/reports";
 import { requirePageUser } from "@/server/session";
@@ -10,12 +11,22 @@ export const metadata: Metadata = { title: "Cấu hình" };
 
 export default async function SettingsPage() {
   const { actor } = await requirePageUser("admin");
-  const [settings, permissions, teachers] = await Promise.all([readSettings(actor), readPermissions(actor), listTeachers(actor)]);
-  // Danh sách vai trò lấy từ cột Vai trò ở menu Giáo viên.
-  const members = {
-    teacher: teachers.filter((t) => t.role === "teacher" && t.status === "active").map((t) => t.fullName),
-    duty_teacher: teachers.filter((t) => t.role === "duty_teacher" && t.status === "active").map((t) => t.fullName),
-  };
+  const [settings, permissions, teachers, accounts] = await Promise.all([
+    readSettings(actor),
+    readPermissions(actor),
+    listTeachers(actor),
+    listAccounts(actor),
+  ]);
+  // Ai đang mang từng vai trò: số tài khoản và tên giáo viên (cột Vai trò ở menu Giáo viên).
+  const members = Object.fromEntries(
+    Object.keys(permissions).map((role) => [
+      role,
+      {
+        accounts: accounts.filter((a) => a.role === role).length,
+        teachers: teachers.filter((t) => t.role === role && t.status === "active").map((t) => t.fullName),
+      },
+    ]),
+  );
   const items = [
     {
       label: "Khóa sửa điểm danh sau",
@@ -60,9 +71,10 @@ export default async function SettingsPage() {
         <div>
           <h2 className="text-lg font-semibold">Phân quyền</h2>
           <p className="text-sm text-muted-foreground">
-            Chọn <strong>Vai trò</strong> rồi tick quyền cho vai trò đó. Tick <strong>Xem</strong> để menu hiện trên thanh menu của vai trò đó; <strong>Thêm</strong>, <strong>Sửa</strong> mở các nút
-            tương ứng. Quản trị luôn có toàn quyền. Xóa dữ liệu và các menu Tài khoản, Nhật ký, Cấu hình luôn chỉ dành cho Quản trị. Giáo
-            viên và Giáo viên trực luôn có khu vực giảng dạy (Tổng quan, thời khóa biểu, lớp) trong phạm vi lớp đã chọn.
+            Chọn <strong>Vai trò</strong> rồi tick quyền cho vai trò đó; bấm <strong>Thêm vai trò</strong> để tạo vai trò mới dùng khi tạo
+            tài khoản. Tick <strong>Xem</strong> để menu hiện trên thanh menu của vai trò đó; <strong>Thêm</strong>, <strong>Sửa</strong> mở các nút
+            tương ứng. Quản trị luôn có toàn quyền. Xóa dữ liệu và các menu Tài khoản, Nhật ký, Cấu hình luôn chỉ dành cho Quản trị. Mọi
+            vai trò ngoài Quản trị luôn có khu vực giảng dạy (Tổng quan, thời khóa biểu, lớp) trong phạm vi lớp đã chọn.
           </p>
         </div>
         <PermissionMatrix initial={permissions} action={updatePermissionsAction} members={members} />

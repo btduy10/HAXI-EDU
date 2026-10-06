@@ -2,7 +2,7 @@ import "server-only";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { cache } from "react";
-import type { ManagedRole, Menu, PermissionAction, UserRole } from "@/lib/permissions";
+import { type Menu, NO_PERMISSIONS, type PermissionAction, type UserRole } from "@/lib/permissions";
 import { auth } from "./auth";
 import { AppError } from "./errors";
 import { type Actor, can, unauthenticated } from "./guard";
@@ -27,8 +27,7 @@ export const getSessionUser = cache(async (): Promise<SessionUser | null> => {
     id: u.id,
     name: u.name,
     username: u.username ?? "",
-    // Giá trị lạ được coi là vai trò ít quyền nhất.
-    role: u.role === "admin" ? "admin" : u.role === "duty_teacher" ? "duty_teacher" : "teacher",
+    role: typeof u.role === "string" && u.role ? u.role : "teacher",
     teacherId: u.teacherId ?? null,
     mustChangePassword: u.mustChangePassword,
     twoFactorEnabled: Boolean(u.twoFactorEnabled),
@@ -40,7 +39,10 @@ const loadPermissions = cache(() => getPermissionConfig());
 
 async function actorOf(user: SessionUser): Promise<Actor> {
   const base = { userId: user.id, role: user.role, teacherId: user.teacherId };
-  return user.role === "admin" ? base : { ...base, perms: (await loadPermissions())[user.role as ManagedRole] };
+  // Vai trò không còn trong Cấu hình (đã bị xóa) thì không có quyền gì.
+  if (user.role === "admin") return base;
+  const config = await loadPermissions();
+  return { ...base, perms: Object.hasOwn(config, user.role) ? config[user.role]! : NO_PERMISSIONS };
 }
 
 /** Bước bắt buộc còn thiếu trước khi được dùng hệ thống. */

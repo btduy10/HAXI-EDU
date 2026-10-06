@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ROLE_KEY } from "@/lib/permissions";
 import {
   code,
   id,
@@ -23,7 +24,8 @@ export const teacherInput = z.object({
   phone: optPhone,
   email: optEmail,
   status: z.enum(["active", "inactive"]).default("active"),
-  role: z.enum(["teacher", "duty_teacher"]).default("teacher"),
+  // Khóa của một vai trò trong Cấu hình → Phân quyền; service kiểm tra vai trò có tồn tại.
+  role: z.string().regex(ROLE_KEY, "Vai trò không hợp lệ").default("teacher"),
 });
 
 export const studentInput = z.object({
@@ -109,7 +111,7 @@ export const accountInput = z
       .toLowerCase()
       .regex(/^[a-z0-9._-]{3,32}$/, "3–32 ký tự: chữ thường, số, dấu . _ -"),
     name: reqText(100),
-    role: z.enum(["admin", "teacher", "duty_teacher"]),
+    role: z.string({ error: "Bắt buộc chọn" }).regex(ROLE_KEY, "Vai trò không hợp lệ"),
     teacherId: optId,
     password,
   })
@@ -128,7 +130,7 @@ export const accountEditInput = z
       .toLowerCase()
       .regex(/^[a-z0-9._-]{3,32}$/, "3–32 ký tự: chữ thường, số, dấu . _ -"),
     name: reqText(100),
-    role: z.enum(["admin", "teacher", "duty_teacher"]),
+    role: z.string({ error: "Bắt buộc chọn" }).regex(ROLE_KEY, "Vai trò không hợp lệ"),
     teacherId: optId,
   })
   .refine((v) => v.role !== "teacher" || v.teacherId, {

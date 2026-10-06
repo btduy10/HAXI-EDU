@@ -3,7 +3,7 @@ import { db, type DbOrTx } from "@/db";
 import { classTeachers, classes, sessions } from "@/db/schema";
 import {
   DEFAULT_PERMISSIONS,
-  type ManagedRole,
+  NO_PERMISSIONS,
   type Menu,
   type PermissionAction,
   type RolePermissions,
@@ -16,7 +16,7 @@ export type Actor = {
   userId: string;
   role: UserRole;
   teacherId: string | null;
-  /** Quyền của vai trò, nạp từ Cấu hình cùng lúc với phiên. Thiếu thì dùng mặc định của vai trò. */
+  /** Quyền của vai trò, nạp từ Cấu hình cùng lúc với phiên. Thiếu thì dùng mặc định của vai trò (vai trò lạ: không có quyền gì). */
   perms?: RolePermissions;
 };
 
@@ -27,7 +27,7 @@ export function assertAdmin(actor: Actor) {
 }
 
 const permsOf = (actor: Actor): RolePermissions | null =>
-  isAdmin(actor) ? null : (actor.perms ?? DEFAULT_PERMISSIONS[actor.role as ManagedRole] ?? DEFAULT_PERMISSIONS.teacher);
+  isAdmin(actor) ? null : (actor.perms ?? (Object.hasOwn(DEFAULT_PERMISSIONS, actor.role) ? DEFAULT_PERMISSIONS[actor.role]! : NO_PERMISSIONS));
 
 /** Vai trò có được làm thao tác này ở menu này không (theo bảng tick trong Cấu hình). Admin luôn được. */
 export function can(actor: Actor, menu: Menu, action: PermissionAction): boolean {

@@ -1,30 +1,35 @@
 "use client";
 
+import { PlusIcon, Trash2Icon } from "lucide-react";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 import { type ActionFn, selectClass } from "@/components/form-dialog";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   ACTION_LABELS,
   type ClassScope,
-  MANAGED_ROLES,
-  type ManagedRole,
+  MAX_ROLES,
   type Menu,
+  NO_PERMISSIONS,
   PERMISSION_ACTIONS,
   PERMISSION_MENUS,
   type PermissionAction,
   type PermissionConfig,
-  ROLE_LABELS,
+  ROLE_LABEL_MAX,
   SCOPE_LABELS,
+  isBuiltinRole,
 } from "@/lib/permissions";
-import { cn } from "@/lib/utils";
 
-const ROLE_HINTS: Record<ManagedRole, string> = {
+const ROLE_HINTS: Record<string, string> = {
   teacher: "Tài khoản của giáo viên đứng lớp.",
   duty_teacher: "Tài khoản trực trung tâm: hỗ trợ điểm danh, nhắc giáo viên.",
 };
 
-/** Bảng tick quyền Xem / Thêm / Sửa theo menu cho từng vai trò. Chỉ Admin dùng; máy chủ kiểm tra lại khi lưu. */
+/**
+ * Một bảng phân quyền duy nhất: chọn vai trò ở ô "Vai trò" rồi tick Xem / Thêm / Sửa theo menu.
+ * Admin tạo thêm, đổi tên, xóa vai trò tại đây. Chỉ Admin dùng; máy chủ kiểm tra lại khi lưu.
+ */
 export function PermissionMatrix({
   initial,
   action,
@@ -32,80 +37,107 @@ export function PermissionMatrix({
 }: {
   initial: PermissionConfig;
   action: ActionFn;
-  /** Giáo viên đang mang từng vai trò (lấy từ cột Vai trò ở menu Giáo viên). */
-  members: Record<ManagedRole, string[]>;
+  /** Số tài khoản và tên giáo viên đang mang từng vai trò. */
+  members: Record<string, { accounts: number; teachers: string[] }>;
 }) {
   const [config, setConfig] = useState(initial);
-  // Một bảng duy nhất: chọn vai trò ở ô "Vai trò" để xem và tick quyền của vai trò đó.
-  const [role, setRole] = useState<ManagedRole>("teacher");
+  const [role, setRole] = useState(Object.keys(initial)[0] ?? "teacher");
   const [pending, startTransition] = useTransition();
   const dirty = JSON.stringify(config) !== JSON.stringify(initial);
+  const keys = Object.keys(config);
+  const current = config[role] ?? config[keys[0]!]!;
+  const builtin = isBuiltinRole(role);
+  const usage = members[role] ?? { accounts: 0, teachers: [] };
+  const inUse = usage.accounts > 0 || usage.teachers.length > 0;
 
-  function toggle(
-    role: ManagedRole,
-    menu: Menu,
-    act: PermissionAction,
-    checked: boolean,
-  ) {
-    setConfig((prev) => {
-      const current = prev[role].menus[menu];
-      // Bỏ Xem thì bỏ luôn Thêm/Sửa; tick Thêm/Sửa thì tự tick Xem.
-      const next =
-        act === "view"
-          ? checked
-            ? { ...current, view: true }
-            : { view: false, add: false, edit: false }
-          : { ...current, [act]: checked, view: current.view || checked };
-      return {
-        ...prev,
-        [role]: { ...prev[role], menus: { ...prev[role].menus, [menu]: next } },
-      };
-    });
+  const patchRole = (patch: Partial<PermissionConfig[string]>) => setConfig((prev) => ({ ...prev, [role]: { ...prev[role]!, ...patch } }));
+
+  function toggle(menu: Menu, act: PermissionAction, checked: boolean) {
+    const item = current.menus[menu];
+    // Bỏ Xem thì bỏ luôn Thêm/Sửa; tick Thêm/Sửa thì tự tick Xem.
+    const next =
+      act === "view"
+        ? checked
+          ? { ...item, view: true }
+          : { view: false, add: false, edit: false }
+        : { ...item, [act]: checked, view: item.view || checked };
+    patchRole({ menus: { ...current.menus, [menu]: next } });
   }
 
-  function setScope(role: ManagedRole, scope: ClassScope) {
-    setConfig((prev) => ({ ...prev, [role]: { ...prev[role], scope } }));
+  function addRole() {
+    const key = `role_${Date.now().toString(36)}`;
+    const base = "Vai trò mới";
+    const taken = new Set(Object.values(config).map((r) => r.label));
+    let label = base;
+    for (let n = 2; taken.has(label); n++) label = `${base} ${n}`;
+    setConfig((prev) => ({ ...prev, [key]: { label, scope: NO_PERMISSIONS.scope, menus: structuredClone(NO_PERMISSIONS.menus) } }));
+    setRole(key);
+  }
+
+  function removeRole() {
+    if (!window.confirm(`Xóa vai trò "${current.label}"? Thay đổi có hiệu lực sau khi bấm Lưu phân quyền.`)) return;
+    setConfig((prev) => Object.fromEntries(Object.entries(prev).filter(([key]) => key !== role)));
+    setRole(keys.find((key) => key !== role) ?? "teacher");
   }
 
   function save() {
     startTransition(async () => {
       const result = await action(config);
       if (result.ok) toast.success("Đã lưu phân quyền.");
-      else toast.error(result.error);
+      else toast.error(result.fieldErrors ? `${result.error} ${Object.values(result.fieldErrors)[0] ?? ""}` : result.error, { duration: 8000 });
     });
   }
 
   return (
     <div className="grid gap-4">
-      <section
-        className="grid gap-3 rounded-lg border p-3"
-        aria-label={`Quyền của ${ROLE_LABELS[role]}`}
-      >
-        <div className="grid gap-3 sm:grid-cols-2">
-          <label className="grid gap-1.5 text-sm font-medium">
+      <section className="grid gap-3 rounded-lg border p-3" aria-label={`Quyền của ${current.label}`}>
+        <div className="flex flex-wrap items-end gap-2">
+          <label className="grid min-w-0 flex-1 gap-1.5 text-sm font-medium sm:max-w-sm">
             Vai trò
-            <select
-              className={selectClass}
-              value={role}
-              aria-label="Vai trò"
-              onChange={(event) => setRole(event.target.value as ManagedRole)}
-            >
-              {MANAGED_ROLES.map((r) => (
-                <option key={r} value={r}>
-                  {ROLE_LABELS[r]} ({members[r].length} giáo viên)
+            <select className={selectClass} value={role} aria-label="Vai trò" onChange={(event) => setRole(event.target.value)}>
+              {keys.map((key) => (
+                <option key={key} value={key}>
+                  {config[key]!.label} ({members[key]?.accounts ?? 0} tài khoản)
                 </option>
               ))}
             </select>
+          </label>
+          <Button type="button" variant="outline" className="h-11" disabled={keys.length >= MAX_ROLES} onClick={addRole}>
+            <PlusIcon /> Thêm vai trò
+          </Button>
+          {!builtin && (
+            <Button
+              type="button"
+              variant="outline"
+              className="h-11"
+              disabled={inUse}
+              title={inUse ? "Vai trò đang được gán cho tài khoản hoặc giáo viên" : undefined}
+              onClick={removeRole}
+            >
+              <Trash2Icon /> Xóa vai trò
+            </Button>
+          )}
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="grid gap-1.5 text-sm font-medium">
+            Tên vai trò
+            <Input
+              className="h-11"
+              value={current.label}
+              maxLength={ROLE_LABEL_MAX}
+              disabled={builtin}
+              aria-label="Tên vai trò"
+              onChange={(event) => patchRole({ label: event.target.value })}
+            />
           </label>
           <label className="grid gap-1.5 text-sm font-medium">
             Phạm vi lớp được thấy
             <select
               className={selectClass}
-              value={config[role].scope}
-              onChange={(event) =>
-                setScope(role, event.target.value as ClassScope)
-              }
-              aria-label={`Phạm vi lớp của ${ROLE_LABELS[role]}`}
+              value={current.scope}
+              aria-label="Phạm vi lớp được thấy"
+              onChange={(event) => patchRole({ scope: event.target.value as ClassScope })}
             >
               {(Object.keys(SCOPE_LABELS) as ClassScope[]).map((scope) => (
                 <option key={scope} value={scope}>
@@ -115,21 +147,19 @@ export function PermissionMatrix({
             </select>
           </label>
         </div>
+
         <p className="text-sm text-muted-foreground">
-          {ROLE_HINTS[role]}{" "}
-          {members[role].length > 0 ? (
+          {builtin ? `${ROLE_HINTS[role]} Vai trò có sẵn: không đổi tên, không xóa được.` : "Vai trò do bạn tạo: đổi tên được; chỉ xóa được khi chưa gán cho ai."}{" "}
+          {usage.teachers.length > 0 ? (
             <>
-              Giáo viên mang vai trò này:{" "}
-              <span className="text-foreground">
-                {members[role].join(", ")}
-              </span>
-              .
+              Giáo viên mang vai trò này: <span className="text-foreground">{usage.teachers.join(", ")}</span>.
             </>
           ) : (
             "Chưa có giáo viên nào mang vai trò này."
           )}{" "}
-          Đổi vai trò của từng người ở cột Vai trò trong menu Giáo viên.
+          Gán vai trò ở cột Vai trò trong menu Giáo viên, hoặc khi tạo tài khoản.
         </p>
+
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -147,36 +177,25 @@ export function PermissionMatrix({
                 <tr key={menu.key} className="border-b last:border-0">
                   <td className="py-2 pr-2">
                     {menu.label}
-                    {menu.hint && (
-                      <span className="block text-xs text-muted-foreground">
-                        {menu.hint}
-                      </span>
-                    )}
+                    {menu.hint && <span className="block text-xs text-muted-foreground">{menu.hint}</span>}
                   </td>
-                  {PERMISSION_ACTIONS.map((act) => {
-                    const supported = (
-                      menu.actions as readonly PermissionAction[]
-                    ).includes(act);
-                    return (
-                      <td key={act} className="text-center">
-                        {supported ? (
-                          <input
-                            type="checkbox"
-                            className={cn("size-5 accent-primary align-middle")}
-                            checked={config[role].menus[menu.key][act]}
-                            onChange={(event) =>
-                              toggle(role, menu.key, act, event.target.checked)
-                            }
-                            aria-label={`${ROLE_LABELS[role]}: ${ACTION_LABELS[act]} ${menu.label}`}
-                          />
-                        ) : (
-                          <span className="text-muted-foreground" aria-hidden>
-                            –
-                          </span>
-                        )}
-                      </td>
-                    );
-                  })}
+                  {PERMISSION_ACTIONS.map((act) => (
+                    <td key={act} className="text-center">
+                      {(menu.actions as readonly PermissionAction[]).includes(act) ? (
+                        <input
+                          type="checkbox"
+                          className="size-5 align-middle accent-primary"
+                          checked={current.menus[menu.key][act]}
+                          onChange={(event) => toggle(menu.key, act, event.target.checked)}
+                          aria-label={`${current.label}: ${ACTION_LABELS[act]} ${menu.label}`}
+                        />
+                      ) : (
+                        <span className="text-muted-foreground" aria-hidden>
+                          –
+                        </span>
+                      )}
+                    </td>
+                  ))}
                 </tr>
               ))}
             </tbody>
@@ -184,19 +203,10 @@ export function PermissionMatrix({
         </div>
       </section>
       <div className="flex flex-wrap items-center gap-3">
-        <Button
-          type="button"
-          className="h-10"
-          disabled={pending || !dirty}
-          onClick={save}
-        >
+        <Button type="button" className="h-10" disabled={pending || !dirty} onClick={save}>
           Lưu phân quyền
         </Button>
-        {dirty && (
-          <p className="text-sm text-muted-foreground">
-            Có thay đổi chưa lưu (lưu một lần cho cả hai vai trò).
-          </p>
-        )}
+        {dirty && <p className="text-sm text-muted-foreground">Có thay đổi chưa lưu (lưu một lần cho mọi vai trò).</p>}
       </div>
     </div>
   );

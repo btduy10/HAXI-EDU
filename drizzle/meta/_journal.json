@@ -29,6 +29,13 @@
       "when": 1791247491943,
       "tag": "0003_teacher_role",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1791248397761,
+      "tag": "0004_roles_as_text",
+      "breakpoints": true
     }
   ]
 }

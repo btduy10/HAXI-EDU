@@ -2,6 +2,7 @@ import { eq, inArray } from "drizzle-orm";
 import { db, type DbOrTx } from "@/db";
 import { appSettings } from "@/db/schema";
 import { type PermissionConfig, normalizePermissions } from "@/lib/permissions";
+import { AppError } from "./errors";
 
 // Cấu hình nghiệp vụ lưu trong app_settings; thiếu hoặc sai kiểu thì dùng mặc định.
 export const SETTING_DEFAULTS = {
@@ -27,4 +28,12 @@ export async function getSettings(tx: DbOrTx = db): Promise<Record<SettingKey, n
     if (typeof row.value === "number" && Number.isInteger(row.value) && row.value >= 0) out[row.key as SettingKey] = row.value;
   }
   return out;
+}
+
+/** Vai trò gán cho tài khoản/giáo viên phải đang tồn tại trong Cấu hình → Phân quyền ("admin" chỉ hợp lệ với tài khoản). */
+export async function assertKnownRole(role: string, tx: DbOrTx = db, allowAdmin = false) {
+  if (allowAdmin && role === "admin") return;
+  if (!Object.hasOwn(await getPermissionConfig(tx), role)) {
+    throw new AppError("VALIDATION", "Vai trò không tồn tại. Hãy tải lại trang.", { role: "Vai trò không tồn tại" });
+  }
 }

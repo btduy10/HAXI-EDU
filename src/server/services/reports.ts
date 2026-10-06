@@ -1,14 +1,15 @@
-import { and, count, desc, eq, gte, ilike, lte } from "drizzle-orm";
+import { and, count, desc, eq, gte, ilike, inArray, lte } from "drizzle-orm";
 import type { z } from "zod";
 import { db } from "@/db";
-import { appSettings, auditLogs, user } from "@/db/schema";
+import { appSettings, auditLogs, teachers, user } from "@/db/schema";
 import { WEEKDAY_LABELS, isoWeekday } from "@/lib/dates";
 import { formatDate, formatDateTime, formatTime } from "@/lib/format";
 import type { settingsInput } from "@/lib/validation/rewards";
 import { audit } from "../audit";
+import { AppError } from "../errors";
 import type { ExportDoc } from "../export";
 import { type Actor, assertAdmin } from "../guard";
-import { type PermissionConfig, normalizePermissions } from "@/lib/permissions";
+import { ADMIN_LABEL, type PermissionConfig, normalizePermissions } from "@/lib/permissions";
 import { PERMISSIONS_KEY, SETTING_DEFAULTS, type SettingKey, getPermissionConfig, getSettings } from "../settings";
 import { type SessionFilters, listSessions } from "./sessions";
 import { getClassReport, getClassSummary } from "./summaries";
@@ -219,12 +220,28 @@ export async function readPermissions(actor: Actor) {
   return getPermissionConfig();
 }
 
-/** Admin lưu bảng phân quyền của Giáo viên và Giáo viên trực. Có hiệu lực ngay ở yêu cầu kế tiếp của mọi người dùng. */
+/**
+ * Admin lưu danh sách vai trò và bảng phân quyền (gồm cả vai trò mới tạo, đổi tên, xóa).
+ * Có hiệu lực ngay ở yêu cầu kế tiếp của mọi người dùng. Không xóa được vai trò đang gán cho tài khoản hoặc giáo viên.
+ */
 export async function updatePermissions(actor: Actor, data: PermissionConfig) {
   assertAdmin(actor);
   const value = normalizePermissions(data);
+  const labels = Object.values(value).map((role) => role.label.toLowerCase());
+  if (new Set([...labels, ADMIN_LABEL.toLowerCase()]).size !== labels.length + 1) {
+    throw new AppError("VALIDATION", "Tên vai trò bị trùng. Mỗi vai trò cần một tên riêng.");
+  }
   await db.transaction(async (tx) => {
     const before = await getPermissionConfig(tx);
+    const removed = Object.keys(before).filter((key) => !Object.hasOwn(value, key));
+    if (removed.length > 0) {
+      const [usedByAccount] = await tx.select({ role: user.role }).from(user).where(inArray(user.role, removed)).limit(1);
+      const [usedByTeacher] = await tx.select({ role: teachers.role }).from(teachers).where(inArray(teachers.role, removed)).limit(1);
+      const used = usedByAccount?.role ?? usedByTeacher?.role;
+      if (used) {
+        throw new AppError("CONFLICT", `Vai trò "${before[used]!.label}" đang được gán cho tài khoản hoặc giáo viên nên không xóa được. Hãy đổi vai trò của họ trước.`);
+      }
+    }
     await tx
       .insert(appSettings)
       .values({ key: PERMISSIONS_KEY, value })

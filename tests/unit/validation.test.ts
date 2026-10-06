@@ -34,7 +34,9 @@ describe("xác thực dữ liệu vào", () => {
     const account = { username: "GV.Lan", name: "Lan", password: "MatKhau12345" };
     expect(accountInput.safeParse({ ...account, role: "teacher", teacherId: "" }).success).toBe(false);
     expect(accountInput.parse({ ...account, role: "admin", teacherId: "" })).toMatchObject({ username: "gv.lan", teacherId: null });
-    expect(accountInput.safeParse({ ...account, role: "superuser" }).success).toBe(false);
+    // Vai trò là khóa trong Cấu hình: khóa sai định dạng bị chặn ở đây, khóa không tồn tại bị chặn ở service.
+    expect(accountInput.safeParse({ ...account, role: "Super User!" }).success).toBe(false);
+    expect(accountInput.safeParse({ ...account, role: "" }).success).toBe(false);
   });
 });
 
