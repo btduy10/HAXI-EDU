@@ -12,7 +12,8 @@
     "test:e2e": "playwright test",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx scripts/migrate.ts",
-    "db:seed": "tsx scripts/seed.ts"
+    "db:seed": "tsx scripts/seed.ts",
+    "db:reset": "tsx scripts/reset-data.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",

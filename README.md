@@ -17,21 +17,32 @@ cp .env.example .env          # rồi đặt BETTER_AUTH_SECRET (lệnh tạo c�
 docker compose up -d          # PostgreSQL ở cổng 5432, kèm CSDL test haxi_edu_test
 npm install
 npm run db:migrate            # tạo bảng
-npm run db:seed               # dữ liệu mẫu (chỉ chạy khi CSDL chưa có tài khoản)
+npm run db:seed               # tài khoản admin + cấu hình nền (chỉ chạy khi CSDL chưa có tài khoản)
 npm run dev                   # http://localhost:3000
 ```
 
-### Tài khoản demo
+### Tài khoản ban đầu
 
 | Tên đăng nhập | Vai trò | Ghi chú |
 |---|---|---|
 | `admin` | Quản trị | Sau khi đổi mật khẩu phải thiết lập xác thực hai lớp (TOTP) |
 
-Seed chỉ tạo sẵn tài khoản `admin`. Tài khoản giáo viên do Admin tạo và chỉnh sửa trên giao diện, ở trang **Tài khoản** (thêm, sửa, đặt lại mật khẩu, khóa/mở khóa), gắn với giáo viên mẫu GV01, GV02 hoặc giáo viên bạn tự thêm. Biến `SEED_DEMO_ACCOUNTS=true` chỉ dùng cho kiểm thử tự động để có sẵn `gv.lan`, `gv.minh`.
+Seed chỉ tạo sẵn tài khoản `admin`. Tài khoản giáo viên do Admin tạo và chỉnh sửa trên giao diện, ở trang **Tài khoản** (thêm, sửa, đặt lại mật khẩu, khóa/mở khóa), gắn với giáo viên bạn đã thêm ở menu Giáo viên.
 
 Mật khẩu tạm là giá trị `SEED_DEFAULT_PASSWORD` trong `.env` (mặc định `Haxi@2026`). Lần đăng nhập đầu **bắt buộc đổi mật khẩu** (tối thiểu 8 ký tự, có chữ và số).
 
-Dữ liệu mẫu: 2 lớp (mỗi lớp 2 buổi/tuần, đã sinh buổi học; các buổi cũ hơn 7 ngày đã điểm danh và ghi sao sẵn), 15 học viên, 2 phòng, 3 ca học, 5 cấp bậc, tiêu chí sao, 15 avatar, 3 loại quà và mốc quà cho từng khóa. Với CSDL đã có dữ liệu, chạy lại `npm run db:seed` chỉ bổ sung kho avatar còn thiếu.
+Seed mặc định **không tạo dữ liệu mẫu**: chỉ có tài khoản `admin` và cấu hình nền (5 cấp bậc, tiêu chí sao, 15 avatar, cấu hình mặc định), để Admin nhập dữ liệu thật và dùng ngay. Với CSDL đã có tài khoản, chạy lại `npm run db:seed` chỉ bổ sung kho avatar còn thiếu.
+
+Muốn có dữ liệu mẫu để thử trên máy (2 giáo viên và tài khoản `gv.lan`, `gv.minh`, 2 lớp đã sinh buổi học, 15 học viên, phòng, ca học, quà và mốc quà), đặt `SEED_DEMO_DATA=true` khi chạy seed trên CSDL trống. Kiểm thử tự động (Playwright) tự đặt biến này.
+
+### Xóa dữ liệu để bắt đầu lại
+
+```powershell
+npm run db:reset                # chỉ đếm số dòng sẽ xóa, chưa xóa gì
+npm run db:reset -- --confirm   # xóa thật, KHÔNG hoàn tác được — hãy sao lưu trước
+```
+
+Lệnh xóa toàn bộ giáo viên, học viên, khóa học, lớp, phòng, ca học, ngày nghỉ, ghi danh, buổi học, điểm danh, sao, quà, tổng kết, nhật ký và mọi tài khoản không phải Quản trị. Giữ lại: tài khoản Quản trị (mật khẩu, 2FA), cấp bậc, kho avatar, tiêu chí sao, cấu hình và bảng phân quyền. Lệnh chạy trên CSDL trong `DATABASE_URL`; để dọn CSDL đang triển khai, đặt `$env:DATABASE_URL = "<chuỗi kết nối>"` trước khi chạy.
 
 ## Lệnh thường dùng
 
@@ -42,7 +53,8 @@ Dữ liệu mẫu: 2 lớp (mỗi lớp 2 buổi/tuần, đã sinh buổi học;
 | `npm test` | Vitest: test đơn vị + test tích hợp trên CSDL `haxi_edu_test` (tự dựng lại schema) |
 | `npm run test:e2e` | Playwright ở màn hình 360px, tự chạy server riêng (cổng 3100) trên CSDL test. Lần đầu cần `npx playwright install chromium` |
 | `npm run db:generate` | Sinh migration sau khi sửa `src/db/schema` |
-| `npm run db:migrate` / `db:seed` | Áp dụng migration / nạp dữ liệu mẫu |
+| `npm run db:migrate` / `db:seed` | Áp dụng migration / tạo tài khoản admin và cấu hình nền |
+| `npm run db:reset` | Xóa dữ liệu nghiệp vụ, giữ tài khoản Quản trị và cấu hình (cần `-- --confirm`) |
 | `.\scripts\backup.ps1` / `./scripts/backup.sh` | Sao lưu CSDL vào `backups/` (xem [scripts/restore.md](scripts/restore.md) để khôi phục) |
 
 ## Cấu trúc
@@ -142,7 +154,7 @@ Vercel không chạy Docker nên cần một PostgreSQL bên ngoài. Repo đã c
    $env:DATABASE_URL = "<chuỗi kết nối>"; $env:SEED_DEFAULT_PASSWORD = "<mật khẩu tạm của bạn>"; npm run db:seed
    ```
 
-   Seed tạo `admin`, `gv.lan`, `gv.minh` và dữ liệu mẫu. Đăng nhập `admin` ngay sau đó để đổi mật khẩu và bật 2FA. Tài khoản GV và Admin khác tạo ở trang **Tài khoản**.
+   Seed tạo tài khoản `admin` và cấu hình nền, không có dữ liệu mẫu. Đăng nhập `admin` ngay sau đó để đổi mật khẩu và bật 2FA. Tài khoản GV và Admin khác tạo ở trang **Tài khoản**.
 
 Khác biệt khi chạy trên Vercel:
 
@@ -175,7 +187,7 @@ Netlify không chạy Docker nên cần một PostgreSQL bên ngoài (Neon, Supa
    $env:DATABASE_URL = "<chuỗi kết nối>"; $env:SEED_DEFAULT_PASSWORD = "<mật khẩu tạm của bạn>"; npm run db:seed
    ```
 
-   Seed tạo cả dữ liệu mẫu (2 lớp, 15 học viên…). Đăng nhập `admin` ngay sau đó để đổi mật khẩu và bật 2FA.
+   Seed tạo tài khoản `admin` và cấu hình nền, không có dữ liệu mẫu. Đăng nhập `admin` ngay sau đó để đổi mật khẩu và bật 2FA.
 
 Khác biệt khi chạy trên Netlify:
 

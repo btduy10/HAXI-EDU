@@ -61,28 +61,37 @@ const NAV: Record<"admin" | "teacher", NavItem[]> = {
   ],
 };
 
+// Chỉ tải trước trang khi người dùng rê chuột/chạm vào mục menu, thay vì tải trước cả menu ở mỗi lần mở trang.
+function NavLink({ item, active, onNavigate }: { item: NavItem; active: boolean; onNavigate?: () => void }) {
+  const [intent, setIntent] = useState(false);
+  const { href, label, icon: Icon } = item;
+  return (
+    <Link
+      href={href}
+      prefetch={intent ? null : false}
+      onMouseEnter={() => setIntent(true)}
+      onTouchStart={() => setIntent(true)}
+      onFocus={() => setIntent(true)}
+      onClick={onNavigate}
+      aria-current={active ? "page" : undefined}
+      className={cn(
+        "flex min-h-11 items-center gap-3 rounded-lg px-3 text-sm font-medium transition-colors",
+        active ? "bg-sidebar-primary font-bold text-sidebar-primary-foreground" : "hover:bg-sidebar-accent",
+      )}
+    >
+      <Icon className="size-4 shrink-0" aria-hidden />
+      {label}
+    </Link>
+  );
+}
+
 function NavLinks({ items, onNavigate }: { items: NavItem[]; onNavigate?: () => void }) {
   const pathname = usePathname();
   return (
     <nav className="grid gap-1 p-2">
-      {items.map(({ href, label, icon: Icon }) => {
-        const active = pathname === href || pathname.startsWith(`${href}/`);
-        return (
-          <Link
-            key={href}
-            href={href}
-            onClick={onNavigate}
-            aria-current={active ? "page" : undefined}
-            className={cn(
-              "flex min-h-11 items-center gap-3 rounded-lg px-3 text-sm font-medium transition-colors",
-              active ? "bg-sidebar-primary font-bold text-sidebar-primary-foreground" : "hover:bg-sidebar-accent",
-            )}
-          >
-            <Icon className="size-4 shrink-0" aria-hidden />
-            {label}
-          </Link>
-        );
-      })}
+      {items.map((item) => (
+        <NavLink key={item.href} item={item} active={pathname === item.href || pathname.startsWith(`${item.href}/`)} onNavigate={onNavigate} />
+      ))}
     </nav>
   );
 }

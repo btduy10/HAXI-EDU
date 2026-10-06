@@ -6,6 +6,6 @@ export default async function setup() {
   await vitestSetup();
   execSync("npx tsx scripts/seed.ts", {
     stdio: "inherit",
-    env: { ...process.env, DATABASE_URL: process.env.TEST_DATABASE_URL, SEED_DEMO_ACCOUNTS: "true" },
+    env: { ...process.env, DATABASE_URL: process.env.TEST_DATABASE_URL, SEED_DEMO_DATA: "true" },
   });
 }

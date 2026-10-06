@@ -7,7 +7,7 @@ export default function AuthLayout({ children }: LayoutProps<"/">) {
       <div aria-hidden className="pointer-events-none absolute -top-24 -left-24 size-72 rounded-full bg-secondary" />
       <div aria-hidden className="pointer-events-none absolute -right-20 -bottom-28 size-80 rounded-full bg-brand-gold/15" />
       <div className="relative mb-5 flex flex-col items-center gap-2 text-center">
-        <BrandLogo height={112} priority />
+        <BrandLogo height={112} />
         <p className="text-sm font-semibold text-muted-foreground">Hệ thống quản lý trung tâm Robotics</p>
       </div>
       <div className="relative w-full max-w-sm">{children}</div>

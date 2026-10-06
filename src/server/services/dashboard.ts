@@ -34,8 +34,7 @@ const WEEKS = 8;
 
 /** Số liệu biểu đồ trang Tổng quan. Admin: toàn trung tâm; GV: chỉ các lớp được phân công. */
 export async function dashboardCharts(actor: Actor, now: Date = new Date()): Promise<DashboardCharts> {
-  const allowed = await allowedClassIds(actor);
-  const levelList = await loadLevels();
+  const [allowed, levelList] = await Promise.all([allowedClassIds(actor), loadLevels()]);
   const emptyLevels = levelList.map((l) => ({ levelNo: l.levelNo, name: l.name, frameColor: l.frameColor, students: 0 }));
   const today = todayIso(now);
   const firstWeek = addDays(startOfWeek(today), -7 * (WEEKS - 1));

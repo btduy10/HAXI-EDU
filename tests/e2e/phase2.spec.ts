@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { NEW_PASSWORD, expectNoHorizontalScroll, loadAdminSecret, login, sql, totp, visibleText } from "./helpers";
+import { NEW_PASSWORD, expectNoHorizontalScroll, expectNotFound, loadAdminSecret, login, sql, totp, visibleText } from "./helpers";
 
 // Chạy sau phase1 (thứ tự tên tệp): gv.lan đã đổi mật khẩu, admin đã bật 2FA.
 test.describe.configure({ mode: "serial" });
@@ -78,12 +78,11 @@ test("GV điểm danh trên điện thoại 360px: mặc định có mặt, sử
 test("GV không điểm danh được buổi của lớp khác, kể cả mở thẳng bằng id", async ({ page }) => {
   await login(page, "gv.lan", NEW_PASSWORD);
   await expect(page).toHaveURL(/\/teacher\/dashboard$/);
-  const response = await page.goto(`/teacher/sessions/${otherSessionId}/attendance`);
-  expect(response!.status()).toBe(404);
+  await expectNotFound(page, `/teacher/sessions/${otherSessionId}/attendance`);
   await page.goto(`/admin/sessions/${otherSessionId}`);
   await expect(page).toHaveURL(/\/teacher\/dashboard$/);
   // GV có menu Điểm danh (trong phạm vi lớp mình): buổi của lớp khác coi như không tồn tại.
-  expect((await page.goto(`/admin/attendance/${otherSessionId}`))!.status()).toBe(404);
+  await expectNotFound(page, `/admin/attendance/${otherSessionId}`);
   await page.goto("/admin/attendance");
   await expect(page.getByRole("heading", { name: "Điểm danh", exact: true })).toBeVisible();
   await expect(page.getByText("RB-NC01")).toHaveCount(0);

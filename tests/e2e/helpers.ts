@@ -46,6 +46,15 @@ export async function expectNoHorizontalScroll(page: Page) {
 }
 
 /** Danh sách có hai bản (thẻ cho di động, bảng cho màn hình rộng); chỉ lấy bản đang hiển thị. */
+/**
+ * Mở thẳng một địa chỉ ngoài phạm vi: phải ra trang "không tìm thấy".
+ * Trang hiện khung chờ trước rồi mới có kết quả nên mã HTTP là 200; kiểm tra theo nội dung.
+ */
+export async function expectNotFound(page: Page, url: string) {
+  await page.goto(url);
+  await expect(page.getByText("This page could not be found.")).toBeVisible();
+}
+
 export const visibleText = (page: Page, text: string) => page.getByText(text).filter({ visible: true }).first();
 
 /** Tệp Excel học viên theo đúng tiêu đề cột của tệp mẫu. */

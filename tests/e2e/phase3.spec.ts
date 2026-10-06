@@ -1,5 +1,5 @@
 import { type Page, expect, test } from "@playwright/test";
-import { NEW_PASSWORD, expectNoHorizontalScroll, loadAdminSecret, login, sql, totp } from "./helpers";
+import { NEW_PASSWORD, expectNoHorizontalScroll, expectNotFound, loadAdminSecret, login, sql, totp } from "./helpers";
 
 // Chạy sau phase1 + phase2: hôm nay mỗi lớp đã có một buổi học.
 test.describe.configure({ mode: "serial" });
@@ -108,10 +108,10 @@ test("GV ghi sao trên điện thoại: cả lớp, lên cấp, đổi avatar, t
 test("GV không ghi sao, không xem hồ sơ, không đổi avatar của học viên lớp khác", async ({ page }) => {
   await login(page, "gv.lan", NEW_PASSWORD);
   await expect(page).toHaveURL(/\/teacher\/dashboard$/);
-  expect((await page.goto(`/teacher/sessions/${otherSessionId}/stars`))!.status()).toBe(404);
-  expect((await page.goto(`/teacher/students/${otherStudentId}`))!.status()).toBe(404);
+  await expectNotFound(page, `/teacher/sessions/${otherSessionId}/stars`);
+  await expectNotFound(page, `/teacher/students/${otherStudentId}`);
   // GV xem được menu Sao & Avatar nhưng chỉ đọc: không có nút thêm/sửa/xóa cấu hình, không có mục tặng avatar.
-  expect((await page.goto(`/admin/sessions/${otherSessionId}/stars`))!.status()).toBe(404);
+  await expectNotFound(page, `/admin/sessions/${otherSessionId}/stars`);
   await page.goto("/admin/stars?tab=criteria");
   await expect(page.getByRole("heading", { name: /Tiêu chí sao/ })).toBeVisible();
   await expect(page.getByRole("button", { name: "Thêm" })).toHaveCount(0);

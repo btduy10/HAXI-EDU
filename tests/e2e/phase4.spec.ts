@@ -1,6 +1,6 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { expect, test } from "@playwright/test";
-import { NEW_PASSWORD, expectNoHorizontalScroll, loadAdminSecret, login, sql, totp } from "./helpers";
+import { NEW_PASSWORD, expectNoHorizontalScroll, expectNotFound, loadAdminSecret, login, sql, totp } from "./helpers";
 
 // Chạy sau phase1–3. Đóng lớp RB-NC01 (lớp của gv.minh) để không ảnh hưởng dữ liệu lớp RB-CB01.
 test.describe.configure({ mode: "serial" });
@@ -39,7 +39,7 @@ test("GV: báo cáo lớp mình, xuất Excel/PDF; không xem hay xuất đượ
   expect((await page.request.get(`/api/export/class-report/${otherClassId}?format=xlsx`)).status()).toBe(404);
   expect((await page.request.get(`/api/export/summary/${ownClassId}?format=xlsx`)).status()).toBe(403);
   expect((await page.request.get(`/api/export/class-report/${ownClassId}?format=exe`)).status()).toBe(400);
-  expect((await page.goto(`/teacher/classes/${otherClassId}/report`))!.status()).toBe(404);
+  await expectNotFound(page, `/teacher/classes/${otherClassId}/report`);
 
   // TKB xuất ra chỉ gồm lịch của mình dù truyền classId của lớp khác.
   const timetable = await page.request.get(`/api/export/timetable?format=pdf&classId=${otherClassId}`);
@@ -353,8 +353,12 @@ test("Phân quyền: Admin mở menu Học viên cho Giáo viên trực; Giáo v
   await expect(page).toHaveURL(/\/teacher\/dashboard$/);
 
   // Menu: khu vực giảng dạy (thấy mọi lớp) + các menu được tick Xem; không có menu quản trị.
-  await page.getByRole("button", { name: "Mở menu" }).click();
+  // Khung trang hiện trước khi nút kịp gắn sự kiện nên bấm lại cho tới khi menu mở.
   const menu = page.getByRole("dialog");
+  await expect(async () => {
+    await page.getByRole("button", { name: "Mở menu" }).click();
+    await expect(menu).toBeVisible({ timeout: 1000 });
+  }).toPass();
   for (const name of ["Tổng quan", "Thời khóa biểu", "Lớp học", "Học viên", "Điểm danh"]) {
     await expect(menu.getByRole("link", { name, exact: true })).toBeVisible();
   }

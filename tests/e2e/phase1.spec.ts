@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { NEW_PASSWORD, SEED_PASSWORD, expectNoHorizontalScroll, firstLogin, login, saveAdminSecret, sql, studentWorkbook, totp, visibleText } from "./helpers";
+import { NEW_PASSWORD, SEED_PASSWORD, expectNoHorizontalScroll, expectNotFound, firstLogin, login, saveAdminSecret, sql, studentWorkbook, totp, visibleText } from "./helpers";
 
 // Các test chạy tuần tự trên cùng CSDL test và phụ thuộc thứ tự (đổi mật khẩu, bật 2FA).
 test.describe.configure({ mode: "serial" });
@@ -51,8 +51,7 @@ test("GV: buộc đổi mật khẩu, chỉ thấy lớp mình, không vào đư
   await expectNoHorizontalScroll(page);
 
   // Gọi trực tiếp bằng id lớp của GV khác → 404, không lộ dữ liệu.
-  const forbidden = await page.goto(`/teacher/classes/${other!.id}`);
-  expect(forbidden!.status()).toBe(404);
+  await expectNotFound(page, `/teacher/classes/${other!.id}`);
   await expect(page.getByText("Robotics Nâng cao")).toHaveCount(0);
 
   // Trang Admin: bị đưa về trang của GV.
