@@ -5,12 +5,12 @@ import { LABELS, formatDate } from "@/lib/format";
 import { createClassAction, deleteClassAction, updateClassAction } from "@/server/actions/admin";
 import { listCourses, listRooms } from "@/server/services/catalog";
 import { listClasses } from "@/server/services/classes";
-import { requirePageUser } from "@/server/session";
+import { requireMenu } from "@/server/session";
 
 export const metadata: Metadata = { title: "Lớp học" };
 
 export default async function ClassesPage() {
-  const { actor } = await requirePageUser("admin");
+  const { actor, role, can } = await requireMenu("classes");
   const [classes, courses, rooms] = await Promise.all([listClasses(actor), listCourses(actor), listRooms(actor)]);
 
   const fields: Field[] = [
@@ -61,9 +61,9 @@ export default async function ClassesPage() {
         },
       }))}
       fields={fields}
-      createAction={createClassAction}
-      updateAction={updateClassAction}
-      deleteAction={deleteClassAction}
+      createAction={can("add") ? createClassAction : undefined}
+      updateAction={can("edit") ? updateClassAction : undefined}
+      deleteAction={role === "admin" ? deleteClassAction : undefined}
     />
   );
 }

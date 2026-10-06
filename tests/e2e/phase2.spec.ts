@@ -82,8 +82,11 @@ test("GV không điểm danh được buổi của lớp khác, kể cả mở t
   expect(response!.status()).toBe(404);
   await page.goto(`/admin/sessions/${otherSessionId}`);
   await expect(page).toHaveURL(/\/teacher\/dashboard$/);
-  await page.goto(`/admin/attendance/${otherSessionId}`);
-  await expect(page).toHaveURL(/\/teacher\/dashboard$/);
+  // GV có menu Điểm danh (trong phạm vi lớp mình): buổi của lớp khác coi như không tồn tại.
+  expect((await page.goto(`/admin/attendance/${otherSessionId}`))!.status()).toBe(404);
+  await page.goto("/admin/attendance");
+  await expect(page.getByRole("heading", { name: "Điểm danh", exact: true })).toBeVisible();
+  await expect(page.getByText("RB-NC01")).toHaveCount(0);
 });
 
 test("Admin: TKB có bộ lọc, sửa giờ riêng một buổi, trùng lịch bị chặn, mở khóa điểm danh, buổi bù", async ({ page }) => {

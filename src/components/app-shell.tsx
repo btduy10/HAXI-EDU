@@ -34,6 +34,7 @@ import { cn } from "@/lib/utils";
 
 type NavItem = { href: string; label: string; icon: LucideIcon };
 
+// Toàn bộ mục menu. Máy chủ quyết định người dùng thấy mục nào (theo vai trò và bảng phân quyền).
 const NAV: Record<"admin" | "teacher", NavItem[]> = {
   admin: [
     { href: "/admin/dashboard", label: "Tổng quan", icon: LayoutDashboardIcon },
@@ -107,16 +108,22 @@ function AccountLinks({ userName }: { userName: string }) {
 }
 
 export function AppShell({
-  role,
+  hrefs,
+  labels,
   userName,
   children,
 }: {
-  role: "admin" | "teacher";
+  /** Các mục menu được hiện, do máy chủ tính (xem `navFor`). */
+  hrefs: string[];
+  /** Nhãn thay thế theo href (vd. "Lớp của tôi" → "Lớp học" khi được xem mọi lớp). */
+  labels?: Record<string, string>;
   userName: string;
   children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
-  const items = NAV[role];
+  const items = [...NAV.teacher, ...NAV.admin]
+    .filter((item) => hrefs.includes(item.href))
+    .map((item) => ({ ...item, label: labels?.[item.href] ?? item.label }));
   // Logo có chữ màu navy nên phần đầu thanh điều hướng giữ nền trắng.
   const sidebarBrand = (
     <div className="flex items-center gap-3 bg-white px-4 py-3 text-foreground">

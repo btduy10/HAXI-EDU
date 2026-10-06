@@ -15,12 +15,14 @@ import { listRooms, listTeachers, listTimeSlots } from "@/server/services/catalo
 import { getClass, listClassTeachers } from "@/server/services/classes";
 import { listTemplates } from "@/server/services/sessions";
 import { listClassProgress } from "@/server/services/stars";
-import { requirePageUser } from "@/server/session";
+import { requireMenu } from "@/server/session";
 
 export const metadata: Metadata = { title: "Chi tiết lớp" };
 
 export default async function ClassDetailPage({ params }: PageProps<"/admin/classes/[id]">) {
-  const { actor } = await requirePageUser("admin");
+  const { actor, can } = await requireMenu("classes");
+  // Phân công giáo viên, lịch mẫu và sinh buổi đều thuộc quyền "Sửa" của menu Lớp học.
+  const canEdit = can("edit");
   const classId = uuidParam((await params).id);
   const cls = await orNotFound(getClass(actor, classId));
   const [assigned, teachers, students, templates, slots, rooms] = await Promise.all([
@@ -124,8 +126,8 @@ export default async function ClassDetailPage({ params }: PageProps<"/admin/clas
           values: {},
         }))}
         fields={teacherFields}
-        createAction={assignTeacherAction.bind(null, classId)}
-        deleteAction={unassignTeacherAction}
+        createAction={canEdit ? assignTeacherAction.bind(null, classId) : undefined}
+        deleteAction={canEdit ? unassignTeacherAction : undefined}
         emptyText="Chưa phân công giáo viên."
       />
 
@@ -145,8 +147,8 @@ export default async function ClassDetailPage({ params }: PageProps<"/admin/clas
           values: {},
         }))}
         fields={templateFields}
-        createAction={createTemplateAction.bind(null, classId)}
-        deleteAction={deleteTemplateAction}
+        createAction={canEdit ? createTemplateAction.bind(null, classId) : undefined}
+        deleteAction={canEdit ? deleteTemplateAction : undefined}
         emptyText="Chưa có lịch mẫu. Thêm các buổi học cố định trong tuần rồi sinh buổi học."
       />
 
@@ -157,11 +159,13 @@ export default async function ClassDetailPage({ params }: PageProps<"/admin/clas
           ghi đè buổi đã sửa.
         </p>
         <div className="flex flex-wrap items-start gap-2">
-          <GenerateSessionsButton classId={classId} disabled={templates.length === 0 || cls.status !== "open"} />
-          <LinkButton variant="outline" className="h-10" href={`/admin/timetable?classId=${classId}`}>
-            Xem thời khóa biểu lớp
-          </LinkButton>
-          {cls.status === "open" && (
+          {canEdit && <GenerateSessionsButton classId={classId} disabled={templates.length === 0 || cls.status !== "open"} />}
+          {can("view", "timetable") && (
+            <LinkButton variant="outline" className="h-10" href={`/admin/timetable?classId=${classId}`}>
+              Xem thời khóa biểu lớp
+            </LinkButton>
+          )}
+          {cls.status === "open" && can("add", "timetable") && (
             <LinkButton variant="outline" className="h-10" href={`/admin/sessions/makeup?classId=${classId}`}>
               Thêm buổi bù
             </LinkButton>
@@ -174,11 +178,11 @@ export default async function ClassDetailPage({ params }: PageProps<"/admin/clas
           <h2 className="text-lg font-semibold">
             Học viên đang học <span className="text-sm font-normal text-muted-foreground">({students.length})</span>
           </h2>
-          <LinkButton
-            variant="outline"
-            className="h-10" href={`/admin/enrollments?classId=${classId}`}>
-            Quản lý ghi danh
-          </LinkButton>
+          {can("view", "enrollments") && (
+            <LinkButton variant="outline" className="h-10" href={`/admin/enrollments?classId=${classId}`}>
+              Quản lý ghi danh
+            </LinkButton>
+          )}
         </div>
         {students.length === 0 ? (
           <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
@@ -188,7 +192,7 @@ export default async function ClassDetailPage({ params }: PageProps<"/admin/clas
           <ul className="grid gap-2 sm:grid-cols-2">
             {students.map((s) => (
               <li key={s.id}>
-                <StudentProgressCard fullName={s.fullName} code={s.code} progress={s.progress} href={`/admin/students/${s.id}`} />
+                <StudentProgressCard fullName={s.fullName} code={s.code} progress={s.progress} href={can("view", "students") ? `/admin/students/${s.id}` : undefined} />
               </li>
             ))}
           </ul>

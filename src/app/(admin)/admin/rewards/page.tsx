@@ -21,7 +21,7 @@ import type { Actor } from "@/server/guard";
 import { listCourses } from "@/server/services/catalog";
 import { listClasses } from "@/server/services/classes";
 import { getClassReport, getClassSummary, listGifts, listTiers } from "@/server/services/summaries";
-import { requirePageUser } from "@/server/session";
+import { requireMenu } from "@/server/session";
 
 export const metadata: Metadata = { title: "Quà tặng & Tổng kết" };
 
@@ -34,7 +34,9 @@ type TabKey = (typeof TABS)[number]["key"];
 const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v) ?? "";
 
 export default async function RewardsPage({ searchParams }: PageProps<"/admin/rewards">) {
-  const { actor } = await requirePageUser("admin");
+  const { actor, role, can } = await requireMenu("rewards");
+  // Thêm = quà, mốc quà; Sửa = sửa quà, đóng lớp, duyệt và trao quà; xóa chỉ Admin.
+  const perm: Perm = { add: can("add"), edit: can("edit"), admin: role === "admin" };
   const params = await searchParams;
   const tab: TabKey = TABS.find((t) => t.key === one(params.tab))?.key ?? "summary";
 
@@ -56,14 +58,16 @@ export default async function RewardsPage({ searchParams }: PageProps<"/admin/re
           </Link>
         ))}
       </nav>
-      {tab === "summary" && <SummaryTab actor={actor} classId={one(params.classId)} />}
-      {tab === "tiers" && <TiersTab actor={actor} />}
-      {tab === "gifts" && <GiftsTab actor={actor} />}
+      {tab === "summary" && <SummaryTab actor={actor} classId={one(params.classId)} perm={perm} />}
+      {tab === "tiers" && <TiersTab actor={actor} perm={perm} />}
+      {tab === "gifts" && <GiftsTab actor={actor} perm={perm} />}
     </div>
   );
 }
 
-async function GiftsTab({ actor }: { actor: Actor }) {
+type Perm = { add: boolean; edit: boolean; admin: boolean };
+
+async function GiftsTab({ actor, perm }: { actor: Actor; perm: Perm }) {
   const gifts = await listGifts(actor);
   const fields: Field[] = [
     { name: "name", label: "Tên quà", required: true },
@@ -80,14 +84,14 @@ async function GiftsTab({ actor }: { actor: Actor }) {
         values: { name: g.name, stock: String(g.stock), description: g.description ?? "" },
       }))}
       fields={fields}
-      createAction={createGiftAction}
-      updateAction={updateGiftAction}
-      deleteAction={deleteGiftAction}
+      createAction={perm.add ? createGiftAction : undefined}
+      updateAction={perm.edit ? updateGiftAction : undefined}
+      deleteAction={perm.admin ? deleteGiftAction : undefined}
     />
   );
 }
 
-async function TiersTab({ actor }: { actor: Actor }) {
+async function TiersTab({ actor, perm }: { actor: Actor; perm: Perm }) {
   const [tiers, gifts, courses, classes] = await Promise.all([listTiers(actor), listGifts(actor), listCourses(actor), listClasses(actor)]);
   const fields: Field[] = [
     { name: "courseId", label: "Áp dụng cho khóa học", type: "select", options: courses.map((c) => ({ value: c.id, label: c.name })) },
@@ -115,15 +119,15 @@ async function TiersTab({ actor }: { actor: Actor }) {
           values: {},
         }))}
         fields={fields}
-        createAction={createTierAction}
-        deleteAction={deleteTierAction}
+        createAction={perm.add ? createTierAction : undefined}
+        deleteAction={perm.admin ? deleteTierAction : undefined}
         emptyText="Chưa có mốc quà."
       />
     </div>
   );
 }
 
-async function SummaryTab({ actor, classId }: { actor: Actor; classId: string }) {
+async function SummaryTab({ actor, classId, perm }: { actor: Actor; classId: string; perm: Perm }) {
   const classes = await listClasses(actor);
   // Chỉ nhận classId có trong danh sách lớp.
   const current = classes.find((c) => c.id === classId) ?? null;
@@ -144,33 +148,33 @@ async function SummaryTab({ actor, classId }: { actor: Actor; classId: string })
           </AutoSubmitSelect>
         </label>
       </form>
-      {current?.status === "open" && <OpenClassPreview actor={actor} classId={current.id} code={current.code} />}
-      {current?.status === "closed" && <ClosedClassSummary actor={actor} classId={current.id} />}
+      {current?.status === "open" && <OpenClassPreview actor={actor} classId={current.id} code={current.code} canClose={perm.edit} />}
+      {current?.status === "closed" && <ClosedClassSummary actor={actor} classId={current.id} canEdit={perm.edit} />}
     </div>
   );
 }
 
-async function OpenClassPreview({ actor, classId, code }: { actor: Actor; classId: string; code: string }) {
+async function OpenClassPreview({ actor, classId, code, canClose }: { actor: Actor; classId: string; code: string; canClose: boolean }) {
   const report = await getClassReport(actor, classId);
   return (
     <section className="grid gap-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="font-medium">Số liệu tạm tính (lớp đang mở)</h2>
-        <ConfirmButton
+        {canClose && <ConfirmButton
           label="Đóng lớp & chốt tổng kết"
           variant="default"
           confirmText={`Đóng lớp ${code} và chốt tổng kết?\n\nSau khi đóng: không điểm danh, ghi sao hay ghi danh thêm cho lớp này; các buổi tương lai còn lại sẽ bị hủy. Thao tác này không hoàn tác được.`}
           action={closeClassAction}
           input={{ classId }}
           successMessage="Đã đóng lớp và chốt tổng kết."
-        />
+        />}
       </div>
       <ClassReportTable rows={report.rows} sessions={report.sessions} />
     </section>
   );
 }
 
-async function ClosedClassSummary({ actor, classId }: { actor: Actor; classId: string }) {
+async function ClosedClassSummary({ actor, classId, canEdit }: { actor: Actor; classId: string; canEdit: boolean }) {
   const summary = await getClassSummary(actor, classId);
   return (
     <section className="grid gap-4">
@@ -185,6 +189,7 @@ async function ClosedClassSummary({ actor, classId }: { actor: Actor; classId: s
       </div>
 
       <RewardApproval
+        canEdit={canEdit}
         classId={classId}
         rows={summary.rows.map((r) => ({
           summaryId: r.summaryId,

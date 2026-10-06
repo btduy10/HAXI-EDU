@@ -18,7 +18,7 @@ type Row = {
 };
 
 /** Bảng tổng kết: hệ thống đề xuất quà theo mốc → Admin chọn và duyệt → ghi nhận đã trao. */
-export function RewardApproval({ classId, rows }: { classId: string; rows: Row[] }) {
+export function RewardApproval({ classId, rows, canEdit = true }: { classId: string; rows: Row[]; canEdit?: boolean }) {
   const eligible = rows.filter((r) => r.proposedGift && !r.handover);
   const [selected, setSelected] = useState<Set<string>>(() => new Set(eligible.map((r) => r.summaryId)));
   const [pending, startTransition] = useTransition();
@@ -42,7 +42,7 @@ export function RewardApproval({ classId, rows }: { classId: string; rows: Row[]
 
   return (
     <div className="grid gap-3">
-      {eligible.length > 0 && (
+      {canEdit && eligible.length > 0 && (
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-muted/40 p-3 text-sm">
           <p>
             Hệ thống đề xuất <strong>{eligible.length}</strong> học viên đủ điều kiện nhận quà. Bỏ chọn những em không duyệt.
@@ -82,7 +82,8 @@ export function RewardApproval({ classId, rows }: { classId: string; rows: Row[]
             </div>
             <div className="flex flex-wrap items-center gap-2 sm:justify-end">
               {!r.handover && !r.proposedGift && <Badge variant="outline">Chưa đạt mốc quà</Badge>}
-              {!r.handover && r.proposedGift && (
+              {!r.handover && r.proposedGift && !canEdit && <Badge variant="outline">Chờ duyệt</Badge>}
+              {!r.handover && r.proposedGift && canEdit && (
                 <label className="flex min-h-10 cursor-pointer items-center gap-2 rounded-lg border px-3 has-checked:bg-muted">
                   <input
                     type="checkbox"
@@ -97,15 +98,15 @@ export function RewardApproval({ classId, rows }: { classId: string; rows: Row[]
               {r.handover?.status === "pending" && (
                 <>
                   <Badge variant="secondary">Đã duyệt</Badge>
-                  <Button
+                  {canEdit && <Button
                     className="h-9"
                     disabled={pending}
                     aria-label={`Ghi nhận đã trao quà cho ${r.fullName}`}
                     onClick={() => run(() => markGiftGivenAction({ handoverId: r.handover!.id }), `Đã ghi nhận trao quà cho ${r.fullName}.`)}
                   >
                     Đã trao
-                  </Button>
-                  <Button
+                  </Button>}
+                  {canEdit && <Button
                     variant="ghost"
                     className="h-9"
                     disabled={pending}
@@ -113,7 +114,7 @@ export function RewardApproval({ classId, rows }: { classId: string; rows: Row[]
                     onClick={() => run(() => cancelApprovalAction({ handoverId: r.handover!.id }), "Đã bỏ duyệt.")}
                   >
                     Bỏ duyệt
-                  </Button>
+                  </Button>}
                 </>
               )}
               {r.handover?.status === "given" && <Badge>Đã trao</Badge>}

@@ -1,14 +1,15 @@
 import type { Metadata } from "next";
 import { FormDialogButton } from "@/components/action-buttons";
-import { updateSettingsAction } from "@/server/actions/rewards";
-import { readSettings } from "@/server/services/reports";
+import { PermissionMatrix } from "@/components/permission-matrix";
+import { updatePermissionsAction, updateSettingsAction } from "@/server/actions/rewards";
+import { readPermissions, readSettings } from "@/server/services/reports";
 import { requirePageUser } from "@/server/session";
 
 export const metadata: Metadata = { title: "Cấu hình" };
 
 export default async function SettingsPage() {
   const { actor } = await requirePageUser("admin");
-  const settings = await readSettings(actor);
+  const [settings, permissions] = await Promise.all([readSettings(actor), readPermissions(actor)]);
   const items = [
     {
       label: "Khóa sửa điểm danh sau",
@@ -48,6 +49,18 @@ export default async function SettingsPage() {
           </div>
         ))}
       </dl>
+
+      <section className="grid gap-3">
+        <div>
+          <h2 className="text-lg font-semibold">Phân quyền</h2>
+          <p className="text-sm text-muted-foreground">
+            Tick <strong>Xem</strong> để menu hiện trên thanh menu của vai trò đó; <strong>Thêm</strong>, <strong>Sửa</strong> mở các nút
+            tương ứng. Quản trị luôn có toàn quyền. Xóa dữ liệu và các menu Tài khoản, Nhật ký, Cấu hình luôn chỉ dành cho Quản trị. Giáo
+            viên và Giáo viên trực luôn có khu vực giảng dạy (Tổng quan, thời khóa biểu, lớp) trong phạm vi lớp đã chọn.
+          </p>
+        </div>
+        <PermissionMatrix initial={permissions} action={updatePermissionsAction} />
+      </section>
     </div>
   );
 }

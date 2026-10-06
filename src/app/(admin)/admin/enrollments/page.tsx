@@ -6,12 +6,12 @@ import { LABELS, formatDate, todayIso } from "@/lib/format";
 import { enrollStudentAction, leaveEnrollmentAction } from "@/server/actions/admin";
 import { listClasses, listEnrollments } from "@/server/services/classes";
 import { listStudents } from "@/server/services/students";
-import { requirePageUser } from "@/server/session";
+import { requireMenu } from "@/server/session";
 
 export const metadata: Metadata = { title: "Ghi danh" };
 
 export default async function EnrollmentsPage({ searchParams }: PageProps<"/admin/enrollments">) {
-  const { actor } = await requirePageUser("admin");
+  const { actor, can } = await requireMenu("enrollments");
   const classes = await listClasses(actor);
   const raw = (await searchParams).classId;
   const requested = Array.isArray(raw) ? raw[0] : raw;
@@ -19,7 +19,7 @@ export default async function EnrollmentsPage({ searchParams }: PageProps<"/admi
   const current = classes.find((c) => c.id === requested) ?? null;
 
   const [enrollments, students] = current
-    ? await Promise.all([listEnrollments(actor, current.id), listStudents(actor)])
+    ? await Promise.all([listEnrollments(actor, current.id), can("add") ? listStudents(actor) : []])
     : [[], []];
   const activeIds = new Set(enrollments.filter((e) => e.status === "active").map((e) => e.studentId));
   const candidates = students.filter((s) => s.status !== "left" && !activeIds.has(s.id));
@@ -49,7 +49,7 @@ export default async function EnrollmentsPage({ searchParams }: PageProps<"/admi
             <p className="text-sm">
               Sĩ số: <strong>{activeIds.size}</strong>/{current.maxSize} · {LABELS.classStatus[current.status]}
             </p>
-            {current.status === "open" && (
+            {current.status === "open" && can("add") && (
               <FormDialogButton
                 label="Ghi danh học viên"
                 title={`Ghi danh vào ${current.code}`}
@@ -87,7 +87,7 @@ export default async function EnrollmentsPage({ searchParams }: PageProps<"/admi
                       {e.leftAt && ` · rời lớp ${formatDate(e.leftAt)}`}
                     </p>
                   </div>
-                  {e.status === "active" ? (
+                  {e.status === "active" && can("edit") ? (
                     <FormDialogButton
                       label="Cho rời lớp"
                       variant="outline"
@@ -100,7 +100,7 @@ export default async function EnrollmentsPage({ searchParams }: PageProps<"/admi
                       successMessage="Đã cập nhật."
                     />
                   ) : (
-                    <Badge variant="outline">{LABELS.enrollmentStatus[e.status]}</Badge>
+                    <Badge variant={e.status === "active" ? "secondary" : "outline"}>{LABELS.enrollmentStatus[e.status]}</Badge>
                   )}
                 </li>
               ))}

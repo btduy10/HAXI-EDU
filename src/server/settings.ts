@@ -1,6 +1,7 @@
-import { inArray } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { db, type DbOrTx } from "@/db";
 import { appSettings } from "@/db/schema";
+import { type PermissionConfig, normalizePermissions } from "@/lib/permissions";
 
 // Cấu hình nghiệp vụ lưu trong app_settings; thiếu hoặc sai kiểu thì dùng mặc định.
 export const SETTING_DEFAULTS = {
@@ -9,6 +10,14 @@ export const SETTING_DEFAULTS = {
 } as const;
 
 export type SettingKey = keyof typeof SETTING_DEFAULTS;
+
+export const PERMISSIONS_KEY = "role_permissions";
+
+/** Bảng phân quyền theo vai trò (Cấu hình → Phân quyền); chưa lưu lần nào thì là mặc định. */
+export async function getPermissionConfig(tx: DbOrTx = db): Promise<PermissionConfig> {
+  const [row] = await tx.select().from(appSettings).where(eq(appSettings.key, PERMISSIONS_KEY)).limit(1);
+  return normalizePermissions(row?.value);
+}
 
 export async function getSettings(tx: DbOrTx = db): Promise<Record<SettingKey, number>> {
   const keys = Object.keys(SETTING_DEFAULTS) as SettingKey[];

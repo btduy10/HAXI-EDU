@@ -1,13 +1,23 @@
 import { and, eq, or } from "drizzle-orm";
 import { db, type DbOrTx } from "@/db";
 import { classTeachers, classes, sessions } from "@/db/schema";
+import {
+  DEFAULT_PERMISSIONS,
+  type ManagedRole,
+  type Menu,
+  type PermissionAction,
+  type RolePermissions,
+  type UserRole,
+} from "@/lib/permissions";
 import { AppError, forbidden, notFound } from "./errors";
 
 // Người thực hiện thao tác, luôn lấy từ phiên ở máy chủ (không nhận từ client).
 export type Actor = {
   userId: string;
-  role: "admin" | "teacher";
+  role: UserRole;
   teacherId: string | null;
+  /** Quyền của vai trò, nạp từ Cấu hình cùng lúc với phiên. Thiếu thì dùng mặc định của vai trò. */
+  perms?: RolePermissions;
 };
 
 export const isAdmin = (actor: Actor) => actor.role === "admin";
@@ -16,9 +26,35 @@ export function assertAdmin(actor: Actor) {
   if (!isAdmin(actor)) throw forbidden();
 }
 
-/** Danh sách lớp GV được phân công. Admin trả về null (= không giới hạn). */
+const permsOf = (actor: Actor): RolePermissions | null =>
+  isAdmin(actor) ? null : (actor.perms ?? DEFAULT_PERMISSIONS[actor.role as ManagedRole] ?? DEFAULT_PERMISSIONS.teacher);
+
+/** Vai trò có được làm thao tác này ở menu này không (theo bảng tick trong Cấu hình). Admin luôn được. */
+export function can(actor: Actor, menu: Menu, action: PermissionAction): boolean {
+  const perms = permsOf(actor);
+  return perms === null || perms.menus[menu]?.[action] === true;
+}
+
+export function assertCan(actor: Actor, menu: Menu, action: PermissionAction) {
+  if (!can(actor, menu, action)) throw forbidden();
+}
+
+/** Được thao tác ở ít nhất một trong các quyền nêu ra. */
+export function assertCanAny(actor: Actor, ...grants: [Menu, PermissionAction][]) {
+  if (!grants.some(([menu, action]) => can(actor, menu, action))) throw forbidden();
+}
+
+/** Dữ liệu tham chiếu (khóa học, phòng, ca, ngày nghỉ): chỉ cần là người dùng đã đăng nhập. */
+export function assertSignedIn(actor: Actor) {
+  if (!actor.userId) throw unauthenticated();
+}
+
+/** Admin, hoặc vai trò được cấu hình phạm vi "Tất cả lớp". */
+export const seesAllClasses = (actor: Actor) => permsOf(actor)?.scope !== "own";
+
+/** Danh sách lớp trong phạm vi của người dùng. null = không giới hạn (Admin hoặc phạm vi "Tất cả lớp"). */
 export async function allowedClassIds(actor: Actor, tx: DbOrTx = db): Promise<string[] | null> {
-  if (isAdmin(actor)) return null;
+  if (seesAllClasses(actor)) return null;
   if (!actor.teacherId) return [];
   const rows = await tx
     .select({ classId: classTeachers.classId })
@@ -32,7 +68,7 @@ export async function allowedClassIds(actor: Actor, tx: DbOrTx = db): Promise<st
  * Trả NOT_FOUND thay vì FORBIDDEN để không lộ sự tồn tại của lớp khác.
  */
 export async function assertClassAccess(actor: Actor, classId: string, tx: DbOrTx = db) {
-  if (isAdmin(actor)) return;
+  if (seesAllClasses(actor)) return;
   if (!actor.teacherId) throw notFound("lớp học");
   const [row] = await tx
     .select({ id: classTeachers.id })
@@ -44,7 +80,7 @@ export async function assertClassAccess(actor: Actor, classId: string, tx: DbOrT
 
 /** GV được vào buổi học nếu thuộc lớp, hoặc là GV dạy/dạy thay của chính buổi đó. */
 export async function assertSessionAccess(actor: Actor, sessionId: string, tx: DbOrTx = db) {
-  if (isAdmin(actor)) return;
+  if (seesAllClasses(actor)) return;
   if (!actor.teacherId) throw notFound("buổi học");
   const [row] = await tx
     .select({ id: sessions.id })

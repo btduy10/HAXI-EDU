@@ -3,6 +3,7 @@ import { ClassList } from "@/components/class-list";
 import { DashboardCharts } from "@/components/dashboard-charts";
 import { OverdueSessions, TodaySessions } from "@/components/session-lists";
 import { todayIso } from "@/lib/format";
+import { seesAllClasses } from "@/server/guard";
 import { listOverdueSessions } from "@/server/services/attendance";
 import { listClasses } from "@/server/services/classes";
 import { dashboardCharts } from "@/server/services/dashboard";
@@ -14,6 +15,8 @@ export const metadata: Metadata = { title: "Tổng quan" };
 export default async function TeacherDashboardPage() {
   const user = await requirePageUser("teacher");
   const today = todayIso();
+  // Vai trò được xem mọi lớp (vd. Giáo viên trực) thấy số liệu toàn trung tâm.
+  const all = seesAllClasses(user.actor);
   const [todaySessions, overdue, classes, charts] = await Promise.all([
     listSessions(user.actor, { from: today, to: today, personal: true }),
     listOverdueSessions(user.actor),
@@ -27,9 +30,9 @@ export default async function TeacherDashboardPage() {
       <h1 className="text-lg font-semibold">Xin chào, {user.name}</h1>
       <TodaySessions sessions={todaySessions} hrefOf={(s) => attendanceHref(s.id)} today={today} />
       <OverdueSessions sessions={overdue} hrefOf={attendanceHref} />
-      <DashboardCharts data={charts} scopeLabel="các lớp của tôi" />
+      <DashboardCharts data={charts} scopeLabel={all ? "toàn trung tâm" : "các lớp của tôi"} />
       <section className="grid gap-2">
-        <h2 className="font-medium">Lớp đang dạy</h2>
+        <h2 className="font-medium">{all ? "Lớp đang mở" : "Lớp đang dạy"}</h2>
         <ClassList classes={classes.filter((c) => c.status === "open")} basePath="/teacher/classes" />
       </section>
     </div>

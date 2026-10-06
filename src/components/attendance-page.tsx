@@ -6,13 +6,23 @@ import { SessionBadges } from "@/components/timetable";
 import { WEEKDAY_LABELS, isoWeekday } from "@/lib/dates";
 import { formatDate, formatTime, todayIso } from "@/lib/format";
 import { saveAttendanceAction, unlockAttendanceAction } from "@/server/actions/schedule";
-import type { Actor } from "@/server/guard";
+import { type Actor, can, isAdmin } from "@/server/guard";
 import { orNotFound } from "@/server/page";
 import { getAttendanceSheet } from "@/server/services/attendance";
 import { getSession } from "@/server/services/sessions";
 
 /** Trang điểm danh dùng chung cho Admin và GV; quyền trên buổi do service kiểm tra. */
-export async function AttendancePage({ actor, sessionId, backHref }: { actor: Actor; sessionId: string; backHref: string }) {
+export async function AttendancePage({
+  actor,
+  sessionId,
+  backHref,
+  area,
+}: {
+  actor: Actor;
+  sessionId: string;
+  backHref: string;
+  area: "admin" | "teacher";
+}) {
   const session = await orNotFound(getSession(actor, sessionId));
   const sheet = await getAttendanceSheet(actor, sessionId);
 
@@ -35,9 +45,9 @@ export async function AttendancePage({ actor, sessionId, backHref }: { actor: Ac
         </div>
       </div>
 
-      <SessionTabs role={actor.role} sessionId={sessionId} active="attendance" />
+      <SessionTabs area={area} sessionId={sessionId} active="attendance" show={{ attendance: true, stars: can(actor, "stars", "view") }} />
 
-      {sheet.locked && actor.role === "admin" && (
+      {sheet.locked && isAdmin(actor) && (
         <ConfirmButton
           label="Mở khóa điểm danh 24 giờ"
           confirmText="Mở khóa sửa điểm danh buổi này trong 24 giờ? Thao tác được ghi vào nhật ký."
@@ -55,7 +65,10 @@ export async function AttendancePage({ actor, sessionId, backHref }: { actor: Ac
         initialRows={sheet.rows}
         initialContent={session.content ?? ""}
         recorded={sheet.recorded}
-        blockedReason={sheet.blockedReason}
+        blockedReason={
+          sheet.blockedReason ??
+          (sheet.canSave ? null : sheet.recorded ? "Bạn chỉ có quyền xem điểm danh đã lưu, không có quyền sửa." : "Bạn không có quyền điểm danh buổi chưa điểm danh.")
+        }
         saveAction={saveAttendanceAction}
       />
     </div>

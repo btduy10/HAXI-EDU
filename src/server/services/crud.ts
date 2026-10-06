@@ -3,19 +3,24 @@ import type { AnyPgColumn, PgTable } from "drizzle-orm/pg-core";
 import { db } from "@/db";
 import { audit } from "../audit";
 import { notFound, translateDbError } from "../errors";
-import { type Actor, assertAdmin } from "../guard";
+import type { Menu, PermissionAction } from "@/lib/permissions";
+import { type Actor, assertAdmin, assertCan } from "../guard";
 
 type IdTable = PgTable & { id: AnyPgColumn };
 
-// Tạo/sửa/xóa chỉ dành cho Admin, luôn kèm nhật ký. Kiểu của Drizzle không suy ra được
+// Tạo/sửa mặc định chỉ dành cho Admin; truyền `menu` để mở cho vai trò được tick Thêm/Sửa ở menu đó.
+// Xóa luôn chỉ dành cho Admin. Mọi thao tác đều kèm nhật ký. Kiểu của Drizzle không suy ra được
 // qua tham số generic nên ép kiểu được gói gọn trong tệp này.
 export async function createRow<T extends IdTable>(
   actor: Actor,
   table: T,
   tableName: string,
   values: T["$inferInsert"],
+  menu?: Menu,
+  action: PermissionAction = "add",
 ): Promise<T["$inferSelect"]> {
-  assertAdmin(actor);
+  if (menu) assertCan(actor, menu, action);
+  else assertAdmin(actor);
   try {
     return await db.transaction(async (tx) => {
       const rows = (await tx.insert(table).values(values as never).returning()) as T["$inferSelect"][];
@@ -34,8 +39,10 @@ export async function updateRow<T extends IdTable>(
   tableName: string,
   id: string,
   values: Partial<T["$inferInsert"]>,
+  menu?: Menu,
 ): Promise<T["$inferSelect"]> {
-  assertAdmin(actor);
+  if (menu) assertCan(actor, menu, "edit");
+  else assertAdmin(actor);
   try {
     return await db.transaction(async (tx) => {
       const before = (await tx.select().from(table as PgTable).where(eq(table.id, id)).limit(1))[0];

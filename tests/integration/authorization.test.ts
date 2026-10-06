@@ -5,7 +5,7 @@ import * as catalog from "@/server/services/catalog";
 import * as classes from "@/server/services/classes";
 import * as students from "@/server/services/students";
 import { db } from "@/db";
-import { sessions } from "@/db/schema";
+import { sessions, teachers as teachersTable } from "@/db/schema";
 import { type Fixture, resetDb, seedFixture } from "./helpers";
 
 let f: Fixture;
@@ -70,7 +70,11 @@ describe("phân quyền theo lớp (chống IDOR)", () => {
 describe("chức năng chỉ dành cho Admin", () => {
   it("GV bị từ chối ở mọi service quản trị", async () => {
     const denied = { code: "FORBIDDEN" };
-    await expect(catalog.listTeachers(f.actorA)).rejects.toMatchObject(denied);
+    // Danh sách giáo viên dùng cho ô chọn: không có quyền xem menu Giáo viên thì không nhận điện thoại, email.
+    await db.update(teachersTable).set({ phone: "0911111111", email: "a@haxi.example" });
+    expect((await catalog.listTeachers(f.actorA)).every((t) => t.phone === null && t.email === null)).toBe(true);
+    expect((await catalog.listTeachers(f.admin)).every((t) => t.phone === "0911111111")).toBe(true);
+    await expect(catalog.updateTeacher(f.actorA, f.teacherA.id, { code: "GVA", fullName: "Tự sửa", phone: null, email: null, status: "active" })).rejects.toMatchObject(denied);
     await expect(catalog.createRoom(f.actorA, { name: "Phòng lậu", capacity: 5 })).rejects.toMatchObject(denied);
     await expect(catalog.deleteCourse(f.actorA, f.course.id)).rejects.toMatchObject(denied);
     await expect(students.listStudents(f.actorA)).rejects.toMatchObject(denied);

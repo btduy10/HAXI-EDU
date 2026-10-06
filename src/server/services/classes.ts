@@ -5,7 +5,7 @@ import { classTeachers, classes, courses, enrollments, rooms, sessions, students
 import type { classInput, classTeacherInput, enrollInput, leaveInput } from "@/lib/validation/entities";
 import { audit } from "../audit";
 import { AppError, notFound, translateDbError } from "../errors";
-import { type Actor, allowedClassIds, assertAdmin, assertClassAccess } from "../guard";
+import { type Actor, allowedClassIds, assertAdmin, assertCan, assertCanAny, assertClassAccess } from "../guard";
 import { createRow, deleteRow, updateRow } from "./crud";
 
 const activeCount = sql<number>`(
@@ -13,7 +13,7 @@ const activeCount = sql<number>`(
   where ${enrollments.classId} = ${classes.id} and ${enrollments.status} = 'active'
 )`;
 
-/** Admin thấy mọi lớp; GV chỉ thấy lớp được phân công. */
+/** Chỉ các lớp trong phạm vi của người dùng (Admin và phạm vi "Tất cả lớp": mọi lớp). */
 export async function listClasses(actor: Actor) {
   const allowed = await allowedClassIds(actor);
   if (allowed && allowed.length === 0) return [];
@@ -65,9 +65,12 @@ export async function getClass(actor: Actor, classId: string) {
 }
 
 export const createClass = (actor: Actor, data: z.output<typeof classInput>) =>
-  createRow(actor, classes, "classes", data);
-export const updateClass = (actor: Actor, id: string, data: z.output<typeof classInput>) =>
-  updateRow(actor, classes, "classes", id, data);
+  createRow(actor, classes, "classes", data, "classes");
+export async function updateClass(actor: Actor, id: string, data: z.output<typeof classInput>) {
+  assertCan(actor, "classes", "edit");
+  await assertClassAccess(actor, id);
+  return updateRow(actor, classes, "classes", id, data, "classes");
+}
 
 export async function deleteClass(actor: Actor, id: string) {
   assertAdmin(actor);
@@ -92,13 +95,27 @@ export async function listClassTeachers(actor: Actor, classId: string) {
     .orderBy(asc(classTeachers.role), asc(teachers.fullName));
 }
 
-export const assignTeacher = (actor: Actor, data: z.output<typeof classTeacherInput>) =>
-  createRow(actor, classTeachers, "class_teachers", data);
-export const unassignTeacher = (actor: Actor, id: string) => deleteRow(actor, classTeachers, "class_teachers", id);
+// Phân công/bỏ phân công giáo viên là một phần của "Sửa lớp".
+export async function assignTeacher(actor: Actor, data: z.output<typeof classTeacherInput>) {
+  assertCan(actor, "classes", "edit");
+  await assertClassAccess(actor, data.classId);
+  return createRow(actor, classTeachers, "class_teachers", data, "classes", "edit");
+}
+export async function unassignTeacher(actor: Actor, id: string) {
+  assertCan(actor, "classes", "edit");
+  await db.transaction(async (tx) => {
+    const [before] = await tx.select().from(classTeachers).where(eq(classTeachers.id, id)).limit(1);
+    if (!before) throw notFound();
+    await assertClassAccess(actor, before.classId, tx);
+    await tx.delete(classTeachers).where(eq(classTeachers.id, id));
+    await audit(tx, { userId: actor.userId, action: "delete", tableName: "class_teachers", recordId: id, oldValue: before });
+  });
+}
 
-/** Toàn bộ lịch sử ghi danh của lớp (Admin). */
+/** Toàn bộ lịch sử ghi danh của lớp. */
 export async function listEnrollments(actor: Actor, classId: string) {
-  assertAdmin(actor);
+  assertCanAny(actor, ["enrollments", "view"], ["classes", "view"]);
+  await assertClassAccess(actor, classId);
   return db
     .select({
       id: enrollments.id,
@@ -116,7 +133,8 @@ export async function listEnrollments(actor: Actor, classId: string) {
 }
 
 export async function enrollStudent(actor: Actor, data: z.output<typeof enrollInput>) {
-  assertAdmin(actor);
+  assertCan(actor, "enrollments", "add");
+  await assertClassAccess(actor, data.classId);
   try {
     return await db.transaction(async (tx) => {
       // Khóa dòng lớp để hai thao tác ghi danh đồng thời không vượt sĩ số.
@@ -148,10 +166,11 @@ export async function enrollStudent(actor: Actor, data: z.output<typeof enrollIn
 
 /** Cho học viên rời lớp từ ngày `leftAt` (giữ lịch sử, không xóa). */
 export async function leaveEnrollment(actor: Actor, data: z.output<typeof leaveInput>) {
-  assertAdmin(actor);
+  assertCan(actor, "enrollments", "edit");
   return db.transaction(async (tx) => {
     const [before] = await tx.select().from(enrollments).where(eq(enrollments.id, data.id)).limit(1);
     if (!before) throw notFound("ghi danh");
+    await assertClassAccess(actor, before.classId, tx);
     if (before.status !== "active") throw new AppError("CONFLICT", "Ghi danh này đã kết thúc.");
     if (data.leftAt < before.joinedAt) {
       throw new AppError("VALIDATION", "Ngày rời lớp phải sau ngày vào lớp.", { leftAt: "Phải sau ngày vào lớp" });

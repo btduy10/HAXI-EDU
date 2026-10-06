@@ -5,13 +5,15 @@ import { orNotFound, uuidParam } from "@/server/page";
 import { listRooms, listTeachers, listTimeSlots } from "@/server/services/catalog";
 import { getClass, listClassTeachers } from "@/server/services/classes";
 import { listClassStudents } from "@/server/services/students";
-import { requirePageUser } from "@/server/session";
+import { redirect } from "next/navigation";
+import { requireMenu } from "@/server/session";
 import { MakeupForm } from "./makeup-form";
 
 export const metadata: Metadata = { title: "Thêm buổi bù" };
 
 export default async function MakeupPage({ searchParams }: PageProps<"/admin/sessions/makeup">) {
-  const { actor } = await requirePageUser("admin");
+  const { actor, can } = await requireMenu("timetable");
+  if (!can("add")) redirect("/admin/timetable");
   const raw = (await searchParams).classId;
   const classId = uuidParam((Array.isArray(raw) ? raw[0] : raw) ?? "");
   const cls = await orNotFound(getClass(actor, classId));

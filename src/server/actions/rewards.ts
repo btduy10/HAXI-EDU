@@ -1,5 +1,6 @@
 "use server";
 
+import { permissionConfigInput } from "@/lib/permissions";
 import { idOnly } from "@/lib/validation/common";
 import { approveInput, classIdOnly, giftInput, giftUpdate, handoverIdInput, settingsInput, tierInput } from "@/lib/validation/rewards";
 import { runAction } from "../action";
@@ -26,3 +27,6 @@ export const cancelApprovalAction = async (input: unknown) =>
   runAction(handoverIdInput, input, (a, d) => summaries.cancelApproval(a, d.handoverId), ADMIN);
 
 export const updateSettingsAction = async (input: unknown) => runAction(settingsInput, input, reports.updateSettings, ADMIN);
+// Đổi quyền ảnh hưởng cả khu vực giảng dạy nên làm mới toàn bộ.
+export const updatePermissionsAction = async (input: unknown) =>
+  runAction(permissionConfigInput, input, reports.updatePermissions, "/");

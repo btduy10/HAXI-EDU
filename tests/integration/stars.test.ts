@@ -2,6 +2,7 @@ import { eq, sql } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/db";
 import { appSettings, auditLogs, avatars, levels, sessions, starCriteria, starLogs, students } from "@/db/schema";
+import { DEFAULT_PERMISSIONS } from "@/lib/permissions";
 import * as avatarSvc from "@/server/services/avatars";
 import * as stars from "@/server/services/stars";
 import { type Fixture, resetDb, seedFixture } from "./helpers";
@@ -232,8 +233,11 @@ describe("Admin quản lý tiêu chí, cấp bậc, kho avatar", () => {
     await expect(stars.createCriteria(f.actorA, { name: "x", stars: 10, active: true, type: "reward" })).rejects.toMatchObject(denied);
     await expect(stars.updateLevel(f.actorA, level!.id, { levelNo: 1, name: "x", minStars: 0, frameColor: "#000000" })).rejects.toMatchObject(denied);
     await expect(avatarSvc.updateAvatar(f.actorA, avatarId["Pico"]!, { name: "x", requiredLevelId: level!.id, active: true })).rejects.toMatchObject(denied);
-    await expect(stars.listRecentStarLogs(f.actorA)).rejects.toMatchObject(denied);
-    await expect(avatarSvc.listAvatarCatalog(f.actorA)).rejects.toMatchObject(denied);
+    await expect(avatarSvc.giftAvatar(f.actorA, a1(), avatarId["Pico"]!)).rejects.toMatchObject(denied);
+    // Không được tick Xem ở menu Sao & Avatar thì không xem được sổ cái và kho avatar.
+    const noStars = { ...f.actorA, perms: { scope: "own" as const, menus: { ...DEFAULT_PERMISSIONS.teacher.menus, stars: { view: false, add: false, edit: false } } } };
+    await expect(stars.listRecentStarLogs(noStars)).rejects.toMatchObject(denied);
+    await expect(avatarSvc.listAvatarCatalog(noStars)).rejects.toMatchObject(denied);
   });
 
   it("đổi mốc sao của cấp làm đổi cấp học viên và tự đổi avatar bị khóa; bảng cấp phải tăng dần", async () => {

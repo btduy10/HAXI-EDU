@@ -1,0 +1,183 @@
+import { eq } from "drizzle-orm";
+import { beforeEach, describe, expect, it } from "vitest";
+import { db } from "@/db";
+import { auditLogs, sessions, students as studentsTable } from "@/db/schema";
+import { DEFAULT_PERMISSIONS, type Menu, type MenuPermission, type RolePermissions, normalizePermissions } from "@/lib/permissions";
+import { type Actor, can } from "@/server/guard";
+import { getPermissionConfig } from "@/server/settings";
+import * as attendance from "@/server/services/attendance";
+import * as catalog from "@/server/services/catalog";
+import * as classes from "@/server/services/classes";
+import * as reports from "@/server/services/reports";
+import * as sessionSvc from "@/server/services/sessions";
+import * as stars from "@/server/services/stars";
+import * as students from "@/server/services/students";
+import { teacherTimesheet } from "@/server/services/timesheet";
+import { type Fixture, resetDb, seedFixture } from "./helpers";
+
+let f: Fixture;
+let sessionA: typeof sessions.$inferSelect;
+let sessionB: typeof sessions.$inferSelect;
+const now = new Date("2026-01-13T05:00:00Z"); // 13/01/2026, 12:00 giờ Việt Nam
+const FULL: MenuPermission = { view: true, add: true, edit: true };
+const VIEW: MenuPermission = { view: true, add: false, edit: false };
+
+/** Người dùng với bảng quyền tùy chỉnh (như khi Admin tick trong Cấu hình). */
+const withPerms = (actor: Actor, scope: RolePermissions["scope"], menus: Partial<Record<Menu, MenuPermission>>): Actor => ({
+  ...actor,
+  perms: { scope, menus: { ...DEFAULT_PERMISSIONS.teacher.menus, ...menus } },
+});
+const entries = (rows: { studentId: string }[], status: "present" | "absent" = "present") =>
+  rows.map((r) => ({ studentId: r.studentId, status, note: null }));
+
+beforeEach(async () => {
+  await resetDb();
+  f = await seedFixture();
+  const base = { date: "2026-01-13", startTime: "08:00", endTime: "09:30" };
+  [sessionA, sessionB] = (await db
+    .insert(sessions)
+    .values([
+      { ...base, classId: f.classA.id, teacherId: f.teacherA.id },
+      { ...base, classId: f.classB.id, teacherId: f.teacherB.id, startTime: "10:00", endTime: "11:30" },
+    ])
+    .returning()) as [typeof sessions.$inferSelect, typeof sessions.$inferSelect];
+});
+
+describe("bảng phân quyền", () => {
+  it("chuẩn hóa: thiếu thì lấy mặc định, không có Xem thì bỏ Thêm/Sửa, bỏ thao tác menu không hỗ trợ", () => {
+    expect(normalizePermissions(null)).toEqual(DEFAULT_PERMISSIONS);
+    const config = normalizePermissions({
+      teacher: { scope: "all", menus: { students: { view: false, add: true, edit: true }, timesheet: FULL } },
+      duty_teacher: { scope: "lạ" },
+    });
+    expect(config.teacher.scope).toBe("all");
+    expect(config.teacher.menus.students).toEqual({ view: false, add: false, edit: false });
+    expect(config.teacher.menus.timesheet).toEqual({ view: true, add: false, edit: false });
+    expect(config.teacher.menus.attendance).toEqual(FULL); // không gửi → giữ mặc định
+    expect(config.duty_teacher).toEqual(DEFAULT_PERMISSIONS.duty_teacher);
+  });
+
+  it("chỉ Admin lưu được; lưu xong có hiệu lực và có nhật ký", async () => {
+    const next = normalizePermissions({ ...DEFAULT_PERMISSIONS, duty_teacher: { scope: "own", menus: { students: VIEW } } });
+    await expect(reports.updatePermissions(f.actorA, next)).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(reports.readPermissions(f.actorA)).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(await getPermissionConfig()).toEqual(DEFAULT_PERMISSIONS);
+
+    await reports.updatePermissions(f.admin, next);
+    const saved = await getPermissionConfig();
+    expect(saved.duty_teacher.scope).toBe("own");
+    expect(saved.duty_teacher.menus.students).toEqual(VIEW);
+    const [log] = await db.select().from(auditLogs).where(eq(auditLogs.action, "permissions_updated"));
+    expect(log).toMatchObject({ userId: f.admin.userId, tableName: "app_settings" });
+  });
+
+  it("Admin luôn có toàn quyền; vai trò lạ không có quyền gì hơn Giáo viên", () => {
+    expect(can(f.admin, "rewards", "edit")).toBe(true);
+    expect(can(f.actorA, "attendance", "add")).toBe(true);
+    expect(can(f.actorA, "students", "view")).toBe(false);
+    expect(can({ ...f.actorA, role: "khác" as never }, "students", "view")).toBe(false);
+  });
+});
+
+describe("Giáo viên trực (mặc định: thấy mọi lớp, hỗ trợ điểm danh)", () => {
+  const duty = (): Actor => ({ userId: f.actorB.userId, role: "duty_teacher", teacherId: null });
+
+  it("thấy mọi lớp và mọi buổi, điểm danh được lớp bất kỳ", async () => {
+    expect((await classes.listClasses(duty())).map((c) => c.code).sort()).toEqual(["A", "B"]);
+    expect(await sessionSvc.listSessions(duty(), { from: "2026-01-13", to: "2026-01-13", personal: true })).toHaveLength(2);
+    const sheet = await attendance.getAttendanceSheet(duty(), sessionA.id, now);
+    expect(sheet.canSave).toBe(true);
+    await expect(attendance.saveAttendance(duty(), { sessionId: sessionA.id, content: null, entries: entries(sheet.rows) }, now)).resolves.toMatchObject({ changed: 2 });
+    expect(await attendance.listOverdueSessions(duty(), new Date("2026-01-14T05:00:00Z"))).toHaveLength(1); // buổi lớp B chưa điểm danh
+  });
+
+  it("không chấm sao, không sửa lịch, không xem học viên, không mở khóa, không xóa", async () => {
+    const [criteria] = await catalogCriteria();
+    const denied = { code: "FORBIDDEN" };
+    await expect(stars.awardStars(duty(), { sessionId: sessionA.id, criteriaId: criteria!, studentIds: [f.students[0]!.id], note: null }, now)).rejects.toMatchObject(denied);
+    await expect(sessionSvc.cancelSession(duty(), { id: sessionA.id, note: null })).rejects.toMatchObject(denied);
+    await expect(students.listStudentsPage(duty(), undefined, 1)).rejects.toMatchObject(denied);
+    await expect(attendance.unlockAttendance(duty(), sessionA.id, now)).rejects.toMatchObject(denied);
+    await expect(sessionSvc.deleteSession(duty(), sessionA.id)).rejects.toMatchObject(denied);
+    await expect(reports.updatePermissions(duty(), DEFAULT_PERMISSIONS)).rejects.toMatchObject(denied);
+  });
+});
+
+async function catalogCriteria() {
+  const { starCriteria } = await import("@/db/schema");
+  const rows = await db.insert(starCriteria).values({ name: "+1", stars: 1, type: "reward" }).returning();
+  return rows.map((r) => r.id);
+}
+
+describe("quyền theo menu", () => {
+  it("điểm danh: Thêm cho buổi chưa điểm danh, Sửa cho buổi đã lưu, chỉ Xem thì không lưu được", async () => {
+    const addOnly = withPerms(f.actorA, "own", { attendance: { view: true, add: true, edit: false } });
+    const viewOnly = withPerms(f.actorA, "own", { attendance: VIEW });
+    const none = withPerms(f.actorA, "own", { attendance: { view: false, add: false, edit: false } });
+    const sheet = await attendance.getAttendanceSheet(viewOnly, sessionA.id, now);
+    expect(sheet.canSave).toBe(false);
+    const input = { sessionId: sessionA.id, content: null, entries: entries(sheet.rows) };
+    await expect(attendance.getAttendanceSheet(none, sessionA.id, now)).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(attendance.saveAttendance(viewOnly, input, now)).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(attendance.saveAttendance(addOnly, input, now)).resolves.toBeDefined();
+    await expect(attendance.saveAttendance(addOnly, { ...input, entries: entries(sheet.rows, "absent") }, now)).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(attendance.saveAttendance(f.actorA, { ...input, entries: entries(sheet.rows, "absent") }, now)).resolves.toMatchObject({ changed: 2 });
+  });
+
+  it("học viên: chỉ thấy học viên lớp mình, không có thông tin riêng tư; thêm/sửa không ghi được thông tin đó", async () => {
+    await db.update(studentsTable).set({ guardianName: "Phụ huynh", note: "ghi chú", birthDate: "2015-01-01", gender: "male" });
+    const viewer = withPerms(f.actorA, "own", { students: FULL });
+    const page = await students.listStudentsPage(viewer, undefined, 1);
+    expect(page.rows.map((s) => s.code).sort()).toEqual(["A1", "A2"]);
+    expect(page.rows.every((s) => s.phone === null && s.guardianName === null && s.note === null && s.birthDate === null && s.gender === null)).toBe(true);
+    expect((await students.listStudentsPage(withPerms(f.actorA, "all", { students: VIEW }), undefined, 1)).total).toBe(6);
+    expect((await students.listStudentsPage(f.admin, "A1", 1)).rows[0]).toMatchObject({ phone: "0900000000", guardianName: "Phụ huynh" });
+
+    const input = { code: "A1", fullName: "Tên mới", birthDate: null, gender: null, schoolGrade: 5, guardianName: "Chèn", phone: "0999999999", status: "active" as const, note: "chèn" };
+    const updated = await students.updateStudent(viewer, f.students[0]!.id, input);
+    expect(updated).toMatchObject({ fullName: "Tên mới", phone: null });
+    const [stored] = await db.select().from(studentsTable).where(eq(studentsTable.id, f.students[0]!.id));
+    expect(stored).toMatchObject({ fullName: "Tên mới", schoolGrade: 5, phone: "0900000000", guardianName: "Phụ huynh", note: "ghi chú", birthDate: "2015-01-01" });
+    // Học viên lớp khác: không sửa được, kể cả khi gửi đúng id.
+    await expect(students.updateStudent(viewer, f.students[2]!.id, input)).rejects.toMatchObject({ code: "NOT_FOUND" });
+
+    await students.createStudent(viewer, { ...input, code: "MOI" });
+    const [created] = await db.select().from(studentsTable).where(eq(studentsTable.code, "MOI"));
+    expect(created).toMatchObject({ phone: null, guardianName: null, note: null });
+    // Chỉ Xem thì không thêm/sửa; xóa luôn chỉ Admin dù được tick hết.
+    await expect(students.createStudent(withPerms(f.actorA, "own", { students: VIEW }), { ...input, code: "X9" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(students.deleteStudent(viewer, created!.id)).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+
+  it("thời khóa biểu và ghi danh: được tick thì làm được trong phạm vi lớp mình, lớp khác coi như không tồn tại", async () => {
+    const scheduler = withPerms(f.actorA, "own", { timetable: FULL, enrollments: FULL });
+    await expect(sessionSvc.updateSession(scheduler, { id: sessionA.id, startTime: "08:30", endTime: "09:30", roomId: null, teacherId: f.teacherA.id, content: null, note: null })).resolves.toBeDefined();
+    await expect(sessionSvc.cancelSession(scheduler, { id: sessionB.id, note: null })).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(sessionSvc.deleteSession(scheduler, sessionA.id)).rejects.toMatchObject({ code: "FORBIDDEN" });
+
+    expect((await students.listStudents(scheduler)).every((s) => s.phone === null)).toBe(true);
+    await expect(classes.enrollStudent(scheduler, { classId: f.classA.id, studentId: f.students[4]!.id, joinedAt: "2026-01-10" })).resolves.toBeDefined();
+    await expect(classes.enrollStudent(scheduler, { classId: f.classB.id, studentId: f.students[5]!.id, joinedAt: "2026-01-10" })).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(classes.listEnrollments(scheduler, f.classB.id)).rejects.toMatchObject({ code: "NOT_FOUND" });
+    // Cùng quyền nhưng phạm vi "Tất cả lớp" thì sửa được lớp B.
+    await expect(sessionSvc.cancelSession(withPerms(f.actorA, "all", { timetable: FULL }), { id: sessionB.id, note: null })).resolves.toBeDefined();
+  });
+
+  it("danh mục: tick Thêm/Sửa mới ghi được; xóa chỉ Admin", async () => {
+    const editor = withPerms(f.actorA, "own", { rooms: FULL });
+    const room = await catalog.createRoom(editor, { name: "Lab mới", capacity: 5 });
+    await expect(catalog.updateRoom(editor, room.id, { name: "Lab mới", capacity: 9 })).resolves.toMatchObject({ capacity: 9 });
+    await expect(catalog.deleteRoom(editor, room.id)).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(catalog.createCourse(editor, { name: "Khóa lậu", description: null, totalSessions: 3 })).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+
+  it("chấm công: phạm vi lớp của mình chỉ thấy công của chính mình", async () => {
+    await db.update(sessions).set({ status: "done" });
+    const range = { from: "2026-01-01", to: "2026-01-31" };
+    await expect(teacherTimesheet(f.actorA, range, now)).rejects.toMatchObject({ code: "FORBIDDEN" });
+    const own = await teacherTimesheet(withPerms(f.actorA, "own", { timesheet: VIEW }), { ...range, teacherId: f.teacherB.id }, now);
+    expect(own.summary.map((s) => s.teacherCode)).toEqual(["GVA"]);
+    const all = await teacherTimesheet(withPerms(f.actorA, "all", { timesheet: VIEW }), range, now);
+    expect(all.summary.map((s) => s.teacherCode)).toEqual(["GVA", "GVB"]);
+  });
+});

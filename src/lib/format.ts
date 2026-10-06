@@ -27,7 +27,7 @@ export const LABELS = {
   classStatus: { open: "Đang mở", closed: "Đã đóng" },
   classTeacherRole: { main: "GV chính", assistant: "Trợ giảng" },
   enrollmentStatus: { active: "Đang học", left: "Đã rời lớp" },
-  role: { admin: "Quản trị", teacher: "Giáo viên" },
+  role: { admin: "Quản trị", teacher: "Giáo viên", duty_teacher: "Giáo viên trực" },
 } as const;
 
 export const toOptions = (labels: Record<string, string>) =>

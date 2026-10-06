@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { LABELS, formatDate, toOptions } from "@/lib/format";
 import { createStudentAction, deleteStudentAction, updateStudentAction } from "@/server/actions/admin";
 import { listStudentsPage } from "@/server/services/students";
-import { requirePageUser } from "@/server/session";
+import { requireMenu } from "@/server/session";
 
 export const metadata: Metadata = { title: "Học viên" };
 
@@ -24,7 +24,12 @@ const fields: Field[] = [
 ];
 
 export default async function StudentsPage({ searchParams }: PageProps<"/admin/students">) {
-  const { actor } = await requirePageUser("admin");
+  const { actor, role, can } = await requireMenu("students");
+  const admin = role === "admin";
+  // Ngoài Admin: không hiện và không nhập thông tin riêng tư của học viên.
+  const PRIVATE = ["birthDate", "gender", "guardianName", "phone", "note"];
+  const formFields = admin ? fields : fields.filter((f) => !PRIVATE.includes(f.name));
+  const columns = ["Họ tên", "Mã HV", ...(admin ? ["Ngày sinh"] : []), "Khối", ...(admin ? ["Phụ huynh", "Điện thoại"] : []), "Trạng thái"];
   const raw = (await searchParams).q;
   const q = (Array.isArray(raw) ? raw[0] : raw)?.slice(0, 100) ?? "";
   const rawPage = (await searchParams).page;
@@ -50,9 +55,11 @@ export default async function StudentsPage({ searchParams }: PageProps<"/admin/s
             Tìm
           </Button>
         </form>
-        <LinkButton variant="outline" className="h-10" href="/admin/students/import">
-          Nhập từ Excel
-        </LinkButton>
+        {admin && (
+          <LinkButton variant="outline" className="h-10" href="/admin/students/import">
+            Nhập từ Excel
+          </LinkButton>
+        )}
       </div>
       <CrudSection
         title="Học viên"
@@ -95,17 +102,16 @@ export default async function StudentsPage({ searchParams }: PageProps<"/admin/s
             </nav>
           )
         }
-        columns={["Họ tên", "Mã HV", "Ngày sinh", "Khối", "Phụ huynh", "Điện thoại", "Trạng thái"]}
+        columns={columns}
         rows={students.map((s) => ({
           id: s.id,
           href: `/admin/students/${s.id}`,
           cells: [
             s.fullName,
             s.code,
-            formatDate(s.birthDate),
+            ...(admin ? [formatDate(s.birthDate)] : []),
             s.schoolGrade ? String(s.schoolGrade) : "",
-            s.guardianName ?? "",
-            s.phone ?? "",
+            ...(admin ? [s.guardianName ?? "", s.phone ?? ""] : []),
             LABELS.studentStatus[s.status],
           ],
           values: {
@@ -120,10 +126,10 @@ export default async function StudentsPage({ searchParams }: PageProps<"/admin/s
             note: s.note ?? "",
           },
         }))}
-        fields={fields}
-        createAction={createStudentAction}
-        updateAction={updateStudentAction}
-        deleteAction={deleteStudentAction}
+        fields={formFields}
+        createAction={can("add") ? createStudentAction : undefined}
+        updateAction={can("edit") ? updateStudentAction : undefined}
+        deleteAction={admin ? deleteStudentAction : undefined}
         detailLabel="Sao & avatar"
         emptyText={q ? "Không tìm thấy học viên phù hợp." : "Chưa có học viên."}
       />

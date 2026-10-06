@@ -2,7 +2,7 @@ import { and, asc, between, eq, isNotNull, ne, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { classes, courses, rooms, sessions, teachers } from "@/db/schema";
 import { todayIso } from "@/lib/format";
-import { type Actor, assertAdmin } from "../guard";
+import { type Actor, assertCan, seesAllClasses } from "../guard";
 
 export type TimesheetFilters = {
   from: string;
@@ -18,17 +18,21 @@ const minutesOf = (time: string) => Number(time.slice(0, 2)) * 60 + Number(time.
 
 /**
  * Chấm công giáo viên: các buổi trong khoảng ngày, tính cho người THỰC DẠY (GV dạy thay nếu có, không thì GV của buổi).
- * Buổi đã hủy không tính. Chỉ buổi đã điểm danh mới được tính là một công. Chỉ Admin xem được.
+ * Buổi đã hủy không tính. Chỉ buổi đã điểm danh mới được tính là một công.
+ * Phạm vi "lớp của mình": chỉ thấy công của chính mình.
  */
 export async function teacherTimesheet(actor: Actor, filters: TimesheetFilters, now: Date = new Date()) {
-  assertAdmin(actor);
+  assertCan(actor, "timesheet", "view");
+  const ownOnly = !seesAllClasses(actor);
+  if (ownOnly && !actor.teacherId) return { rows: [], summary: [] };
   const effectiveTeacherId = sql<string>`coalesce(${sessions.substituteTeacherId}, ${sessions.teacherId})`;
   const conditions = [
     between(sessions.date, filters.from, filters.to),
     ne(sessions.status, "cancelled"),
     isNotNull(effectiveTeacherId),
   ];
-  if (filters.teacherId) conditions.push(eq(effectiveTeacherId, filters.teacherId));
+  const teacherId = ownOnly ? actor.teacherId : filters.teacherId;
+  if (teacherId) conditions.push(eq(effectiveTeacherId, teacherId));
   if (filters.classId) conditions.push(eq(sessions.classId, filters.classId));
 
   const found = await db

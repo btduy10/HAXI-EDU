@@ -110,8 +110,18 @@ test("GV không ghi sao, không xem hồ sơ, không đổi avatar của học v
   await expect(page).toHaveURL(/\/teacher\/dashboard$/);
   expect((await page.goto(`/teacher/sessions/${otherSessionId}/stars`))!.status()).toBe(404);
   expect((await page.goto(`/teacher/students/${otherStudentId}`))!.status()).toBe(404);
-  await page.goto("/admin/stars");
-  await expect(page).toHaveURL(/\/teacher\/dashboard$/);
+  // GV xem được menu Sao & Avatar nhưng chỉ đọc: không có nút thêm/sửa/xóa cấu hình, không có mục tặng avatar.
+  expect((await page.goto(`/admin/sessions/${otherSessionId}/stars`))!.status()).toBe(404);
+  await page.goto("/admin/stars?tab=criteria");
+  await expect(page.getByRole("heading", { name: /Tiêu chí sao/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Thêm" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /^(Sửa|Xóa) / })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Tặng avatar" })).toHaveCount(0);
+  await page.goto("/admin/stars?tab=avatars");
+  await expect(page.getByRole("button", { name: "Sửa" })).toHaveCount(0);
+  await page.goto("/admin/stars?tab=ledger");
+  await expect(page.getByText("RB-NC01")).toHaveCount(0);
+  await expectNoHorizontalScroll(page);
 });
 
 test("Admin: tiêu chí, cấp bậc, kho avatar, tặng avatar, sổ cái", async ({ page }) => {

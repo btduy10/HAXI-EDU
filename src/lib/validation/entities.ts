@@ -108,7 +108,7 @@ export const accountInput = z
       .toLowerCase()
       .regex(/^[a-z0-9._-]{3,32}$/, "3–32 ký tự: chữ thường, số, dấu . _ -"),
     name: reqText(100),
-    role: z.enum(["admin", "teacher"]),
+    role: z.enum(["admin", "teacher", "duty_teacher"]),
     teacherId: optId,
     password,
   })
@@ -127,7 +127,7 @@ export const accountEditInput = z
       .toLowerCase()
       .regex(/^[a-z0-9._-]{3,32}$/, "3–32 ký tự: chữ thường, số, dấu . _ -"),
     name: reqText(100),
-    role: z.enum(["admin", "teacher"]),
+    role: z.enum(["admin", "teacher", "duty_teacher"]),
     teacherId: optId,
   })
   .refine((v) => v.role !== "teacher" || v.teacherId, {

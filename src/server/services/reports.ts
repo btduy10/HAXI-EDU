@@ -8,7 +8,8 @@ import type { settingsInput } from "@/lib/validation/rewards";
 import { audit } from "../audit";
 import type { ExportDoc } from "../export";
 import { type Actor, assertAdmin } from "../guard";
-import { SETTING_DEFAULTS, type SettingKey, getSettings } from "../settings";
+import { type PermissionConfig, normalizePermissions } from "@/lib/permissions";
+import { PERMISSIONS_KEY, SETTING_DEFAULTS, type SettingKey, getPermissionConfig, getSettings } from "../settings";
 import { type SessionFilters, listSessions } from "./sessions";
 import { getClassReport, getClassSummary } from "./summaries";
 
@@ -209,4 +210,26 @@ export async function updateSettings(actor: Actor, data: z.output<typeof setting
     await audit(tx, { userId: actor.userId, action: "settings_updated", tableName: "app_settings", oldValue: before, newValue: data });
   });
   return data;
+}
+
+// ---------- Phân quyền theo vai trò ----------
+
+export async function readPermissions(actor: Actor) {
+  assertAdmin(actor);
+  return getPermissionConfig();
+}
+
+/** Admin lưu bảng phân quyền của Giáo viên và Giáo viên trực. Có hiệu lực ngay ở yêu cầu kế tiếp của mọi người dùng. */
+export async function updatePermissions(actor: Actor, data: PermissionConfig) {
+  assertAdmin(actor);
+  const value = normalizePermissions(data);
+  await db.transaction(async (tx) => {
+    const before = await getPermissionConfig(tx);
+    await tx
+      .insert(appSettings)
+      .values({ key: PERMISSIONS_KEY, value })
+      .onConflictDoUpdate({ target: appSettings.key, set: { value, updatedAt: new Date() } });
+    await audit(tx, { userId: actor.userId, action: "permissions_updated", tableName: "app_settings", oldValue: before, newValue: value });
+  });
+  return value;
 }

@@ -14,7 +14,7 @@ import {
 } from "@/server/actions/admin";
 import { listHolidays, listRooms, listTimeSlots } from "@/server/services/catalog";
 import { listClasses } from "@/server/services/classes";
-import { requirePageUser } from "@/server/session";
+import { requireMenu } from "@/server/session";
 
 export const metadata: Metadata = { title: "Phòng & Ca học" };
 
@@ -36,7 +36,8 @@ const slotFields: Field[] = [
 ];
 
 export default async function RoomsSlotsPage() {
-  const { actor } = await requirePageUser("admin");
+  const { actor, role, can } = await requireMenu("rooms");
+  const admin = role === "admin";
   const [rooms, slots, holidays, classes] = await Promise.all([
     listRooms(actor),
     listTimeSlots(actor),
@@ -68,9 +69,9 @@ export default async function RoomsSlotsPage() {
           values: { name: r.name, capacity: String(r.capacity) },
         }))}
         fields={roomFields}
-        createAction={createRoomAction}
-        updateAction={updateRoomAction}
-        deleteAction={deleteRoomAction}
+        createAction={can("add") ? createRoomAction : undefined}
+        updateAction={can("edit") ? updateRoomAction : undefined}
+        deleteAction={admin ? deleteRoomAction : undefined}
       />
       <CrudSection
         title="Ca học"
@@ -82,9 +83,9 @@ export default async function RoomsSlotsPage() {
           values: { name: s.name, defaultStart: formatTime(s.defaultStart), defaultEnd: formatTime(s.defaultEnd) },
         }))}
         fields={slotFields}
-        createAction={createTimeSlotAction}
-        updateAction={updateTimeSlotAction}
-        deleteAction={deleteTimeSlotAction}
+        createAction={can("add") ? createTimeSlotAction : undefined}
+        updateAction={can("edit") ? updateTimeSlotAction : undefined}
+        deleteAction={admin ? deleteTimeSlotAction : undefined}
       />
       <CrudSection
         title="Ngày nghỉ"
@@ -95,8 +96,8 @@ export default async function RoomsSlotsPage() {
           values: {},
         }))}
         fields={holidayFields}
-        createAction={createHolidayAction}
-        deleteAction={deleteHolidayAction}
+        createAction={can("add") ? createHolidayAction : undefined}
+        deleteAction={admin ? deleteHolidayAction : undefined}
       />
     </div>
   );

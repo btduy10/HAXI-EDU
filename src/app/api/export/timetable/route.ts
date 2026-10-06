@@ -2,11 +2,12 @@ import { addDays, daysBetween, parseIsoDate } from "@/lib/dates";
 import { todayIso } from "@/lib/format";
 import { AppError } from "@/server/errors";
 import { handleExport } from "@/server/export-route";
+import { can } from "@/server/guard";
 import { timetableDoc } from "@/server/services/reports";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/** Xuất TKB. Admin lọc theo GV/lớp/phòng; GV chỉ nhận lịch của mình (service giới hạn phạm vi). */
+/** Xuất TKB. Ai được xem menu Thời khóa biểu thì lọc theo GV/lớp/phòng; còn lại chỉ nhận lịch cá nhân (service giới hạn phạm vi). */
 export async function GET(request: Request) {
   return handleExport(request, "timetable", null, async (actor) => {
     const params = new URL(request.url).searchParams;
@@ -24,7 +25,7 @@ export async function GET(request: Request) {
       classId: uuid("classId"),
       teacherId: uuid("teacherId"),
       roomId: uuid("roomId"),
-      personal: actor.role !== "admin",
+      personal: !can(actor, "timetable", "view"),
     });
   });
 }

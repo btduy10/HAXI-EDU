@@ -34,8 +34,8 @@ import type {
 } from "@/lib/validation/schedule";
 import { audit } from "../audit";
 import { AppError, notFound } from "../errors";
-import { type Actor, allowedClassIds, assertAdmin, assertSessionAccess, isAdmin } from "../guard";
-import { createRow, deleteRow } from "./crud";
+import { type Actor, allowedClassIds, assertAdmin, assertCan, assertCanAny, assertClassAccess, assertSessionAccess } from "../guard";
+import { createRow } from "./crud";
 
 const substitute = alias(teachers, "substitute");
 
@@ -88,7 +88,7 @@ export type SessionFilters = {
   personal?: boolean;
 };
 
-/** Admin xem mọi buổi; GV chỉ thấy buổi của lớp mình và buổi mình dạy/dạy thay. */
+/** Admin và phạm vi "Tất cả lớp" xem mọi buổi; phạm vi "lớp của mình" chỉ thấy buổi của lớp mình và buổi mình dạy/dạy thay. */
 export async function listSessions(actor: Actor, filters: SessionFilters): Promise<SessionRow[]> {
   const conditions = [between(sessions.date, filters.from, filters.to)];
   if (filters.classId) conditions.push(eq(sessions.classId, filters.classId));
@@ -97,10 +97,13 @@ export async function listSessions(actor: Actor, filters: SessionFilters): Promi
     conditions.push(or(eq(sessions.teacherId, filters.teacherId), eq(sessions.substituteTeacherId, filters.teacherId))!);
   }
 
-  if (!isAdmin(actor)) {
-    if (!actor.teacherId) return [];
-    const mine = or(eq(sessions.teacherId, actor.teacherId), eq(sessions.substituteTeacherId, actor.teacherId))!;
-    const allowed = (await allowedClassIds(actor)) ?? [];
+  const allowed = await allowedClassIds(actor);
+  const mine = actor.teacherId
+    ? or(eq(sessions.teacherId, actor.teacherId), eq(sessions.substituteTeacherId, actor.teacherId))!
+    : null;
+  if (allowed !== null) {
+    // Phạm vi "lớp của mình": buổi mình dạy/dạy thay, cộng các buổi của lớp được phân công.
+    if (!mine) return [];
     conditions.push(filters.personal || allowed.length === 0 ? mine : or(mine, inArray(sessions.classId, allowed))!);
   }
 
@@ -119,7 +122,8 @@ export async function getSession(actor: Actor, sessionId: string): Promise<Sessi
 // ---------- Lịch mẫu ----------
 
 export async function listTemplates(actor: Actor, classId: string) {
-  assertAdmin(actor);
+  assertCanAny(actor, ["classes", "view"], ["timetable", "view"]);
+  await assertClassAccess(actor, classId);
   return db
     .select({
       id: scheduleTemplates.id,
@@ -143,10 +147,23 @@ export async function listTemplates(actor: Actor, classId: string) {
     .orderBy(asc(scheduleTemplates.weekday), asc(timeSlots.defaultStart));
 }
 
-export const createTemplate = (actor: Actor, data: z.output<typeof templateInput>) =>
-  createRow(actor, scheduleTemplates, "schedule_templates", data);
+// Thêm/xóa dòng lịch mẫu là một phần của "Sửa lớp".
+export async function createTemplate(actor: Actor, data: z.output<typeof templateInput>) {
+  assertCan(actor, "classes", "edit");
+  await assertClassAccess(actor, data.classId);
+  return createRow(actor, scheduleTemplates, "schedule_templates", data, "classes", "edit");
+}
 /** Xóa dòng lịch mẫu không xóa các buổi đã sinh (template_id của buổi thành null). */
-export const deleteTemplate = (actor: Actor, id: string) => deleteRow(actor, scheduleTemplates, "schedule_templates", id);
+export async function deleteTemplate(actor: Actor, id: string) {
+  assertCan(actor, "classes", "edit");
+  await db.transaction(async (tx) => {
+    const [before] = await tx.select().from(scheduleTemplates).where(eq(scheduleTemplates.id, id)).limit(1);
+    if (!before) throw notFound();
+    await assertClassAccess(actor, before.classId, tx);
+    await tx.delete(scheduleTemplates).where(eq(scheduleTemplates.id, id));
+    await audit(tx, { userId: actor.userId, action: "delete", tableName: "schedule_templates", recordId: id, oldValue: before });
+  });
+}
 
 // ---------- Kiểm tra trùng lịch ----------
 
@@ -229,7 +246,8 @@ export type GenerationResult = {
  * Buổi trùng GV/phòng không được tạo và được trả về trong `conflicts`.
  */
 export async function generateSessions(actor: Actor, classId: string): Promise<GenerationResult> {
-  assertAdmin(actor);
+  assertCan(actor, "classes", "edit");
+  await assertClassAccess(actor, classId);
   return db.transaction(async (tx) => {
     await lockSchedule(tx);
     const [cls] = await tx.select().from(classes).where(eq(classes.id, classId)).limit(1);
@@ -324,9 +342,11 @@ export async function generateSessions(actor: Actor, classId: string): Promise<G
 
 // ---------- Điều chỉnh từng buổi ----------
 
-async function loadForChange(tx: Tx, sessionId: string) {
+/** Nạp buổi để sửa (khóa dòng) và bảo đảm lớp của buổi nằm trong phạm vi của người thao tác. */
+async function loadForChange(tx: Tx, actor: Actor, sessionId: string) {
   const [row] = await tx.select().from(sessions).where(eq(sessions.id, sessionId)).for("update").limit(1);
   if (!row) throw notFound("buổi học");
+  await assertClassAccess(actor, row.classId, tx);
   return row;
 }
 
@@ -364,11 +384,11 @@ async function applyChange(
 
 /** Sửa giờ/phòng/GV/nội dung của RIÊNG một buổi; ca gốc và các buổi khác không đổi. */
 export async function updateSession(actor: Actor, input: z.output<typeof sessionEditInput>): Promise<ScheduleResult> {
-  assertAdmin(actor);
+  assertCan(actor, "timetable", "edit");
   return db.transaction(async (tx) => {
     await lockSchedule(tx);
     const { id, ...patch } = input;
-    const before = await loadForChange(tx, id);
+    const before = await loadForChange(tx, actor, id);
     if (before.status === "cancelled") throw new AppError("CONFLICT", "Buổi đã hủy. Hãy khôi phục trước khi sửa.");
     return applyChange(tx, actor, before, patch, "session_updated");
   });
@@ -376,10 +396,10 @@ export async function updateSession(actor: Actor, input: z.output<typeof session
 
 /** Dời buổi sang ngày/giờ khác; lưu ngày gốc lần đầu dời. */
 export async function rescheduleSession(actor: Actor, input: z.output<typeof sessionRescheduleInput>): Promise<ScheduleResult> {
-  assertAdmin(actor);
+  assertCan(actor, "timetable", "edit");
   return db.transaction(async (tx) => {
     await lockSchedule(tx);
-    const before = await loadForChange(tx, input.id);
+    const before = await loadForChange(tx, actor, input.id);
     if (before.status !== "planned") throw new AppError("CONFLICT", "Chỉ dời được buổi chưa diễn ra và chưa hủy.");
     const result = await applyChange(
       tx,
@@ -405,10 +425,10 @@ export async function rescheduleSession(actor: Actor, input: z.output<typeof ses
 
 /** Hủy buổi: không cần điểm danh và không tính vào chuyên cần. */
 export async function cancelSession(actor: Actor, input: z.output<typeof sessionCancelInput>): Promise<ScheduleResult> {
-  assertAdmin(actor);
+  assertCan(actor, "timetable", "edit");
   return db.transaction(async (tx) => {
     await lockSchedule(tx);
-    const before = await loadForChange(tx, input.id);
+    const before = await loadForChange(tx, actor, input.id);
     if (before.status === "cancelled") throw new AppError("CONFLICT", "Buổi này đã hủy.");
     if (before.status === "done") throw new AppError("CONFLICT", "Buổi đã điểm danh nên không thể hủy.");
     return applyChange(tx, actor, before, { status: "cancelled", note: input.note ?? before.note }, "session_cancelled");
@@ -416,10 +436,10 @@ export async function cancelSession(actor: Actor, input: z.output<typeof session
 }
 
 export async function restoreSession(actor: Actor, sessionId: string): Promise<ScheduleResult> {
-  assertAdmin(actor);
+  assertCan(actor, "timetable", "edit");
   return db.transaction(async (tx) => {
     await lockSchedule(tx);
-    const before = await loadForChange(tx, sessionId);
+    const before = await loadForChange(tx, actor, sessionId);
     if (before.status !== "cancelled") throw new AppError("CONFLICT", "Buổi này không ở trạng thái đã hủy.");
     return applyChange(tx, actor, before, { status: "planned" }, "session_restored");
   });
@@ -433,7 +453,7 @@ export async function deleteSession(actor: Actor, sessionId: string): Promise<{ 
   assertAdmin(actor);
   return db.transaction(async (tx) => {
     await lockSchedule(tx);
-    const before = await loadForChange(tx, sessionId);
+    const before = await loadForChange(tx, actor, sessionId);
     const [attended] = await tx.select({ id: attendances.id }).from(attendances).where(eq(attendances.sessionId, sessionId)).limit(1);
     const [starred] = await tx.select({ id: starLogs.id }).from(starLogs).where(eq(starLogs.sessionId, sessionId)).limit(1);
     if (attended || starred) {
@@ -447,10 +467,10 @@ export async function deleteSession(actor: Actor, sessionId: string): Promise<{ 
 
 /** Phân GV dạy thay: giữ GV gốc, lưu thêm GV thay. Để trống = bỏ dạy thay. */
 export async function setSubstitute(actor: Actor, input: z.output<typeof sessionSubstituteInput>): Promise<ScheduleResult> {
-  assertAdmin(actor);
+  assertCan(actor, "timetable", "edit");
   return db.transaction(async (tx) => {
     await lockSchedule(tx);
-    const before = await loadForChange(tx, input.id);
+    const before = await loadForChange(tx, actor, input.id);
     if (before.status === "cancelled") throw new AppError("CONFLICT", "Buổi đã hủy.");
     if (input.substituteTeacherId && input.substituteTeacherId === before.teacherId) {
       throw new AppError("VALIDATION", "GV dạy thay phải khác GV của buổi.", { substituteTeacherId: "Phải khác GV của buổi" });
@@ -464,7 +484,8 @@ export async function createMakeupSession(
   actor: Actor,
   input: z.output<typeof makeupInput>,
 ): Promise<ScheduleResult & { id: string }> {
-  assertAdmin(actor);
+  assertCan(actor, "timetable", "add");
+  await assertClassAccess(actor, input.classId);
   return db.transaction(async (tx) => {
     await lockSchedule(tx);
     const [cls] = await tx.select().from(classes).where(eq(classes.id, input.classId)).limit(1);
@@ -520,7 +541,8 @@ export async function createManualSession(
   actor: Actor,
   input: z.output<typeof manualSessionInput>,
 ): Promise<ScheduleResult & { id: string }> {
-  assertAdmin(actor);
+  assertCan(actor, "timetable", "add");
+  await assertClassAccess(actor, input.classId);
   return db.transaction(async (tx) => {
     await lockSchedule(tx);
     const [cls] = await tx.select().from(classes).where(eq(classes.id, input.classId)).limit(1);

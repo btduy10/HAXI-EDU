@@ -21,7 +21,8 @@ import {
 import { listAvatarCatalog, listGiftedAvatars } from "@/server/services/avatars";
 import { listCriteria, listRecentStarLogs, loadLevels } from "@/server/services/stars";
 import { listStudents } from "@/server/services/students";
-import { requirePageUser } from "@/server/session";
+import type { Actor } from "@/server/guard";
+import { requireMenu } from "@/server/session";
 
 export const metadata: Metadata = { title: "Sao & Avatar" };
 
@@ -41,16 +42,19 @@ const ACTIVE_OPTIONS = [
 const NEUTRAL_FRAME = "#d4d4d8";
 
 export default async function StarsAdminPage({ searchParams }: PageProps<"/admin/stars">) {
-  const { actor } = await requirePageUser("admin");
+  const { actor, role, can } = await requireMenu("stars");
+  // Tiêu chí, cấp bậc, kho avatar, tặng avatar: chỉ Admin chỉnh. Vai trò khác xem được và dùng sổ cái theo quyền.
+  const admin = role === "admin";
+  const tabs = TABS.filter((t) => admin || t.key !== "gifts");
   const raw = (await searchParams).tab;
   const requested = Array.isArray(raw) ? raw[0] : raw;
-  const tab: TabKey = TABS.find((t) => t.key === requested)?.key ?? "criteria";
+  const tab: TabKey = tabs.find((t) => t.key === requested)?.key ?? (admin ? "criteria" : "ledger");
 
   return (
     <div className="grid gap-4">
       <h1 className="text-lg font-semibold">Sao, cấp bậc & avatar</h1>
       <nav aria-label="Mục" className="flex gap-1 overflow-x-auto rounded-lg border p-0.5 text-sm">
-        {TABS.map((t) => (
+        {tabs.map((t) => (
           <Link
             key={t.key}
             href={`/admin/stars?tab=${t.key}`}
@@ -64,18 +68,18 @@ export default async function StarsAdminPage({ searchParams }: PageProps<"/admin
           </Link>
         ))}
       </nav>
-      {tab === "criteria" && <CriteriaTab actor={actor} />}
-      {tab === "levels" && <LevelsTab />}
-      {tab === "avatars" && <AvatarsTab actor={actor} />}
-      {tab === "gifts" && <GiftsTab actor={actor} />}
-      {tab === "ledger" && <LedgerTab actor={actor} />}
+      {tab === "criteria" && <CriteriaTab actor={actor} admin={admin} />}
+      {tab === "levels" && <LevelsTab admin={admin} />}
+      {tab === "avatars" && <AvatarsTab actor={actor} admin={admin} />}
+      {tab === "gifts" && admin && <GiftsTab actor={actor} />}
+      {tab === "ledger" && <LedgerTab actor={actor} canUndo={can("edit")} />}
     </div>
   );
 }
 
-type TabProps = { actor: Awaited<ReturnType<typeof requirePageUser>>["actor"] };
+type TabProps = { actor: Actor };
 
-async function CriteriaTab({ actor }: TabProps) {
+async function CriteriaTab({ actor, admin }: TabProps & { admin: boolean }) {
   const criteria = await listCriteria(actor, false);
   const fields: Field[] = [
     { name: "name", label: "Tên tiêu chí", required: true },
@@ -92,14 +96,14 @@ async function CriteriaTab({ actor }: TabProps) {
         values: { name: c.name, stars: String(c.stars), active: String(c.active) },
       }))}
       fields={fields}
-      createAction={createCriteriaAction}
-      updateAction={updateCriteriaAction}
-      deleteAction={deleteCriteriaAction}
+      createAction={admin ? createCriteriaAction : undefined}
+      updateAction={admin ? updateCriteriaAction : undefined}
+      deleteAction={admin ? deleteCriteriaAction : undefined}
     />
   );
 }
 
-async function LevelsTab() {
+async function LevelsTab({ admin }: { admin: boolean }) {
   const levels = await loadLevels();
   const fields: Field[] = [
     { name: "levelNo", label: "Cấp số", type: "number", required: true, hint: "Không đổi được sau khi tạo." },
@@ -128,15 +132,15 @@ async function LevelsTab() {
           values: { levelNo: String(l.levelNo), name: l.name, minStars: String(l.minStars), frameColor: l.frameColor },
         }))}
         fields={fields}
-        createAction={createLevelAction}
-        updateAction={updateLevelAction}
-        deleteAction={deleteLevelAction}
+        createAction={admin ? createLevelAction : undefined}
+        updateAction={admin ? updateLevelAction : undefined}
+        deleteAction={admin ? deleteLevelAction : undefined}
       />
     </div>
   );
 }
 
-async function AvatarsTab({ actor }: TabProps) {
+async function AvatarsTab({ actor, admin }: TabProps & { admin: boolean }) {
   const [avatars, levels] = await Promise.all([listAvatarCatalog(actor), loadLevels()]);
   const levelOptions = levels.map((l) => ({ value: l.id, label: `Cấp ${l.levelNo} · ${l.name} (${l.minStars} sao)` }));
   const colorOf = (levelId: string | null) => levels.find((l) => l.id === levelId)?.frameColor ?? NEUTRAL_FRAME;
@@ -154,7 +158,7 @@ async function AvatarsTab({ actor }: TabProps) {
               {a.unlockType === "gifted" ? "Tặng riêng" : `Cấp ${a.requiredLevelNo} · cần ${a.requiredMinStars} sao`}
             </span>
             {!a.active && <Badge variant="outline">Ngừng dùng</Badge>}
-            <FormDialogButton
+            {admin && <FormDialogButton
               label="Sửa"
               variant="outline"
               className="h-9 w-full"
@@ -168,7 +172,7 @@ async function AvatarsTab({ actor }: TabProps) {
               ]}
               initial={{ name: a.name, requiredLevelId: a.requiredLevelId ?? "", active: String(a.active) }}
               action={updateAvatarAction.bind(null, a.id)}
-            />
+            />}
           </li>
         ))}
       </ul>
@@ -229,7 +233,7 @@ async function GiftsTab({ actor }: TabProps) {
   );
 }
 
-async function LedgerTab({ actor }: TabProps) {
+async function LedgerTab({ actor, canUndo }: TabProps & { canUndo: boolean }) {
   const logs = await listRecentStarLogs(actor);
   return (
     <section className="grid gap-2">
@@ -255,7 +259,7 @@ async function LedgerTab({ actor }: TabProps) {
                   {formatDateTime(log.recordedAt)}
                 </span>
               </span>
-              {!log.isReversal && !log.reversed && (
+              {canUndo && !log.isReversal && !log.reversed && (
                 <ConfirmButton
                   label="Hoàn tác"
                   className="h-9 shrink-0"

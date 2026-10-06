@@ -1,7 +1,7 @@
 import { bigint, boolean, index, integer, jsonb, pgEnum, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { teachers } from "./teachers";
 
-export const userRole = pgEnum("user_role", ["admin", "teacher"]);
+export const userRole = pgEnum("user_role", ["admin", "teacher", "duty_teacher"]);
 
 // Bảng do Better Auth quản lý (thay cho bảng `users` trong đặc tả).
 // password_hash nằm ở `account.password`, totp_secret nằm ở `two_factor.secret`.

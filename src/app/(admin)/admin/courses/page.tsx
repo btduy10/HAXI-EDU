@@ -3,7 +3,7 @@ import { CrudSection } from "@/components/crud-section";
 import type { Field } from "@/components/form-dialog";
 import { createCourseAction, deleteCourseAction, updateCourseAction } from "@/server/actions/admin";
 import { listCourses } from "@/server/services/catalog";
-import { requirePageUser } from "@/server/session";
+import { requireMenu } from "@/server/session";
 
 export const metadata: Metadata = { title: "Khóa học" };
 
@@ -14,7 +14,7 @@ const fields: Field[] = [
 ];
 
 export default async function CoursesPage() {
-  const { actor } = await requirePageUser("admin");
+  const { actor, role, can } = await requireMenu("courses");
   const courses = await listCourses(actor);
   return (
     <CrudSection
@@ -28,9 +28,9 @@ export default async function CoursesPage() {
         values: { name: c.name, totalSessions: String(c.totalSessions), description: c.description ?? "" },
       }))}
       fields={fields}
-      createAction={createCourseAction}
-      updateAction={updateCourseAction}
-      deleteAction={deleteCourseAction}
+      createAction={can("add") ? createCourseAction : undefined}
+      updateAction={can("edit") ? updateCourseAction : undefined}
+      deleteAction={role === "admin" ? deleteCourseAction : undefined}
     />
   );
 }

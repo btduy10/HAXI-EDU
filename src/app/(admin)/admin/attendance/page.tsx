@@ -3,12 +3,12 @@ import { OverdueSessions, TodaySessions } from "@/components/session-lists";
 import { todayIso } from "@/lib/format";
 import { listOverdueSessions } from "@/server/services/attendance";
 import { listSessions } from "@/server/services/sessions";
-import { requirePageUser } from "@/server/session";
+import { requireMenu } from "@/server/session";
 
 export const metadata: Metadata = { title: "Điểm danh" };
 
 export default async function AdminAttendancePage() {
-  const { actor } = await requirePageUser("admin");
+  const { actor } = await requireMenu("attendance");
   const today = todayIso();
   const [todaySessions, overdue] = await Promise.all([
     listSessions(actor, { from: today, to: today }),

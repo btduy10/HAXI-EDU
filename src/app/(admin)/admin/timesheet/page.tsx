@@ -10,7 +10,7 @@ import { formatDate, formatTime, todayIso } from "@/lib/format";
 import { listTeachers } from "@/server/services/catalog";
 import { listClasses } from "@/server/services/classes";
 import { type TimesheetState, teacherTimesheet } from "@/server/services/timesheet";
-import { requirePageUser } from "@/server/session";
+import { requireMenu } from "@/server/session";
 
 export const metadata: Metadata = { title: "Chấm công" };
 
@@ -18,7 +18,7 @@ const STATE_LABEL: Record<TimesheetState, string> = { taught: "Đã dạy", pend
 const hours = (minutes: number) => (minutes / 60).toLocaleString("vi-VN", { maximumFractionDigits: 1 });
 
 export default async function TimesheetPage({ searchParams }: PageProps<"/admin/timesheet">) {
-  const { actor } = await requirePageUser("admin");
+  const { actor } = await requireMenu("timesheet");
   const params = await searchParams;
   const one = (key: string) => {
     const value = params[key];

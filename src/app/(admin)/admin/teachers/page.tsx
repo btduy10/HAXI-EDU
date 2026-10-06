@@ -4,7 +4,7 @@ import type { Field } from "@/components/form-dialog";
 import { LABELS, toOptions } from "@/lib/format";
 import { createTeacherAction, deleteTeacherAction, updateTeacherAction } from "@/server/actions/admin";
 import { listTeachers } from "@/server/services/catalog";
-import { requirePageUser } from "@/server/session";
+import { requireMenu } from "@/server/session";
 
 export const metadata: Metadata = { title: "Giáo viên" };
 
@@ -17,7 +17,7 @@ const fields: Field[] = [
 ];
 
 export default async function TeachersPage() {
-  const { actor } = await requirePageUser("admin");
+  const { actor, role, can } = await requireMenu("teachers");
   const teachers = await listTeachers(actor);
   return (
     <CrudSection
@@ -30,9 +30,9 @@ export default async function TeachersPage() {
         values: { code: t.code, fullName: t.fullName, phone: t.phone ?? "", email: t.email ?? "", status: t.status },
       }))}
       fields={fields}
-      createAction={createTeacherAction}
-      updateAction={updateTeacherAction}
-      deleteAction={deleteTeacherAction}
+      createAction={can("add") ? createTeacherAction : undefined}
+      updateAction={can("edit") ? updateTeacherAction : undefined}
+      deleteAction={role === "admin" ? deleteTeacherAction : undefined}
     />
   );
 }

@@ -16,12 +16,13 @@ import {
 import { orNotFound, uuidParam } from "@/server/page";
 import { listRooms, listTeachers } from "@/server/services/catalog";
 import { getSession } from "@/server/services/sessions";
-import { requirePageUser } from "@/server/session";
+import { requireMenu } from "@/server/session";
 
 export const metadata: Metadata = { title: "Buổi học" };
 
 export default async function SessionDetailPage({ params }: PageProps<"/admin/sessions/[id]">) {
-  const { actor } = await requirePageUser("admin");
+  const { actor, role, can } = await requireMenu("timetable");
+  const canEdit = can("edit");
   const id = uuidParam((await params).id);
   const session = await orNotFound(getSession(actor, id));
   const [teachers, rooms] = await Promise.all([listTeachers(actor), listRooms(actor)]);
@@ -67,17 +68,17 @@ export default async function SessionDetailPage({ params }: PageProps<"/admin/se
       </dl>
 
       <div className="flex flex-wrap gap-2">
-        {!cancelled && (
+        {!cancelled && can("view", "attendance") && (
           <LinkButton className="h-10" href={`/admin/attendance/${id}`}>
             {session.attendanceCount > 0 ? "Xem / sửa điểm danh" : "Điểm danh"}
           </LinkButton>
         )}
-        {!cancelled && (
+        {!cancelled && can("view", "stars") && (
           <LinkButton variant="outline" className="h-10" href={`/admin/sessions/${id}/stars`}>
             Ghi sao
           </LinkButton>
         )}
-        {!cancelled && (
+        {!cancelled && canEdit && (
           <FormDialogButton
             label="Sửa buổi này"
             variant="outline"
@@ -103,7 +104,7 @@ export default async function SessionDetailPage({ params }: PageProps<"/admin/se
             action={updateSessionAction}
           />
         )}
-        {session.status === "planned" && (
+        {session.status === "planned" && canEdit && (
           <FormDialogButton
             label="Dời buổi"
             variant="outline"
@@ -119,7 +120,7 @@ export default async function SessionDetailPage({ params }: PageProps<"/admin/se
             successMessage="Đã dời buổi học."
           />
         )}
-        {!cancelled && (
+        {!cancelled && canEdit && (
           <FormDialogButton
             label="GV dạy thay"
             variant="outline"
@@ -138,7 +139,7 @@ export default async function SessionDetailPage({ params }: PageProps<"/admin/se
             action={setSubstituteAction}
           />
         )}
-        {session.status === "planned" && (
+        {session.status === "planned" && canEdit && (
           <FormDialogButton
             label="Hủy buổi"
             variant="destructive"
@@ -152,7 +153,7 @@ export default async function SessionDetailPage({ params }: PageProps<"/admin/se
             successMessage="Đã hủy buổi học."
           />
         )}
-        {cancelled && (
+        {cancelled && canEdit && (
           <ConfirmButton
             label="Khôi phục buổi"
             confirmText="Khôi phục buổi học đã hủy?"
@@ -161,7 +162,7 @@ export default async function SessionDetailPage({ params }: PageProps<"/admin/se
             successMessage="Đã khôi phục buổi học."
           />
         )}
-        {session.attendanceCount === 0 && (
+        {role === "admin" && session.attendanceCount === 0 && (
           <ConfirmButton
             label="Xóa buổi"
             variant="destructive"
@@ -171,7 +172,7 @@ export default async function SessionDetailPage({ params }: PageProps<"/admin/se
             successMessage="Đã xóa buổi học."
           />
         )}
-        {session.classStatus === "open" && (
+        {session.classStatus === "open" && can("add") && (
           <LinkButton
             variant="outline"
             className="h-10" href={`/admin/sessions/makeup?classId=${session.classId}`}>

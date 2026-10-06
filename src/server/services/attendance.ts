@@ -7,7 +7,7 @@ import { todayIso } from "@/lib/format";
 import type { attendanceInput } from "@/lib/validation/schedule";
 import { audit } from "../audit";
 import { AppError, notFound } from "../errors";
-import { type Actor, assertAdmin, assertClassOpen, assertSessionAccess, isAdmin } from "../guard";
+import { type Actor, assertAdmin, assertCan, assertClassOpen, assertSessionAccess, can, seesAllClasses } from "../guard";
 import { getSettings } from "../settings";
 
 const UNLOCK_HOURS = 24;
@@ -61,6 +61,7 @@ function blockedReason(
 }
 
 export async function getAttendanceSheet(actor: Actor, sessionId: string, now: Date = new Date()) {
+  assertCan(actor, "attendance", "view");
   await assertSessionAccess(actor, sessionId);
   const [session] = await db.select().from(sessions).where(eq(sessions.id, sessionId)).limit(1);
   if (!session) throw notFound("buổi học");
@@ -73,6 +74,8 @@ export async function getAttendanceSheet(actor: Actor, sessionId: string, now: D
   const reason = blockedReason(session, settings.attendance_lock_days, now);
   return {
     recorded: existing.length > 0,
+    // Buổi chưa điểm danh cần quyền Thêm; buổi đã điểm danh cần quyền Sửa.
+    canSave: can(actor, "attendance", existing.length > 0 ? "edit" : "add"),
     blockedReason: reason,
     locked: Boolean(reason) && session.status !== "cancelled" && session.date <= todayIso(now),
     // Mặc định "Có mặt" cho cả lớp; GV chỉ sửa những em khác.
@@ -103,6 +106,7 @@ export async function saveAttendance(actor: Actor, input: z.output<typeof attend
     }
 
     const existing = await tx.select().from(attendances).where(eq(attendances.sessionId, session.id));
+    assertCan(actor, "attendance", existing.length > 0 ? "edit" : "add");
     const before = new Map(existing.map((a) => [a.studentId, a]));
     let changed = 0;
     for (const entry of submitted.values()) {
@@ -169,11 +173,11 @@ export async function unlockAttendance(actor: Actor, sessionId: string, now: Dat
 
 /**
  * Buổi đã qua ngày mà chưa điểm danh. GV: các buổi mình thực dạy (đã tính dạy thay).
- * Admin: toàn trung tâm.
+ * Admin và phạm vi "Tất cả lớp": toàn trung tâm.
  */
 export async function listOverdueSessions(actor: Actor, now: Date = new Date()) {
   const conditions = [lt(sessions.date, todayIso(now)), eq(sessions.status, "planned")];
-  if (!isAdmin(actor)) {
+  if (!seesAllClasses(actor)) {
     if (!actor.teacherId) return [];
     conditions.push(
       or(

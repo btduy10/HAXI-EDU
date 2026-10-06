@@ -20,7 +20,7 @@ import { todayIso } from "@/lib/format";
 import type { awardInput, criteriaInput, levelInput } from "@/lib/validation/stars";
 import { audit } from "../audit";
 import { AppError, notFound } from "../errors";
-import { type Actor, assertAdmin, assertClassOpen, assertSessionAccess, isAdmin } from "../guard";
+import { type Actor, allowedClassIds, assertAdmin, assertCan, assertClassOpen, assertSessionAccess, isAdmin, seesAllClasses } from "../guard";
 import { getSettings } from "../settings";
 import { sessionRoster } from "./attendance";
 import { createRow, deleteRow, updateRow } from "./crud";
@@ -265,6 +265,7 @@ export type StarResult = { count: number; stars: number; levelChanges: LevelChan
  * Số sao lấy từ tiêu chí ở máy chủ (client không tự gửi số sao).
  */
 export async function awardStars(actor: Actor, input: z.output<typeof awardInput>, now: Date = new Date()): Promise<StarResult> {
+  assertCan(actor, "stars", "add");
   await assertSessionAccess(actor, input.sessionId);
   return db.transaction(async (tx) => {
     const [session] = await tx.select().from(sessions).where(eq(sessions.id, input.sessionId)).limit(1);
@@ -324,6 +325,7 @@ export async function awardStars(actor: Actor, input: z.output<typeof awardInput
 
 /** Hoàn tác một lần ghi sao bằng bản ghi đảo dấu (không xóa). Mỗi lần ghi chỉ hoàn tác được một lần. */
 export async function undoStarLog(actor: Actor, logId: string, now: Date = new Date()): Promise<StarResult> {
+  assertCan(actor, "stars", "edit");
   const [target] = await db.select().from(starLogs).where(eq(starLogs.id, logId)).limit(1);
   // Kiểm tra quyền trước khi tiết lộ bất kỳ thông tin nào về bản ghi.
   if (!target) throw notFound("lần ghi sao");
@@ -368,9 +370,9 @@ export async function undoStarLog(actor: Actor, logId: string, now: Date = new D
 
 // ---------- Truy vấn cho giao diện ----------
 
-/** GV truy cập được học viên đang học lớp mình, hoặc thuộc lớp có buổi mình dạy thay hôm nay. */
+/** Phạm vi "lớp của mình": chỉ truy cập học viên đang học lớp mình, hoặc thuộc lớp có buổi mình dạy thay hôm nay. */
 export async function assertStudentAccess(actor: Actor, studentId: string, tx: DbOrTx = db, now: Date = new Date()) {
-  if (isAdmin(actor)) {
+  if (seesAllClasses(actor)) {
     const [row] = await tx.select({ id: students.id }).from(students).where(eq(students.id, studentId)).limit(1);
     if (!row) throw notFound("học viên");
     return;
@@ -426,6 +428,7 @@ export type StarLogRow = Awaited<ReturnType<typeof logQuery>>[number];
 
 /** Bảng ghi sao của một buổi: danh sách học viên kèm tiến độ, tiêu chí đang dùng và sổ cái của buổi. */
 export async function getSessionStarBoard(actor: Actor, sessionId: string) {
+  assertCan(actor, "stars", "view");
   await assertSessionAccess(actor, sessionId);
   const [session] = await db.select().from(sessions).where(eq(sessions.id, sessionId)).limit(1);
   if (!session) throw notFound("buổi học");
@@ -484,8 +487,12 @@ export async function getStudentStarProfile(actor: Actor, studentId: string) {
   };
 }
 
-/** Sổ cái toàn trung tâm (Admin). */
+/** Sổ cái gần đây: toàn trung tâm, hoặc chỉ các lớp trong phạm vi của người xem. */
 export async function listRecentStarLogs(actor: Actor, limit = 200) {
-  assertAdmin(actor);
-  return logQuery().orderBy(desc(starLogs.recordedAt), desc(starLogs.id)).limit(limit);
+  assertCan(actor, "stars", "view");
+  const allowed = await allowedClassIds(actor);
+  if (allowed && allowed.length === 0) return [];
+  return logQuery()
+    .where(allowed ? inArray(sessions.classId, allowed) : undefined)
+    .orderBy(desc(starLogs.recordedAt), desc(starLogs.id)).limit(limit);
 }

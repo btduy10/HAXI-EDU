@@ -19,8 +19,8 @@ const UUID = /^[0-9a-f-]{36}$/i;
 const uuidOrEmpty = (v: string) => (UUID.test(v) ? v : "");
 
 /**
- * Thời khóa biểu dùng chung: Admin có bộ lọc GV/lớp/phòng; GV chỉ xem lịch của mình
- * (phạm vi do service `listSessions` quyết định, không phụ thuộc tham số trên URL).
+ * Thời khóa biểu dùng chung. `manage` = trang quản lý (có bộ lọc GV/lớp/phòng); không thì là lịch cá nhân.
+ * Phạm vi buổi học do service `listSessions` quyết định, không phụ thuộc tham số trên URL.
  */
 export async function TimetablePage({
   actor,
@@ -28,14 +28,20 @@ export async function TimetablePage({
   basePath,
   title,
   sessionHref,
+  manage = false,
+  canAdd = false,
 }: {
+  /** Trang quản lý Thời khóa biểu (menu được phân quyền), có bộ lọc. */
+  manage?: boolean;
+  /** Được xếp tay buổi học (quyền Thêm của menu Thời khóa biểu). */
+  canAdd?: boolean;
   actor: Actor;
   params: Params;
   basePath: string;
   title: string;
   sessionHref: (session: TimetableSession) => string;
 }) {
-  const admin = actor.role === "admin";
+  const admin = manage;
   const today = todayIso();
   const view = one(params.view) === "month" ? "month" : "week";
   const date = parseIsoDate(one(params.date), today);
@@ -138,7 +144,7 @@ export async function TimetablePage({
       />
 
       {view === "week" ? (
-        options ? (
+        options && canAdd ? (
           <ManualScheduler
             options={{
               slots: slots.map((s) => ({ value: s.id, label: `${s.name} (${s.defaultStart.slice(0, 5)}–${s.defaultEnd.slice(0, 5)})` })),

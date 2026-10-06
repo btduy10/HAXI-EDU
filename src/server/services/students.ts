@@ -1,31 +1,48 @@
-import { and, asc, count, eq, ilike, or } from "drizzle-orm";
+import { and, asc, count, eq, ilike, inArray, or, sql } from "drizzle-orm";
 import type { z } from "zod";
 import { db } from "@/db";
 import { enrollments, students } from "@/db/schema";
 import type { studentInput } from "@/lib/validation/entities";
 import { notFound } from "../errors";
-import { type Actor, assertAdmin, assertClassAccess } from "../guard";
+import { type Actor, allowedClassIds, assertCan, assertClassAccess, isAdmin } from "../guard";
 import { createRow, deleteRow, updateRow } from "./crud";
 
-export async function listStudents(actor: Actor, search?: string) {
-  assertAdmin(actor);
+type StudentRow = typeof students.$inferSelect;
+
+/** Thông tin chỉ Admin được xem và sửa; vai trò khác luôn nhận giá trị rỗng. */
+const PRIVATE_FIELDS = ["birthDate", "gender", "guardianName", "phone", "note"] as const;
+const hidePrivate = (row: StudentRow): StudentRow => ({ ...row, birthDate: null, gender: null, guardianName: null, phone: null, note: null });
+const forActor = (actor: Actor, rows: StudentRow[]) => (isAdmin(actor) ? rows : rows.map(hidePrivate));
+
+const searchFilter = (search?: string) => {
   const term = search?.trim();
   const pattern = term ? `%${term.replace(/[%_\\]/g, "\\$&")}%` : null;
-  return db
-    .select()
-    .from(students)
-    .where(pattern ? or(ilike(students.fullName, pattern), ilike(students.code, pattern)) : undefined)
-    .orderBy(asc(students.code));
+  return pattern ? or(ilike(students.fullName, pattern), ilike(students.code, pattern)) : undefined;
+};
+
+/** Học viên đã từng ghi danh một lớp trong phạm vi của người dùng. undefined = không giới hạn. */
+async function scopeFilter(actor: Actor) {
+  const allowed = await allowedClassIds(actor);
+  if (allowed === null) return undefined;
+  if (allowed.length === 0) return sql`false`;
+  return inArray(students.id, db.select({ id: enrollments.studentId }).from(enrollments).where(inArray(enrollments.classId, allowed)));
+}
+
+/**
+ * Toàn bộ học viên, dùng cho ô chọn khi ghi danh (học viên mới chưa thuộc lớp nào cũng phải chọn được).
+ * Ngoài Admin, cần quyền Thêm ở menu Ghi danh và chỉ nhận mã, tên, khối, trạng thái.
+ */
+export async function listStudents(actor: Actor, search?: string) {
+  assertCan(actor, "enrollments", "add");
+  return forActor(actor, await db.select().from(students).where(searchFilter(search)).orderBy(asc(students.code)));
 }
 
 export const STUDENT_PAGE_SIZE = 10;
 
 /** Danh sách học viên theo trang (mỗi trang 10 em). Trang vượt quá số trang thì trả về trang cuối. */
 export async function listStudentsPage(actor: Actor, search: string | undefined, page: number) {
-  assertAdmin(actor);
-  const term = search?.trim();
-  const pattern = term ? `%${term.replace(/[%_\\]/g, "\\$&")}%` : null;
-  const where = pattern ? or(ilike(students.fullName, pattern), ilike(students.code, pattern)) : undefined;
+  assertCan(actor, "students", "view");
+  const where = and(searchFilter(search), await scopeFilter(actor));
   const [counted] = await db.select({ n: count() }).from(students).where(where);
   const total = counted?.n ?? 0;
   const pageCount = Math.max(1, Math.ceil(total / STUDENT_PAGE_SIZE));
@@ -37,22 +54,34 @@ export async function listStudentsPage(actor: Actor, search: string | undefined,
     .orderBy(asc(students.code))
     .limit(STUDENT_PAGE_SIZE)
     .offset((current - 1) * STUDENT_PAGE_SIZE);
-  return { rows, total, page: current, pageCount, pageSize: STUDENT_PAGE_SIZE };
+  return { rows: forActor(actor, rows), total, page: current, pageCount, pageSize: STUDENT_PAGE_SIZE };
 }
 
 export async function getStudent(actor: Actor, id: string) {
-  assertAdmin(actor);
-  const [row] = await db.select().from(students).where(eq(students.id, id)).limit(1);
+  assertCan(actor, "students", "view");
+  const [row] = await db.select().from(students).where(and(eq(students.id, id), await scopeFilter(actor))).limit(1);
   if (!row) throw notFound("học viên");
-  return row;
+  return forActor(actor, [row])[0]!;
 }
 
-export const createStudent = (actor: Actor, data: z.output<typeof studentInput>) =>
-  createRow(actor, students, "students", data);
-export const updateStudent = (actor: Actor, id: string, data: z.output<typeof studentInput>) =>
-  updateRow(actor, students, "students", id, data);
-export const deleteStudent = (actor: Actor, id: string) => deleteRow(actor, students, "students", id);
+/** Ngoài Admin, thông tin riêng tư (ngày sinh, giới tính, phụ huynh, điện thoại, ghi chú) không được ghi qua form. */
+export async function createStudent(actor: Actor, data: z.output<typeof studentInput>) {
+  const values = isAdmin(actor) ? data : { ...data, birthDate: null, gender: null, guardianName: null, phone: null, note: null };
+  return forActor(actor, [await createRow(actor, students, "students", values, "students")])[0]!;
+}
 
+export async function updateStudent(actor: Actor, id: string, data: z.output<typeof studentInput>) {
+  assertCan(actor, "students", "edit");
+  if (isAdmin(actor)) return updateRow(actor, students, "students", id, data, "students");
+  // Chỉ sửa được học viên trong phạm vi lớp của mình, và giữ nguyên thông tin riêng tư đang lưu.
+  const [inScope] = await db.select({ id: students.id }).from(students).where(and(eq(students.id, id), await scopeFilter(actor))).limit(1);
+  if (!inScope) throw notFound("học viên");
+  const patch: Partial<typeof data> = { ...data };
+  for (const field of PRIVATE_FIELDS) delete patch[field];
+  return hidePrivate(await updateRow(actor, students, "students", id, patch, "students"));
+}
+
+export const deleteStudent = (actor: Actor, id: string) => deleteRow(actor, students, "students", id);
 /**
  * Học viên đang ghi danh của một lớp. GV chỉ xem được lớp mình và chỉ nhận
  * các trường tối thiểu (không có số điện thoại, phụ huynh, ghi chú).

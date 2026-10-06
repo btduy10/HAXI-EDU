@@ -21,7 +21,7 @@ import { todayIso } from "@/lib/format";
 import type { giftInput, tierInput } from "@/lib/validation/rewards";
 import { audit } from "../audit";
 import { AppError, notFound } from "../errors";
-import { type Actor, assertAdmin, assertClassAccess } from "../guard";
+import { type Actor, assertCan, assertClassAccess } from "../guard";
 import { createRow, deleteRow, updateRow } from "./crud";
 
 // ---------- Số liệu lớp: tổng sao theo lớp, chuyên cần, xếp hạng ----------
@@ -126,7 +126,8 @@ export async function getClassReport(actor: Actor, classId: string) {
  * Buổi đã qua mà chưa điểm danh phải được xử lý trước; buổi tương lai còn lại được hủy.
  */
 export async function closeClass(actor: Actor, classId: string, now: Date = new Date()) {
-  assertAdmin(actor);
+  assertCan(actor, "rewards", "edit");
+  await assertClassAccess(actor, classId);
   return db.transaction(async (tx) => {
     const [cls] = await tx.select().from(classes).where(eq(classes.id, classId)).for("update").limit(1);
     if (!cls) throw notFound("lớp học");
@@ -175,15 +176,15 @@ export async function closeClass(actor: Actor, classId: string, now: Date = new 
 // ---------- Quà tặng và mốc quà ----------
 
 export async function listGifts(actor: Actor) {
-  assertAdmin(actor);
+  assertCan(actor, "rewards", "view");
   return db.select().from(gifts).orderBy(asc(gifts.name));
 }
-export const createGift = (actor: Actor, data: z.output<typeof giftInput>) => createRow(actor, gifts, "gifts", data);
-export const updateGift = (actor: Actor, id: string, data: z.output<typeof giftInput>) => updateRow(actor, gifts, "gifts", id, data);
+export const createGift = (actor: Actor, data: z.output<typeof giftInput>) => createRow(actor, gifts, "gifts", data, "rewards");
+export const updateGift = (actor: Actor, id: string, data: z.output<typeof giftInput>) => updateRow(actor, gifts, "gifts", id, data, "rewards");
 export const deleteGift = (actor: Actor, id: string) => deleteRow(actor, gifts, "gifts", id);
 
 export async function listTiers(actor: Actor) {
-  assertAdmin(actor);
+  assertCan(actor, "rewards", "view");
   return db
     .select({
       id: rewardTiers.id,
@@ -198,7 +199,7 @@ export async function listTiers(actor: Actor) {
     .leftJoin(classes, eq(classes.id, rewardTiers.classId))
     .orderBy(asc(courses.name), asc(classes.code), asc(rewardTiers.minStars));
 }
-export const createTier = (actor: Actor, data: z.output<typeof tierInput>) => createRow(actor, rewardTiers, "reward_tiers", data);
+export const createTier = (actor: Actor, data: z.output<typeof tierInput>) => createRow(actor, rewardTiers, "reward_tiers", data, "rewards");
 export const deleteTier = (actor: Actor, id: string) => deleteRow(actor, rewardTiers, "reward_tiers", id);
 
 async function tiersFor(tx: DbOrTx, cls: { id: string; courseId: string }): Promise<RewardTier[]> {
@@ -227,7 +228,8 @@ export type GiftNeed = { giftId: string; name: string; eligible: number; approve
 
 /** Bảng tổng kết đã chốt của lớp: xếp hạng, quà đề xuất theo mốc, trạng thái duyệt/trao, số quà cần chuẩn bị. */
 export async function getClassSummary(actor: Actor, classId: string) {
-  assertAdmin(actor);
+  assertCan(actor, "rewards", "view");
+  await assertClassAccess(actor, classId);
   const [cls] = await db
     .select({ id: classes.id, code: classes.code, name: classes.name, status: classes.status, courseId: classes.courseId, courseName: courses.name })
     .from(classes)
@@ -316,7 +318,8 @@ export async function getClassSummary(actor: Actor, classId: string) {
 
 /** Admin duyệt danh sách nhận quà: quà do máy chủ xác định theo mốc, client chỉ chọn học viên. */
 export async function approveRewards(actor: Actor, classId: string, summaryIds: string[]) {
-  assertAdmin(actor);
+  assertCan(actor, "rewards", "edit");
+  await assertClassAccess(actor, classId);
   return db.transaction(async (tx) => {
     const [cls] = await tx.select().from(classes).where(eq(classes.id, classId)).limit(1);
     if (!cls) throw notFound("lớp học");
@@ -349,12 +352,20 @@ export async function approveRewards(actor: Actor, classId: string, summaryIds: 
   });
 }
 
+/** Lượt trao quà phải thuộc một lớp trong phạm vi của người thao tác. */
+async function assertHandoverAccess(actor: Actor, summaryId: string, tx: DbOrTx) {
+  const [summary] = await tx.select({ classId: courseSummaries.classId }).from(courseSummaries).where(eq(courseSummaries.id, summaryId)).limit(1);
+  if (!summary) throw notFound("lượt trao quà");
+  await assertClassAccess(actor, summary.classId, tx);
+}
+
 /** Ghi nhận đã trao quà: lưu ngày và người trao, trừ tồn kho. */
 export async function markGiftGiven(actor: Actor, handoverId: string, now: Date = new Date()) {
-  assertAdmin(actor);
+  assertCan(actor, "rewards", "edit");
   return db.transaction(async (tx) => {
     const [handover] = await tx.select().from(giftHandovers).where(eq(giftHandovers.id, handoverId)).for("update").limit(1);
     if (!handover) throw notFound("lượt trao quà");
+    await assertHandoverAccess(actor, handover.summaryId, tx);
     if (handover.status === "given") throw new AppError("CONFLICT", "Quà này đã được ghi nhận trao.");
     const [gift] = await tx.select().from(gifts).where(eq(gifts.id, handover.giftId)).for("update").limit(1);
     if (!gift || gift.stock < 1) throw new AppError("CONFLICT", `Kho đã hết quà "${gift?.name ?? "?"}". Hãy cập nhật tồn kho trước.`);
@@ -371,10 +382,11 @@ export async function markGiftGiven(actor: Actor, handoverId: string, now: Date 
 
 /** Bỏ duyệt một lượt quà chưa trao. */
 export async function cancelApproval(actor: Actor, handoverId: string) {
-  assertAdmin(actor);
+  assertCan(actor, "rewards", "edit");
   return db.transaction(async (tx) => {
     const [handover] = await tx.select().from(giftHandovers).where(eq(giftHandovers.id, handoverId)).for("update").limit(1);
     if (!handover) throw notFound("lượt trao quà");
+    await assertHandoverAccess(actor, handover.summaryId, tx);
     if (handover.status === "given") throw new AppError("CONFLICT", "Quà đã trao nên không bỏ duyệt được.");
     await tx.delete(giftHandovers).where(eq(giftHandovers.id, handoverId));
     await audit(tx, { userId: actor.userId, action: "reward_approval_cancelled", tableName: "gift_handovers", recordId: handoverId, oldValue: handover });

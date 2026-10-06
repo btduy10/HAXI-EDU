@@ -4,7 +4,7 @@ import { avatars, levels, studentAvatarGifts, students } from "@/db/schema";
 import { isAvatarUnlocked } from "@/domain/stars";
 import { audit } from "../audit";
 import { AppError, notFound } from "../errors";
-import { type Actor, assertAdmin } from "../guard";
+import { type Actor, assertAdmin, assertCan } from "../guard";
 import { assertStudentAccess, loadAvatars, progressOf, resyncAllAvatars } from "./stars";
 
 // Kho avatar là bộ SVG có sẵn trong public/avatars. Admin chỉnh tên, cấp yêu cầu, bật/tắt và tặng riêng;
@@ -49,7 +49,7 @@ export async function ensureAvatarCatalog(tx: DbOrTx = db): Promise<number> {
 }
 
 export async function listAvatarCatalog(actor: Actor) {
-  assertAdmin(actor);
+  assertCan(actor, "stars", "view");
   return loadAvatars();
 }
 
@@ -106,6 +106,7 @@ export async function giftAvatar(actor: Actor, studentId: string, avatarId: stri
 
 /** Đổi avatar cho học viên: chỉ GV của lớp (hoặc Admin), và chỉ avatar đã mở theo cấp hoặc được tặng. */
 export async function setStudentAvatar(actor: Actor, studentId: string, avatarId: string) {
+  assertCan(actor, "stars", "edit");
   await assertStudentAccess(actor, studentId);
   return db.transaction(async (tx) => {
     const [student] = await tx.select().from(students).where(eq(students.id, studentId)).for("update").limit(1);

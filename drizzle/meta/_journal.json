@@ -15,6 +15,13 @@
       "when": 1791213860828,
       "tag": "0001_star_logs_append_only",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1791246181445,
+      "tag": "0002_duty_teacher_role",
+      "breakpoints": true
     }
   ]
 }

@@ -72,7 +72,13 @@ Nguyên tắc: mọi hàm trong `server/services` nhận `actor` lấy từ phi�
 
 - Đăng nhập bằng tên đăng nhập, băm Argon2id, buộc đổi mật khẩu lần đầu, khóa tạm sau 5 lần sai (15 phút), giới hạn tốc độ.
 - 2FA (TOTP) bắt buộc với Admin, có mã dự phòng. Chỉ khi chạy thử mới tắt bằng biến môi trường `ADMIN_2FA_REQUIRED=false`.
-- Admin toàn quyền. GV chỉ thấy và thao tác trên lớp được phân công; GV dạy thay chỉ có quyền trên đúng buổi mình dạy thay.
+- Ba vai trò: **Quản trị** (toàn quyền), **Giáo viên**, **Giáo viên trực**. Quyền của hai vai trò sau do Admin tick ở **Cấu hình → Phân quyền**:
+  - **Phạm vi lớp**: "Chỉ lớp của mình" (lớp được phân công; GV dạy thay có quyền trên đúng buổi mình dạy thay) hoặc "Tất cả lớp".
+  - **Xem / Thêm / Sửa** theo từng menu. Tick Xem thì menu hiện trên thanh menu của vai trò đó và mở cùng trang Admin dùng, giới hạn trong phạm vi lớp.
+  - Mặc định: Giáo viên điểm danh và chấm sao lớp mình; Giáo viên trực thấy mọi lớp và hỗ trợ điểm danh.
+  - Luôn chỉ Admin: xóa dữ liệu; Tài khoản, Nhật ký, Cấu hình; nhập Excel; mở khóa điểm danh; tiêu chí sao, cấp bậc, kho avatar, tặng avatar.
+  - Ngoài Admin, không ai thấy hay ghi được ngày sinh, giới tính, phụ huynh, điện thoại, ghi chú của học viên.
+- Quyền được kiểm tra ở máy chủ trong từng service (`can`/`assertCan` trong `src/server/guard.ts`); ẩn menu và nút chỉ là phần hiển thị.
 
 ### Danh mục (Admin)
 

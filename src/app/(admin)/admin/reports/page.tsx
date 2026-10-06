@@ -6,12 +6,12 @@ import { Button } from "@/components/ui/button";
 import { LABELS } from "@/lib/format";
 import { listClasses } from "@/server/services/classes";
 import { getClassReport } from "@/server/services/summaries";
-import { requirePageUser } from "@/server/session";
+import { requireMenu } from "@/server/session";
 
 export const metadata: Metadata = { title: "Báo cáo" };
 
 export default async function ReportsPage({ searchParams }: PageProps<"/admin/reports">) {
-  const { actor } = await requirePageUser("admin");
+  const { actor, can } = await requireMenu("reports");
   const classes = await listClasses(actor);
   const raw = (await searchParams).classId;
   const current = classes.find((c) => c.id === (Array.isArray(raw) ? raw[0] : raw)) ?? null;
@@ -40,9 +40,11 @@ export default async function ReportsPage({ searchParams }: PageProps<"/admin/re
         <section className="grid gap-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <ExportLinks baseHref={`/api/export/class-report/${current.id}`} />
-            <LinkButton variant="outline" className="h-10" href={`/admin/rewards?tab=summary&classId=${current.id}`}>
-              Tổng kết & quà tặng
-            </LinkButton>
+            {can("view", "rewards") && (
+              <LinkButton variant="outline" className="h-10" href={`/admin/rewards?tab=summary&classId=${current.id}`}>
+                Tổng kết & quà tặng
+              </LinkButton>
+            )}
           </div>
           <ClassReportCharts rows={report.rows} />
           <ClassReportTable rows={report.rows} sessions={report.sessions} />

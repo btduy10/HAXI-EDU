@@ -2,15 +2,17 @@ import "server-only";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { cache } from "react";
+import type { ManagedRole, Menu, PermissionAction, UserRole } from "@/lib/permissions";
 import { auth } from "./auth";
 import { AppError } from "./errors";
-import { type Actor, unauthenticated } from "./guard";
+import { type Actor, can, unauthenticated } from "./guard";
+import { getPermissionConfig } from "./settings";
 
 export type SessionUser = {
   id: string;
   name: string;
   username: string;
-  role: "admin" | "teacher";
+  role: UserRole;
   teacherId: string | null;
   mustChangePassword: boolean;
   twoFactorEnabled: boolean;
@@ -25,12 +27,21 @@ export const getSessionUser = cache(async (): Promise<SessionUser | null> => {
     id: u.id,
     name: u.name,
     username: u.username ?? "",
-    role: u.role === "admin" ? "admin" : "teacher",
+    // Giá trị lạ được coi là vai trò ít quyền nhất.
+    role: u.role === "admin" ? "admin" : u.role === "duty_teacher" ? "duty_teacher" : "teacher",
     teacherId: u.teacherId ?? null,
     mustChangePassword: u.mustChangePassword,
     twoFactorEnabled: Boolean(u.twoFactorEnabled),
   };
 });
+
+// Bảng phân quyền đọc lại mỗi request nên Admin đổi là có hiệu lực ngay.
+const loadPermissions = cache(() => getPermissionConfig());
+
+async function actorOf(user: SessionUser): Promise<Actor> {
+  const base = { userId: user.id, role: user.role, teacherId: user.teacherId };
+  return user.role === "admin" ? base : { ...base, perms: (await loadPermissions())[user.role as ManagedRole] };
+}
 
 /** Bước bắt buộc còn thiếu trước khi được dùng hệ thống. */
 /**
@@ -56,15 +67,28 @@ export async function requireActor(): Promise<Actor> {
   if (needsTwoFactorSetup(user)) {
     throw new AppError("FORBIDDEN", "Quản trị viên cần bật xác thực hai lớp trước khi tiếp tục.");
   }
-  return { userId: user.id, role: user.role, teacherId: user.teacherId };
+  return actorOf(user);
 }
 
-/** Dùng trong trang/layout: chuyển hướng khi chưa đủ điều kiện. */
-export async function requirePageUser(role?: "admin" | "teacher"): Promise<SessionUser & { actor: Actor }> {
+/**
+ * Dùng trong trang/layout: chuyển hướng khi chưa đủ điều kiện.
+ * "admin" = chỉ Quản trị; "teacher" = Giáo viên hoặc Giáo viên trực (khu vực giảng dạy).
+ */
+export async function requirePageUser(area?: "admin" | "teacher"): Promise<SessionUser & { actor: Actor }> {
   const user = await getSessionUser();
   if (!user) redirect("/login");
   const step = pendingStep(user);
   if (step) redirect(step);
-  if (role && user.role !== role) redirect(homeOf(user));
-  return { ...user, actor: { userId: user.id, role: user.role, teacherId: user.teacherId } };
+  if (area && (area === "admin") !== (user.role === "admin")) redirect(homeOf(user));
+  return { ...user, actor: await actorOf(user) };
+}
+
+/**
+ * Trang quản lý của một menu: Admin luôn vào được; vai trò khác phải được tick "Xem" ở menu đó,
+ * nếu không thì về trang chủ của mình. `can` dùng để ẩn/hiện nút — máy chủ vẫn kiểm tra lại trong service.
+ */
+export async function requireMenu(menu: Menu) {
+  const user = await requirePageUser();
+  if (!can(user.actor, menu, "view")) redirect(homeOf(user));
+  return { ...user, can: (action: PermissionAction, of: Menu = menu) => can(user.actor, of, action) };
 }

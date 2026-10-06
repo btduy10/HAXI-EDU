@@ -46,7 +46,7 @@ export async function createAccount(actor: Actor, data: z.output<typeof accountI
         // Better Auth yêu cầu email; hệ thống không dùng email nên sinh địa chỉ nội bộ.
         email: `${data.username}@haxi.local`,
         role: data.role,
-        teacherId: data.role === "teacher" ? data.teacherId : null,
+        teacherId: data.role === "admin" ? null : data.teacherId,
         mustChangePassword: true,
       });
       await tx.insert(account).values({ id: randomUUID(), accountId: id, providerId: "credential", userId: id, password: passwordHash });
@@ -78,7 +78,7 @@ export async function updateAccount(actor: Actor, data: z.output<typeof accountE
     return await db.transaction(async (tx) => {
       const [before] = await tx.select().from(user).where(eq(user.id, data.id)).for("update").limit(1);
       if (!before) throw notFound("tài khoản");
-      const teacherId = data.role === "teacher" ? data.teacherId : null;
+      const teacherId = data.role === "admin" ? null : data.teacherId;
 
       if (before.role !== data.role) {
         if (data.id === actor.userId) throw new AppError("CONFLICT", "Không thể tự đổi vai trò của chính mình.", { role: "Không tự đổi được" });
