@@ -130,7 +130,8 @@ export async function listEnrollments(actor: Actor, classId: string) {
     .from(enrollments)
     .innerJoin(students, eq(students.id, enrollments.studentId))
     .where(eq(enrollments.classId, classId))
-    .orderBy(asc(enrollments.status), asc(students.fullName));
+    // Theo mã học viên; cùng một em ghi danh nhiều lần thì lần mới nhất đứng trước.
+    .orderBy(asc(students.code), desc(enrollments.joinedAt));
 }
 
 export async function enrollStudent(actor: Actor, data: z.output<typeof enrollInput>) {

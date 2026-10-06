@@ -80,7 +80,7 @@ export default async function EnrollmentsPage({ searchParams }: PageProps<"/admi
                 <li key={e.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3 text-sm">
                   <div className="min-w-0">
                     <p className="font-medium break-words">
-                      {e.fullName} <span className="font-normal text-muted-foreground">({e.code})</span>
+                      <span className="tabular-nums">{e.code}</span> <span className="font-normal text-muted-foreground">–</span> {e.fullName}
                     </p>
                     <p className="text-muted-foreground">
                       Vào lớp {formatDate(e.joinedAt)}
