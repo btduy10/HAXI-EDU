@@ -1,12 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ConfirmButton } from "@/components/action-buttons";
+import { AutoSubmitSelect } from "@/components/auto-submit-select";
 import { ClassReportTable, ExportLinks } from "@/components/class-report";
 import { CrudSection } from "@/components/crud-section";
-import { type Field, selectClass } from "@/components/form-dialog";
+import type { Field } from "@/components/form-dialog";
 import { RewardApproval } from "@/components/reward-approval";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { LABELS, formatDateTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import {
@@ -130,22 +130,19 @@ async function SummaryTab({ actor, classId }: { actor: Actor; classId: string })
 
   return (
     <div className="grid gap-4">
-      <form className="flex flex-col gap-2 sm:flex-row sm:items-end">
+      <form>
         <input type="hidden" name="tab" value="summary" />
-        <label className="grid flex-1 gap-1.5 text-sm font-medium">
+        <label className="grid gap-1.5 text-sm font-medium sm:w-1/2">
           Lớp học
-          <select name="classId" defaultValue={current?.id ?? ""} className={selectClass}>
+          <AutoSubmitSelect name="classId" defaultValue={current?.id ?? ""}>
             <option value="">— Chọn lớp —</option>
             {classes.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.code} – {c.name} ({LABELS.classStatus[c.status]})
               </option>
             ))}
-          </select>
+          </AutoSubmitSelect>
         </label>
-        <Button type="submit" variant="outline" className="h-11">
-          Xem
-        </Button>
       </form>
       {current?.status === "open" && <OpenClassPreview actor={actor} classId={current.id} code={current.code} />}
       {current?.status === "closed" && <ClosedClassSummary actor={actor} classId={current.id} />}

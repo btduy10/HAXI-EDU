@@ -172,8 +172,10 @@ test("Admin: đổi mật khẩu → bắt buộc thiết lập 2FA → quản l
 
   // Ghi danh: chọn lớp, thêm học viên vừa nhập.
   await page.goto("/admin/enrollments");
+  // Chọn lớp là hiện danh sách ngay, không còn nút "Xem".
+  await expect(page.getByRole("button", { name: "Xem", exact: true })).toHaveCount(0);
   await page.getByLabel("Lớp học").selectOption({ label: "RB-NC01 – Robotics Nâng cao 01 (7/8)" });
-  await page.getByRole("button", { name: "Xem" }).click();
+  await expect(page).toHaveURL(/\/admin\/enrollments\?classId=/);
   await page.getByRole("button", { name: "Ghi danh học viên" }).click();
   await page.getByLabel("Học viên").selectOption({ label: "HV800 – Đinh Nhập Excel" });
   await page.getByRole("button", { name: "Lưu" }).click();

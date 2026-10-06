@@ -1,8 +1,7 @@
 import type { Metadata } from "next";
 import { FormDialogButton } from "@/components/action-buttons";
-import { selectClass } from "@/components/form-dialog";
+import { AutoSubmitSelect } from "@/components/auto-submit-select";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { LABELS, formatDate, todayIso } from "@/lib/format";
 import { enrollStudentAction, leaveEnrollmentAction } from "@/server/actions/admin";
 import { listClasses, listEnrollments } from "@/server/services/classes";
@@ -29,22 +28,19 @@ export default async function EnrollmentsPage({ searchParams }: PageProps<"/admi
   return (
     <div className="grid gap-4">
       <h1 className="text-lg font-semibold">Ghi danh</h1>
-      <form className="flex flex-col gap-2 sm:flex-row sm:items-end">
-        {/* Màn hình rộng: ô chọn lớp chỉ chiếm nửa chiều ngang; điện thoại vẫn đủ rộng. */}
+      <form>
+        {/* Chọn lớp là hiện danh sách ngay. Màn hình rộng: ô chọn chỉ chiếm nửa chiều ngang. */}
         <label className="grid gap-1.5 text-sm font-medium sm:w-1/2">
           Lớp học
-          <select name="classId" defaultValue={current?.id ?? ""} className={selectClass}>
+          <AutoSubmitSelect name="classId" defaultValue={current?.id ?? ""}>
             <option value="">— Chọn lớp —</option>
             {classes.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.code} – {c.name} ({c.studentCount}/{c.maxSize})
               </option>
             ))}
-          </select>
+          </AutoSubmitSelect>
         </label>
-        <Button type="submit" variant="outline" className="h-11">
-          Xem
-        </Button>
       </form>
 
       {current && (

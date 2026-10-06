@@ -75,7 +75,7 @@ test("Admin: cấu hình, đóng lớp, chốt tổng kết, duyệt và trao qu
   // Tổng kết: lớp đang mở, còn buổi hôm nay chưa điểm danh → không đóng được.
   await page.goto("/admin/rewards?tab=summary");
   await page.getByLabel("Lớp học").selectOption({ label: "RB-NC01 – Robotics Nâng cao 01 (Đang mở)" });
-  await page.getByRole("button", { name: "Xem" }).click();
+  await expect(page).toHaveURL(/tab=summary&classId=/);
   await expect(page.getByRole("heading", { name: "Số liệu tạm tính (lớp đang mở)" })).toBeVisible();
   page.once("dialog", (d) => d.accept());
   await page.getByRole("button", { name: "Đóng lớp & chốt tổng kết" }).click();
@@ -139,7 +139,23 @@ test("Admin: cấu hình, đóng lớp, chốt tổng kết, duyệt và trao qu
   await expect(page.getByRole("heading", { name: "Điểm danh 30 ngày qua" })).toBeVisible();
   await expect(page.getByRole("img", { name: /có đi học: \d+%/ })).toBeVisible();
   await page.screenshot({ path: "test-results/shots/dashboard-1280.png", fullPage: true });
+
+  // Chấm công: mở từ menu, chọn lớp là tính theo trọn khóa của lớp; chọn giáo viên là lọc ngay.
+  await page.getByRole("link", { name: "Chấm công" }).click();
+  await expect(page.getByRole("heading", { name: "Chấm công giáo viên" })).toBeVisible();
+  await page.getByLabel("Lớp (tính theo khóa)").selectOption({ label: "RB-NC01 – Robotics Nâng cao 01" });
+  await expect(page).toHaveURL(/classId=/);
+  await expect(page.getByRole("link", { name: "Cả khóa của lớp RB-NC01" })).toBeVisible();
+  await expect(page.getByRole("columnheader", { name: "Số công" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Chi tiết buổi dạy/ })).toBeVisible();
+  await page.getByLabel("Giáo viên").selectOption({ label: "GV01 – Nguyễn Thị Lan" });
+  await expect(page).toHaveURL(/teacherId=/);
+  await page.getByLabel("Giáo viên").selectOption({ label: "Tất cả giáo viên" });
+  await page.screenshot({ path: "test-results/shots/timesheet-1280.png", fullPage: true });
   await page.setViewportSize({ width: 360, height: 740 });
+  await expectNoHorizontalScroll(page);
+  await page.screenshot({ path: "test-results/shots/timesheet-360.png", fullPage: true });
+  await page.goto("/admin/dashboard");
 
   // Biểu đồ trên điện thoại: không tràn ngang, có chú giải số liệu.
   await expect(page.getByRole("heading", { name: "Chuyên cần theo lớp" })).toBeVisible();
