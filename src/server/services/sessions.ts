@@ -25,7 +25,7 @@ import {
   planSessions,
   staffOf,
 } from "@/domain/schedule";
-import { addDays } from "@/lib/dates";
+import { WEEKDAY_LABELS, addDays } from "@/lib/dates";
 import { formatDate, todayIso } from "@/lib/format";
 import type {
   makeupInput,
@@ -293,6 +293,17 @@ const templatePlace = (
   cls: { defaultRoomId: string | null },
 ) => ({ weekday: data.weekday, timeSlotId: data.timeSlotId, roomId: data.roomId ?? cls.defaultRoomId, teacherIds: [data.teacherId, data.assistantTeacherId] });
 
+/** Một lớp không có hai dòng lịch mẫu cùng Thứ + Ca + Khung giờ. */
+async function assertTemplateUnique(tx: Tx, classId: string, data: { weekday: number; timeSlotId: string }, exceptId?: string) {
+  const conditions = [eq(scheduleTemplates.classId, classId), eq(scheduleTemplates.weekday, data.weekday), eq(scheduleTemplates.timeSlotId, data.timeSlotId)];
+  if (exceptId) conditions.push(ne(scheduleTemplates.id, exceptId));
+  const [dup] = await tx.select({ id: scheduleTemplates.id }).from(scheduleTemplates).where(and(...conditions)).limit(1);
+  if (dup) {
+    const message = `Lớp đã có lịch mẫu vào ${WEEKDAY_LABELS[data.weekday]}, ca và khung giờ này.`;
+    throw new AppError("VALIDATION", message, { timeSlotId: message });
+  }
+}
+
 export async function createTemplate(actor: Actor, data: z.output<typeof templateInput>, now: Date = new Date()): Promise<GenerationResult> {
   assertCan(actor, "classes", "edit");
   await assertClassAccess(actor, data.classId);
@@ -301,6 +312,7 @@ export async function createTemplate(actor: Actor, data: z.output<typeof templat
     await lockSchedule(tx);
     const [cls] = await tx.select().from(classes).where(eq(classes.id, data.classId)).limit(1);
     if (!cls) throw notFound("lớp học");
+    await assertTemplateUnique(tx, data.classId, data);
     await assertNoWeeklyClash(tx, templatePlace(data, cls), { extrasOnly: true });
     const [row] = await tx.insert(scheduleTemplates).values(data).returning();
     await audit(tx, { userId: actor.userId, action: "create", tableName: "schedule_templates", recordId: row!.id, newValue: row });
@@ -330,6 +342,7 @@ export async function updateTemplate(
     await assertClassAccess(actor, before.classId, tx);
     const [cls] = await tx.select().from(classes).where(eq(classes.id, before.classId)).limit(1);
     if (!cls) throw notFound("lớp học");
+    await assertTemplateUnique(tx, before.classId, data, id);
     await assertNoWeeklyClash(tx, templatePlace(data, cls), { extrasOnly: true });
     const [after] = await tx.update(scheduleTemplates).set(data).where(eq(scheduleTemplates.id, id)).returning();
     await audit(tx, { userId: actor.userId, action: "update", tableName: "schedule_templates", recordId: id, oldValue: before, newValue: after });
@@ -656,10 +669,20 @@ async function generateInTx(tx: Tx, actor: Actor, classId: string, templateId?: 
 
   // Khóa nhận diện buổi đã sinh: dòng lịch mẫu + ngày GỐC (buổi đã dời vẫn được nhận ra).
   const existing = await tx
-    .select({ templateId: sessions.templateId, date: sessions.date, originalDate: sessions.originalDate, kind: sessions.kind, status: sessions.status })
+    .select({
+      templateId: sessions.templateId,
+      date: sessions.date,
+      originalDate: sessions.originalDate,
+      timeSlotId: sessions.timeSlotId,
+      kind: sessions.kind,
+      status: sessions.status,
+    })
     .from(sessions)
     .where(eq(sessions.classId, classId));
   const existingKeys = new Set(existing.map((s) => `${s.templateId}|${s.originalDate ?? s.date}`));
+  // Ngày + khung giờ mà CHÍNH lớp này đã có buổi: dòng lịch mẫu bị lặp (cùng thứ, cùng khung) không tạo buổi thứ hai
+  // và cũng không bị báo là trùng lịch với chính lớp mình.
+  const ownSlots = new Set(existing.filter((s) => s.status !== "cancelled" && s.timeSlotId).map((s) => `${s.date}|${s.timeSlotId}`));
   // Số buổi của lớp không vượt số buổi của khóa học: buổi thường chưa hủy đã có được tính trước.
   const counted = existing.filter((s) => s.kind === "regular" && s.status !== "cancelled").length;
   const room = Math.max(0, courseSessions - counted);
@@ -670,6 +693,10 @@ async function generateInTx(tx: Tx, actor: Actor, classId: string, templateId?: 
 
   for (const p of planned) {
     if (existingKeys.has(`${p.templateId}|${p.date}`)) {
+      result.alreadyExisting++;
+      continue;
+    }
+    if (ownSlots.has(`${p.date}|${p.timeSlotId}`)) {
       result.alreadyExisting++;
       continue;
     }
@@ -686,6 +713,7 @@ async function generateInTx(tx: Tx, actor: Actor, classId: string, templateId?: 
     toInsert.push({ ...p, classId, kind: "regular", status: "planned" });
     // Buổi vừa lên kế hoạch cũng chiếm GV/phòng đối với các buổi sau trong cùng lần sinh.
     busy.push({ id: `new-${toInsert.length}`, label: cls.code, ...p, teacherIds: staffOf(p) });
+    ownSlots.add(`${p.date}|${p.timeSlotId}`);
   }
 
   result.scheduled = counted + toInsert.length;
