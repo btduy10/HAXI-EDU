@@ -138,6 +138,32 @@ export async function nextSessionDate(actor: Actor, classId: string, from: strin
   return last?.date ?? null;
 }
 
+/**
+ * Tình trạng lịch học của lớp cho trang Lớp học: số buổi đã xếp so với khóa học, buổi đầu/cuối,
+ * số buổi đã dạy, buổi chưa có GV chính, và vài buổi sắp tới (kèm GV, trợ giảng, phòng).
+ */
+export async function classScheduleOverview(actor: Actor, classId: string, today: string = todayIso()) {
+  assertCanAny(actor, ["classes", "view"], ["timetable", "view"]);
+  await assertClassAccess(actor, classId);
+  const [[cls], all] = await Promise.all([
+    db.select({ totalSessions: courses.totalSessions }).from(classes).innerJoin(courses, eq(courses.id, classes.courseId)).where(eq(classes.id, classId)).limit(1),
+    sessionQuery().where(eq(sessions.classId, classId)).orderBy(asc(sessions.date), asc(sessions.startTime)),
+  ]);
+  const active = all.filter((s) => s.status !== "cancelled");
+  const regular = active.filter((s) => s.kind === "regular");
+  return {
+    courseSessions: cls?.totalSessions ?? 0,
+    scheduled: regular.length,
+    done: active.filter((s) => s.status === "done").length,
+    cancelled: all.length - active.length,
+    makeup: active.length - regular.length,
+    first: active[0] ?? null,
+    last: active.at(-1) ?? null,
+    missingTeacher: active.filter((s) => !s.teacherId && !s.substituteTeacherId).length,
+    upcoming: active.filter((s) => s.date >= today && s.status === "planned").slice(0, 5),
+  };
+}
+
 export async function getSession(actor: Actor, sessionId: string): Promise<SessionRow> {
   await assertSessionAccess(actor, sessionId);
   const [row] = await sessionQuery().where(eq(sessions.id, sessionId)).limit(1);

@@ -51,6 +51,12 @@ describe("xếp lại lịch lớp theo lịch mẫu", () => {
     expect(rebuilt.every((s) => s.teacherId === teacherC!.id && s.assistantTeacherId === f.teacherA.id)).toBe(true);
     expect(rebuilt[0]!.date).toBe("2026-01-07");
 
+    // Trang Lớp học hiển thị tình trạng lịch: 10/10 buổi, buổi đầu, đã dạy 1, buổi sắp tới kèm GV.
+    const overview = await svc.classScheduleOverview(f.admin, f.classA.id, "2026-01-08");
+    expect(overview).toMatchObject({ courseSessions: 10, scheduled: 10, done: 1, missingTeacher: 1 });
+    expect(overview.first!.date).toBe("2026-01-05");
+    expect(overview.upcoming.map((s) => [s.date, s.teacherName, s.assistantName])[0]).toEqual(["2026-01-14", "GV C", "Giáo viên A"]);
+
     // Bấm lại: vẫn đúng 10 buổi.
     await svc.rebuildSchedule(f.admin, f.classA.id);
     expect(await sessionsOf(f.classA.id)).toHaveLength(10);

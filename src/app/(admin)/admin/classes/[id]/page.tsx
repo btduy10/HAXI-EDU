@@ -6,14 +6,14 @@ import type { Field } from "@/components/form-dialog";
 import { Badge } from "@/components/ui/badge";
 import { LinkButton } from "@/components/link-button";
 import { GenerateSessionsButton } from "@/components/generate-sessions-button";
-import { WEEKDAY_LABELS } from "@/lib/dates";
+import { WEEKDAY_LABELS, isoWeekday, startOfWeek } from "@/lib/dates";
 import { LABELS, formatDate, formatMoney, formatTime, toOptions, todayIso } from "@/lib/format";
 import { assignTeacherAction, unassignTeacherAction, updateClassTeacherAction } from "@/server/actions/admin";
 import { createTemplateAction, deleteTemplateAction, updateTemplateAction } from "@/server/actions/schedule";
 import { orNotFound, uuidParam } from "@/server/page";
 import { listRooms, listTeachers, listTimeSlots } from "@/server/services/catalog";
 import { getClass, listClassTeachers } from "@/server/services/classes";
-import { listTemplates, nextSessionDate } from "@/server/services/sessions";
+import { classScheduleOverview, listTemplates, nextSessionDate } from "@/server/services/sessions";
 import { listClassProgress } from "@/server/services/stars";
 import { requireMenu } from "@/server/session";
 
@@ -34,8 +34,11 @@ export default async function ClassDetailPage({ params }: PageProps<"/admin/clas
     listRooms(actor),
   ]);
 
-  // "Xem thời khóa biểu lớp" mở đúng tuần có buổi sắp tới của lớp, lọc theo lớp.
-  const timetableDate = can("view", "timetable") ? await nextSessionDate(actor, classId, todayIso()) : null;
+  // "Xem thời khóa biểu lớp" mở tuần hiện tại nếu lớp có buổi trong tuần này; nếu không thì tuần có buổi sắp tới. Lọc theo lớp.
+  const [timetableDate, overview] = await Promise.all([
+    can("view", "timetable") ? nextSessionDate(actor, classId, startOfWeek(todayIso())) : null,
+    classScheduleOverview(actor, classId),
+  ]);
   const timetableHref = `/admin/timetable?${new URLSearchParams({ view: "week", classId, ...(timetableDate ? { date: timetableDate } : {}) })}`;
 
   const assignedIds = new Set(assigned.map((a) => a.teacherId));
@@ -192,6 +195,64 @@ export default async function ClassDetailPage({ params }: PageProps<"/admin/clas
           {formatDate(cls.endDate)}, bỏ ngày nghỉ, đủ số buổi của khóa học. Bấm nút dưới đây để xếp lại toàn bộ buổi chưa dạy theo lịch mẫu
           hiện tại; buổi đã điểm danh, đã ghi sao và buổi đã hủy giữ nguyên.
         </p>
+        {overview.scheduled + overview.makeup > 0 ? (
+          <div className="grid gap-2 rounded-lg border p-3 text-sm">
+            <p>
+              Đã xếp <strong>{overview.scheduled}/{overview.courseSessions}</strong> buổi theo khóa học
+              {overview.first && overview.last && (
+                <>
+                  , từ {WEEKDAY_LABELS[isoWeekday(overview.first.date)]} {formatDate(overview.first.date)} đến{" "}
+                  {WEEKDAY_LABELS[isoWeekday(overview.last.date)]} {formatDate(overview.last.date)}
+                </>
+              )}
+              . Đã dạy {overview.done} buổi
+              {overview.makeup > 0 && ` · ${overview.makeup} buổi bù`}
+              {overview.cancelled > 0 && ` · ${overview.cancelled} buổi đã hủy`}.
+            </p>
+            {overview.scheduled < overview.courseSessions && (
+              <p className="text-destructive">Còn thiếu {overview.courseSessions - overview.scheduled} buổi so với khóa học. Bấm “Sinh buổi học từ lịch mẫu” để xếp đủ.</p>
+            )}
+            {overview.missingTeacher > 0 && (
+              <p className="text-destructive">
+                {overview.missingTeacher} buổi chưa có giáo viên. Hãy phân công GV chính cho lớp hoặc chọn GV trong lịch mẫu, rồi bấm “Sinh buổi học từ
+                lịch mẫu”.
+              </p>
+            )}
+            {overview.upcoming.length > 0 && (
+              <div className="grid gap-1">
+                <p className="font-medium">Buổi sắp tới</p>
+                <ul className="grid gap-1">
+                  {overview.upcoming.map((s) => {
+                    const text = (
+                      <>
+                        <span className="font-medium">
+                          {WEEKDAY_LABELS[isoWeekday(s.date)]} {formatDate(s.date)}
+                        </span>{" "}
+                        · {s.slotName ? `${s.slotName} ` : ""}
+                        {formatTime(s.startTime)}–{formatTime(s.endTime)} · GV: {s.substituteName ?? s.teacherName ?? "chưa có"}
+                        {s.assistantName && ` · Trợ giảng: ${s.assistantName}`}
+                        {s.roomName && ` · ${s.roomName}`}
+                      </>
+                    );
+                    return (
+                      <li key={s.id} className="rounded-md bg-muted/50 px-2 py-1">
+                        {can("view", "timetable") ? (
+                          <Link href={`/admin/sessions/${s.id}`} className="hover:underline">
+                            {text}
+                          </Link>
+                        ) : (
+                          text
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            )}
+          </div>
+        ) : (
+          <p className="rounded-lg border border-dashed p-3 text-sm text-muted-foreground">Lớp chưa có buổi học nào. Thêm lịch mẫu rồi bấm “Sinh buổi học từ lịch mẫu”.</p>
+        )}
         <div className="flex flex-wrap items-start gap-2">
           {canEdit && (
             <GenerateSessionsButton
