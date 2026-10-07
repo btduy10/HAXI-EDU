@@ -69,6 +69,16 @@ export const timeSlotInput = z
   })
   .refine((v) => v.defaultStart < v.defaultEnd, { path: ["defaultEnd"], message: "Giờ kết thúc phải sau giờ bắt đầu" });
 
+/** Lớp học thêm: lớp ngoài hệ thống, giữ phòng hằng tuần theo Thứ + Ca + Khung giờ. */
+export const extraClassInput = z.object({
+  name: reqText(100),
+  courseId: id,
+  roomId: id,
+  weekday: intIn(1, 7),
+  timeSlotId: id,
+  teacherId: optId,
+});
+
 export const holidayInput = z.object({
   date: isoDate,
   reason: reqText(200),
@@ -173,4 +183,5 @@ export const studentUpdate = withId(studentInput);
 export const courseUpdate = withId(courseInput);
 export const roomUpdate = withId(roomInput);
 export const timeSlotUpdate = withId(timeSlotInput);
+export const extraClassUpdate = withId(extraClassInput);
 export const classUpdate = withId(classInput);

@@ -21,6 +21,8 @@ export type TimetableSession = {
   kind: "regular" | "makeup";
   status: "planned" | "done" | "cancelled";
   attendanceCount: number;
+  /** Lớp học thêm (lớp ngoài, chỉ giữ phòng): không phải buổi học, không bấm vào được, không có điểm danh. */
+  extra?: boolean;
 };
 
 type HrefOf = (session: TimetableSession) => string;
@@ -28,6 +30,7 @@ type HrefOf = (session: TimetableSession) => string;
 const STATUS_LABEL = { planned: "Chưa điểm danh", done: "Đã điểm danh", cancelled: "Đã hủy" } as const;
 
 export function SessionBadges({ session, today }: { session: TimetableSession; today: string }) {
+  if (session.extra) return <Badge variant="outline">Học thêm</Badge>;
   return (
     <>
       {session.kind === "makeup" && <Badge variant="outline">Học bù</Badge>}
@@ -42,6 +45,24 @@ export function SessionBadges({ session, today }: { session: TimetableSession; t
 
 /** Thẻ buổi học đầy đủ, dùng cho danh sách theo ngày (di động) và các bảng tổng hợp. */
 export function SessionCard({ session, href, today }: { session: TimetableSession; href: string; today: string }) {
+  if (session.extra) {
+    return (
+      <div className="rounded-lg border border-dashed border-amber-600/40 bg-amber-500/10 p-3 text-sm">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <span className="font-semibold tabular-nums">
+            {formatTime(session.startTime)}–{formatTime(session.endTime)}
+          </span>
+          <span className="font-medium">{session.classCode}</span>
+          <SessionBadges session={session} today={today} />
+        </div>
+        <p className="mt-1 text-muted-foreground">
+          {session.className}
+          {session.roomName && ` · ${session.roomName}`}
+        </p>
+        {session.teacherName && <p className="text-muted-foreground">GV: {session.teacherName}</p>}
+      </div>
+    );
+  }
   return (
     <Link
       href={href}
@@ -67,6 +88,22 @@ export function SessionCard({ session, href, today }: { session: TimetableSessio
 }
 
 function SessionChip({ session, href }: { session: TimetableSession; href: string }) {
+  if (session.extra) {
+    return (
+      <div
+        title={`Lớp học thêm · ${session.className}`}
+        className="min-w-0 overflow-hidden rounded-md border border-dashed border-amber-600/40 bg-amber-500/10 px-1.5 py-1 text-xs leading-tight"
+      >
+        <span className="block truncate">
+          <span className="font-medium tabular-nums">{formatTime(session.startTime)}</span> {session.classCode}
+        </span>
+        <span className="block truncate text-muted-foreground">
+          Học thêm{session.teacherName && ` · ${session.teacherName}`}
+          {session.roomName && ` · ${session.roomName}`}
+        </span>
+      </div>
+    );
+  }
   return (
     <Link
       href={href}

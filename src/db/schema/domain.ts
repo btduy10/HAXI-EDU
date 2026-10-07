@@ -195,6 +195,33 @@ export const scheduleTemplates = pgTable(
   ],
 );
 
+// Lớp học thêm: lớp ngoài hệ thống, chỉ để giữ phòng hằng tuần trên Thời khóa biểu (không điểm danh, sao, chấm công).
+export const extraClasses = pgTable(
+  "extra_classes",
+  {
+    id: id(),
+    name: text("name").notNull(),
+    courseId: uuid("course_id")
+      .notNull()
+      .references(() => courses.id),
+    roomId: uuid("room_id")
+      .notNull()
+      .references(() => rooms.id),
+    weekday: smallint("weekday").notNull(),
+    // Ca + Khung giờ là một dòng time_slots.
+    timeSlotId: uuid("time_slot_id")
+      .notNull()
+      .references(() => timeSlots.id),
+    teacherId: uuid("teacher_id").references(() => teachers.id),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    index("extra_classes_weekday_slot_idx").on(t.weekday, t.timeSlotId),
+    check("extra_classes_weekday_chk", sql`${t.weekday} between 1 and 7`),
+  ],
+);
+
 export const sessions = pgTable(
   "sessions",
   {

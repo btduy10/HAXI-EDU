@@ -19,6 +19,7 @@ const WIPED_TABLES = [
   "session_students",
   "sessions",
   "schedule_templates",
+  "extra_classes",
   "enrollments",
   "class_teachers",
   "holidays",

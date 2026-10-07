@@ -11,6 +11,7 @@ import { formatDate, todayIso } from "@/lib/format";
 import type { Actor } from "@/server/guard";
 import { listTeachers, listRooms, listTimeSlotsForGrid } from "@/server/services/catalog";
 import { listClasses } from "@/server/services/classes";
+import { extraClassesForRange } from "@/server/services/extra-classes";
 import { listSessions } from "@/server/services/sessions";
 
 type Params = Record<string, string | string[] | undefined>;
@@ -54,11 +55,35 @@ export async function TimetablePage({
       ? { from: startOfWeek(date), to: addDays(startOfWeek(date), 6) }
       : { from: startOfWeek(startOfMonth(date)), to: addDays(startOfWeek(endOfMonth(date)), 6) };
 
-  const [sessions, slots, options] = await Promise.all([
+  const [lessons, extras, slots, options] = await Promise.all([
     listSessions(actor, { ...range, ...filters, personal: !admin }),
+    // Lớp học thêm (giữ phòng hằng tuần): ẩn khi đang lọc theo một lớp cụ thể.
+    filters.classId ? [] : extraClassesForRange(actor, { ...range, teacherId: filters.teacherId, roomId: filters.roomId, personal: !admin }),
     listTimeSlotsForGrid(),
     admin ? Promise.all([listTeachers(actor), listClasses(actor), listRooms(actor)]) : null,
   ]);
+
+  const sessions: TimetableSession[] = [
+    ...lessons,
+    ...extras.map((e) => ({
+      id: e.key,
+      classCode: e.name,
+      className: e.courseName,
+      date: e.date,
+      originalDate: null,
+      startTime: e.startTime,
+      endTime: e.endTime,
+      timeSlotId: e.timeSlotId,
+      roomName: e.roomName,
+      teacherName: e.teacherName,
+      substituteName: null,
+      assistantName: null,
+      kind: "regular" as const,
+      status: "planned" as const,
+      attendanceCount: 0,
+      extra: true,
+    })),
+  ].sort((a, b) => a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime));
 
   const href = (next: { view?: string; date?: string }) => {
     const query = new URLSearchParams({ view: next.view ?? view, date: next.date ?? date });

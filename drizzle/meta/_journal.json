@@ -92,6 +92,13 @@
       "when": 1791365073958,
       "tag": "0012_time_slot_periods",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1791366616863,
+      "tag": "0013_extra_classes",
+      "breakpoints": true
     }
   ]
 }

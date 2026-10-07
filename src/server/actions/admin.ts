@@ -22,12 +22,15 @@ import {
   teacherInput,
   teacherUpdate,
   timeSlotInput,
+  extraClassInput,
+  extraClassUpdate,
   timeSlotUpdate,
   userIdInput,
 } from "@/lib/validation/entities";
 import { runAction } from "../action";
 import * as accounts from "../services/accounts";
 import * as catalog from "../services/catalog";
+import * as extraClasses from "../services/extra-classes";
 import * as classes from "../services/classes";
 import * as students from "../services/students";
 
@@ -63,6 +66,12 @@ export const updateTimeSlotAction = async (input: unknown) =>
   runAction(timeSlotUpdate, input, (a, d) => catalog.updateTimeSlot(a, d.id, d.data), ADMIN);
 export const deleteTimeSlotAction = async (input: unknown) =>
   runAction(idOnly, input, (a, d) => catalog.deleteTimeSlot(a, d.id), ADMIN);
+
+export const createExtraClassAction = async (input: unknown) => runAction(extraClassInput, input, extraClasses.createExtraClass, ADMIN);
+export const updateExtraClassAction = async (input: unknown) =>
+  runAction(extraClassUpdate, input, (a, d) => extraClasses.updateExtraClass(a, d.id, d.data), ADMIN);
+export const deleteExtraClassAction = async (input: unknown) =>
+  runAction(idOnly, input, (a, d) => extraClasses.deleteExtraClass(a, d.id), ADMIN);
 
 export const createHolidayAction = async (input: unknown) => runAction(holidayInput, input, catalog.createHoliday, ADMIN);
 export const deleteHolidayAction = async (input: unknown) =>

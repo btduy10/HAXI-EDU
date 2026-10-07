@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { NEW_PASSWORD, loadAdminSecret, login, sql, totp } from "./helpers";
+import { NEW_PASSWORD, expectNoHorizontalScroll, loadAdminSecret, login, sql, totp } from "./helpers";
 
 // Chạy sau phase1–4: admin đã bật 2FA, gv.lan đã đổi mật khẩu. Dùng lớp mới RB-TG01 để không ảnh hưởng lớp khác.
 test.describe.configure({ mode: "serial" });
@@ -88,4 +88,39 @@ test("Phân công GV chính + trợ giảng kèm lương, lịch mẫu tự sinh
   expect(await db`select id from sessions where id = ${sessionId}`).toHaveLength(0);
   expect(await db`select id from attendances where session_id = ${sessionId}`).toHaveLength(0);
   await db.end();
+});
+
+test("Lớp học thêm: Admin thêm ở trang Lớp học, Thời khóa biểu hiện mục Học thêm đúng thứ; trùng thứ + khung + phòng bị báo", async ({ page }) => {
+  await login(page, "admin", NEW_PASSWORD);
+  await page.getByLabel("Mã xác thực").fill(totp(loadAdminSecret()));
+  await page.getByRole("button", { name: "Xác nhận" }).click();
+  await expect(page).toHaveURL(/\/admin\/dashboard$/);
+
+  // Dùng thứ của ngày mai để không trùng lịch mẫu của RB-TG01 (thứ hôm nay, Ca E2E).
+  const day = shift(today(), 1);
+  await page.goto("/admin/classes");
+  const section = page.locator("section").filter({ has: page.getByRole("heading", { name: /Lớp học thêm/ }) });
+  const add = async (name: string) => {
+    await section.getByRole("button", { name: "Thêm", exact: true }).click();
+    await page.locator("#f-name").fill(name);
+    await page.locator("#f-courseId").selectOption({ index: 1 });
+    await page.locator("#f-roomId").selectOption({ index: 1 });
+    await page.locator("#f-weekday").selectOption(String(isoWeekday(day)));
+    await page.locator("#f-timeSlotId").selectOption({ label: "Ca E2E – Khung 1 (05:00–05:45)" });
+    await page.getByRole("button", { name: "Lưu" }).click();
+  };
+  await add("Toán thêm E2E");
+  await expect(page.getByText("Đã lưu.")).toBeVisible();
+  await expect(section.getByText("Toán thêm E2E").first()).toBeVisible();
+  await expect(page.getByText("Đã lưu.")).toHaveCount(0);
+  await expectNoHorizontalScroll(page);
+
+  await add("Trùng phòng E2E");
+  await expect(page.getByText(/Trùng phòng với lớp học thêm "Toán thêm E2E"/).first()).toBeVisible();
+  await page.getByRole("button", { name: "Hủy" }).click();
+
+  await page.goto(`/admin/timetable?date=${day}`);
+  await expect(page.getByText("Toán thêm E2E").first()).toBeVisible();
+  await expect(page.getByText("Học thêm").first()).toBeVisible();
+  await expectNoHorizontalScroll(page);
 });

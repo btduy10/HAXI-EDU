@@ -8,7 +8,7 @@ export async function resetDb() {
   await db.execute(sql`
     truncate table
       gift_redemptions, gift_handovers, course_summaries, reward_tiers, gifts, student_avatar_gifts, star_logs, star_criteria,
-      attendances, session_students, sessions, schedule_templates, enrollments, class_teachers, holidays,
+      attendances, session_students, sessions, schedule_templates, extra_classes, enrollments, class_teachers, holidays,
       classes, time_slots, rooms, courses, students, avatars, levels, audit_logs, app_settings,
       two_factor, verification, account, session, rate_limit, "user", teachers
     restart identity cascade
