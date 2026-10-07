@@ -73,14 +73,19 @@ export const rooms = pgTable("rooms", {
 });
 
 // Ca cố định: chỉ là giờ mặc định, buổi học sao chép giờ từ đây lúc sinh.
-export const timeSlots = pgTable("time_slots", {
-  id: id(),
-  name: text("name").notNull().unique(),
-  defaultStart: time("default_start").notNull(),
-  defaultEnd: time("default_end").notNull(),
-  createdAt: createdAt(),
-  updatedAt: updatedAt(),
-});
+// Mỗi dòng là một khung giờ; một ca (vd. "Ca chiều") có thể có nhiều khung giờ cùng tên.
+export const timeSlots = pgTable(
+  "time_slots",
+  {
+    id: id(),
+    name: text("name").notNull(),
+    defaultStart: time("default_start").notNull(),
+    defaultEnd: time("default_end").notNull(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [uniqueIndex("time_slots_name_frame_uq").on(t.name, t.defaultStart, t.defaultEnd)],
+);
 
 export const classes = pgTable(
   "classes",

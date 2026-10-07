@@ -71,6 +71,13 @@
       "when": 1791362298137,
       "tag": "0009_drop_account_permissions",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1791363728806,
+      "tag": "0010_time_slot_frames",
+      "breakpoints": true
     }
   ]
 }

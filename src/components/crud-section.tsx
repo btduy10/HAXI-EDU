@@ -16,6 +16,8 @@ export type CrudRow = {
   /** Giá trị gốc để nạp vào form sửa. */
   values: Record<string, string>;
   href?: string;
+  /** Tên dòng dùng cho nút Sửa/Xóa và hộp xác nhận, mặc định là ô đầu tiên. */
+  label?: string;
 };
 
 /**
@@ -39,7 +41,10 @@ export function CrudSection({
   startIndex = 0,
   total,
   footer,
+  mergeFirstColumn = false,
 }: {
+  /** Gộp ô đầu của các dòng liền nhau có cùng giá trị (vd. một ca có nhiều khung giờ); STT đếm theo nhóm. */
+  mergeFirstColumn?: boolean;
   /** Hiện cột STT ở đầu danh sách. */
   numbered?: boolean;
   /** Tên các cột canh giữa trong bảng (cột STT luôn canh giữa). */
@@ -67,7 +72,7 @@ export function CrudSection({
   const [pending, startTransition] = useTransition();
 
   function remove(row: CrudRow) {
-    if (!deleteAction || !window.confirm(`Xóa "${row.cells[0]}"? Thao tác này không hoàn tác được.`)) return;
+    if (!deleteAction || !window.confirm(`Xóa "${row.label ?? row.cells[0]}"? Thao tác này không hoàn tác được.`)) return;
     startTransition(async () => {
       const result = await deleteAction({ id: row.id });
       if (result.ok) toast.success("Đã xóa.");
@@ -83,17 +88,27 @@ export function CrudSection({
         </LinkButton>
       )}
       {updateAction && (
-        <Button variant="ghost" size="icon-lg" aria-label={`Sửa ${row.cells[0]}`} onClick={() => setEditing(row)}>
+        <Button variant="ghost" size="icon-lg" aria-label={`Sửa ${row.label ?? row.cells[0]}`} onClick={() => setEditing(row)}>
           <PencilIcon />
         </Button>
       )}
       {deleteAction && (
-        <Button variant="ghost" size="icon-lg" aria-label={`Xóa ${row.cells[0]}`} disabled={pending} onClick={() => remove(row)}>
+        <Button variant="ghost" size="icon-lg" aria-label={`Xóa ${row.label ?? row.cells[0]}`} disabled={pending} onClick={() => remove(row)}>
           <Trash2Icon />
         </Button>
       )}
     </div>
   );
+
+  // Gộp ô đầu: số dòng của mỗi nhóm (0 = dòng nằm trong nhóm phía trên) và STT theo nhóm.
+  const spans = rows.map((row, i) => {
+    if (!mergeFirstColumn) return 1;
+    if (i > 0 && rows[i - 1]!.cells[0] === row.cells[0]) return 0;
+    let n = 1;
+    while (rows[i + n]?.cells[0] === row.cells[0]) n++;
+    return n;
+  });
+  const groupNo = spans.map((_, i) => spans.slice(0, i + 1).filter((n) => n > 0).length);
 
   return (
     <section className="grid gap-3">
@@ -117,7 +132,7 @@ export function CrudSection({
               <li key={row.id} className={cn("flex gap-2 rounded-lg border p-3", row.href ? "flex-col" : "items-start justify-between")}>
                 <div className="min-w-0">
                   <p className="font-medium break-words">
-                    {numbered && <span className="mr-1 font-normal text-muted-foreground tabular-nums">{startIndex + index + 1}.</span>}
+                    {numbered && <span className="mr-1 font-normal text-muted-foreground tabular-nums">{startIndex + groupNo[index]!}.</span>}
                     {row.cells[0]}
                   </p>
                   <dl className="mt-1 grid gap-0.5 text-sm text-muted-foreground">
@@ -151,12 +166,22 @@ export function CrudSection({
               <TableBody>
                 {rows.map((row, index) => (
                   <TableRow key={row.id}>
-                    {numbered && <TableCell className="text-center text-muted-foreground tabular-nums">{startIndex + index + 1}</TableCell>}
-                    {row.cells.map((cell, i) => (
-                      <TableCell key={columns[i]} className={cn("whitespace-normal", centered.includes(columns[i]!) && "text-center")}>
-                        {cell}
+                    {numbered && spans[index]! > 0 && (
+                      <TableCell rowSpan={spans[index]} className="text-center align-top text-muted-foreground tabular-nums">
+                        {startIndex + groupNo[index]!}
                       </TableCell>
-                    ))}
+                    )}
+                    {row.cells.map((cell, i) =>
+                      i === 0 && spans[index] === 0 ? null : (
+                        <TableCell
+                          key={columns[i]}
+                          rowSpan={i === 0 && spans[index]! > 1 ? spans[index] : undefined}
+                          className={cn("whitespace-normal", i === 0 && spans[index]! > 1 && "align-top", centered.includes(columns[i]!) && "text-center")}
+                        >
+                          {cell}
+                        </TableCell>
+                      ),
+                    )}
                     <TableCell>{rowActions(row)}</TableCell>
                   </TableRow>
                 ))}

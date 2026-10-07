@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { CrudSection } from "@/components/crud-section";
 import type { Field } from "@/components/form-dialog";
+import { orderSlotFrames } from "@/domain/time-slots";
 import { formatDate, formatTime } from "@/lib/format";
 import {
   createHolidayAction,
@@ -24,7 +25,7 @@ const roomFields: Field[] = [
 ];
 
 const slotFields: Field[] = [
-  { name: "name", label: "Tên ca", required: true },
+  { name: "name", label: "Tên ca", required: true, hint: "Một ca có nhiều khung giờ: thêm từng khung với cùng tên ca (vd. Ca chiều)." },
   { name: "defaultStart", label: "Giờ bắt đầu mặc định", type: "time", required: true },
   {
     name: "defaultEnd",
@@ -76,10 +77,12 @@ export default async function RoomsSlotsPage() {
       <CrudSection
         title="Ca học"
         numbered
-        columns={["Tên ca", "Bắt đầu", "Kết thúc"]}
-        rows={slots.map((s) => ({
+        columns={["Tên ca", "Khung giờ", "Bắt đầu", "Kết thúc"]}
+        mergeFirstColumn
+        rows={orderSlotFrames(slots).map((s) => ({
           id: s.id,
-          cells: [s.name, formatTime(s.defaultStart), formatTime(s.defaultEnd)],
+          label: `${s.name} – Khung ${s.frame}`,
+          cells: [s.name, `Khung ${s.frame}`, formatTime(s.defaultStart), formatTime(s.defaultEnd)],
           values: { name: s.name, defaultStart: formatTime(s.defaultStart), defaultEnd: formatTime(s.defaultEnd) },
         }))}
         fields={slotFields}

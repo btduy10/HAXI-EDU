@@ -1,0 +1,2 @@
+ALTER TABLE "time_slots" DROP CONSTRAINT "time_slots_name_unique";--> statement-breakpoint
+CREATE UNIQUE INDEX "time_slots_name_frame_uq" ON "time_slots" USING btree ("name","default_start","default_end");
