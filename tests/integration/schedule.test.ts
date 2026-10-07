@@ -81,13 +81,16 @@ describe("sinh buổi học", () => {
     // Lớp B khác tên ca nhưng 09:00–10:30 chồng lên 08:00–09:30 trong cùng phòng Lab.
     await template(f.classB.id, 2, late.id);
     const result = await svc.generateSessions(f.admin, f.classB.id);
-    // Khóa học 10 buổi: lớp A chiếm 10 Thứ Ba đầu (06/01–10/03); 10 Thứ Ba đó của lớp B bị trùng phòng,
-    // lớp B được xếp vào 3 Thứ Ba còn lại trong thời gian lớp (17/03–31/03).
+    // Khóa học 10 buổi: lớp A chiếm 10 Thứ Ba đầu (06/01–10/03); 10 Thứ Ba đó của lớp B bị trùng phòng.
+    // Lớp B được xếp vào các Thứ Ba sau đó cho đủ 10 buổi, vượt ngày kết thúc 31/03 nên ngày kết thúc được lùi tới buổi cuối.
     expect(result.conflicts).toHaveLength(10);
     expect(result.conflicts[0]!.reason).toContain("Phòng");
-    expect(result.created).toBe(3);
-    expect((await sessionsOf(f.classB.id)).map((x) => x.date)).toEqual(["2026-03-17", "2026-03-24", "2026-03-31"]);
-    expect(result.warnings.join(" ")).toContain("mới xếp được 3 buổi");
+    expect(result.created).toBe(10);
+    const dates = (await sessionsOf(f.classB.id)).map((x) => x.date);
+    expect([dates[0], dates.at(-1)]).toEqual(["2026-03-17", "2026-05-19"]);
+    expect(result.warnings.join(" ")).toContain("được lùi từ 31/03/2026 sang 19/05/2026");
+    const [classB] = await db.select().from(classes).where(eq(classes.id, f.classB.id));
+    expect(classB!.endDate).toBe("2026-05-19");
   });
 
   it("cảnh báo (không chặn) khi sĩ số vượt sức chứa phòng", async () => {

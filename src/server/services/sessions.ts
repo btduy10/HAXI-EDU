@@ -25,6 +25,7 @@ import {
   planSessions,
   staffOf,
 } from "@/domain/schedule";
+import { addDays } from "@/lib/dates";
 import { formatDate, todayIso } from "@/lib/format";
 import type {
   makeupInput,
@@ -462,6 +463,8 @@ export type GenerationResult = {
   /** Số buổi theo khóa học và số buổi lớp đang có (không tính buổi hủy, buổi bù). */
   courseSessions?: number;
   scheduled?: number;
+  /** Ngày kết thúc mới của lớp khi phải xếp tiếp sau ngày kết thúc cũ cho đủ số buổi. */
+  endDateExtendedTo?: string;
   /** Thông báo cho người dùng sau khi tự sinh/cập nhật buổi (hiện dạng toast thông tin). */
   notices?: string[];
 };
@@ -558,13 +561,15 @@ async function generateInTx(tx: Tx, actor: Actor, classId: string, templateId?: 
     .where(and(eq(scheduleTemplates.classId, classId), templateId ? eq(scheduleTemplates.id, templateId) : undefined));
   if (templates.length === 0) throw new AppError("VALIDATION", "Lớp chưa có lịch mẫu.");
 
+  // Chưa đủ số buổi khóa học trong thời gian lớp thì xếp tiếp các tuần sau (tối đa 1 năm) và lùi ngày kết thúc của lớp.
+  const horizon = addDays(cls.endDate, 366);
   const holidayRows = await tx
     .select({ date: holidays.date })
     .from(holidays)
     .where(
       and(
         gte(holidays.date, cls.startDate),
-        lte(holidays.date, cls.endDate),
+        lte(holidays.date, horizon),
         or(isNull(holidays.classId), eq(holidays.classId, classId)),
       ),
     );
@@ -576,7 +581,7 @@ async function generateInTx(tx: Tx, actor: Actor, classId: string, templateId?: 
 
   const planned = planSessions({
     startDate: fromDate && fromDate > cls.startDate ? fromDate : cls.startDate,
-    endDate: cls.endDate,
+    endDate: horizon,
     templates,
     holidays: new Set(holidayRows.map((h) => h.date)),
     defaultRoomId: cls.defaultRoomId,
@@ -593,7 +598,7 @@ async function generateInTx(tx: Tx, actor: Actor, classId: string, templateId?: 
   const counted = existing.filter((s) => s.kind === "regular" && s.status !== "cancelled").length;
   const room = Math.max(0, courseSessions - counted);
 
-  const busy = await loadBusy(tx, cls.startDate, cls.endDate);
+  const busy = await loadBusy(tx, cls.startDate, horizon);
   const result: GenerationResult = { created: 0, alreadyExisting: 0, conflicts: [], warnings: [], courseSessions };
   const toInsert: (typeof sessions.$inferInsert)[] = [];
 
@@ -618,10 +623,22 @@ async function generateInTx(tx: Tx, actor: Actor, classId: string, templateId?: 
   }
 
   result.scheduled = counted + toInsert.length;
-  if (result.scheduled < courseSessions && !fromDate) {
-    result.warnings.push(
-      `Khóa học có ${courseSessions} buổi nhưng lớp mới xếp được ${result.scheduled} buổi trong thời gian ${formatDate(cls.startDate)} – ${formatDate(cls.endDate)}. Hãy kéo dài ngày kết thúc của lớp hoặc thêm lịch mẫu.`,
-    );
+  if (result.scheduled < courseSessions) {
+    result.warnings.push(`Khóa học có ${courseSessions} buổi nhưng chỉ xếp được ${result.scheduled} buổi. Hãy kiểm tra lịch mẫu và các buổi bị trùng lịch.`);
+  }
+  const lastDate = toInsert.reduce((max, s) => (s.date > max ? s.date : max), cls.endDate);
+  if (lastDate > cls.endDate) {
+    await tx.update(classes).set({ endDate: lastDate, updatedAt: new Date() }).where(eq(classes.id, cls.id));
+    await audit(tx, {
+      userId: actor.userId,
+      action: "class_end_extended",
+      tableName: "classes",
+      recordId: cls.id,
+      oldValue: { endDate: cls.endDate },
+      newValue: { endDate: lastDate },
+    });
+    result.endDateExtendedTo = lastDate;
+    result.warnings.push(`Để đủ ${courseSessions} buổi, ngày kết thúc của lớp được lùi từ ${formatDate(cls.endDate)} sang ${formatDate(lastDate)}.`);
   }
   if (toInsert.length > 0) {
     await tx.insert(sessions).values(toInsert);

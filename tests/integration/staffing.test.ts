@@ -50,17 +50,18 @@ describe("lịch mẫu tự sinh và tự cập nhật thời khóa biểu", () 
   it("thêm lịch mẫu là tự có buổi từ hôm nay đến hết khóa, kèm trợ giảng; trùng lịch trợ giảng thì bỏ qua và báo lại", async () => {
     const result = await svc.createTemplate(f.admin, templateInput(f.classA.id, { assistantTeacherId: teacherC.id }), now);
     const list = await sessionsOf(f.classA.id);
-    // Thứ Ba từ 03/02 đến 31/03: 9 buổi; không sinh lại các buổi trước hôm nay.
-    expect(result.created).toBe(9);
+    // Khóa 10 buổi, xếp từ hôm nay: Thứ Ba 03/02 → 31/03 mới có 9 buổi nên xếp tiếp 07/04 và lùi ngày kết thúc lớp.
+    expect(result.created).toBe(10);
+    expect(list.at(-1)!.date).toBe("2026-04-07");
     expect(list.map((s) => s.date)[0]).toBe("2026-02-03");
     expect(list.every((s) => s.teacherId === f.teacherA.id && s.assistantTeacherId === teacherC.id)).toBe(true);
-    expect(result.notices).toEqual(["Đã tự thêm 9 buổi vào Thời khóa biểu."]);
+    expect(result.notices).toEqual(["Đã tự thêm 10 buổi vào Thời khóa biểu."]);
 
-    // Lớp B cùng giờ, khác phòng, nhưng trợ giảng C đang bận ở lớp A → mọi buổi bị bỏ qua.
+    // Lớp B cùng giờ, khác phòng, nhưng trợ giảng C đang bận ở lớp A → 10 buổi trùng bị bỏ qua, xếp sang các tuần sau.
     const clash = await svc.createTemplate(f.admin, templateInput(f.classB.id, { roomId: lab2.id, assistantTeacherId: teacherC.id }), now);
-    expect(clash.created).toBe(0);
-    expect(clash.conflicts).toHaveLength(9);
-    expect(clash.warnings[0]).toContain("Giáo viên đã có buổi A");
+    expect(clash.conflicts).toHaveLength(10);
+    expect((await sessionsOf(f.classB.id))[0]!.date).toBe("2026-04-14");
+    expect(clash.warnings.join(" ")).toContain("Giáo viên đã có buổi A");
   });
 
   it("sửa lịch mẫu cập nhật buổi sắp tới; giữ buổi đã điểm danh và phần đã sửa tay; đổi thứ thì sinh lại", async () => {
@@ -71,15 +72,15 @@ describe("lịch mẫu tự sinh và tự cập nhật thời khóa biểu", () 
     await db.update(sessions).set({ roomId: lab2.id }).where(eq(sessions.id, edited!.id)); // sửa tay phòng của buổi 10/02
 
     const result = await svc.updateTemplate(f.admin, { ...templateInput(f.classA.id), id: tpl!.id, timeSlotId: late.id, assistantTeacherId: teacherC.id }, now);
-    expect(result.updated).toBe(8);
+    expect(result.updated).toBe(9);
     const after = await sessionsOf(f.classA.id);
     expect(after.find((s) => s.id === attended!.id)).toMatchObject({ startTime: "08:00:00", assistantTeacherId: null });
     expect(after.find((s) => s.id === edited!.id)).toMatchObject({ startTime: "10:00:00", roomId: lab2.id, assistantTeacherId: teacherC.id });
-    expect(after.filter((s) => s.startTime === "10:00:00" && s.roomId === f.room.id)).toHaveLength(7);
+    expect(after.filter((s) => s.startTime === "10:00:00" && s.roomId === f.room.id)).toHaveLength(8);
 
     // Đổi sang Thứ Năm: buổi chưa điểm danh được sinh lại vào Thứ Năm; buổi đã điểm danh giữ nguyên.
     const moved = await svc.updateTemplate(f.admin, { ...templateInput(f.classA.id), id: tpl!.id, weekday: 4, timeSlotId: late.id }, now);
-    expect(moved.created).toBe(8); // 05/02 … 26/03
+    expect(moved.created).toBe(9); // 1 buổi đã dạy + 9 Thứ Năm 05/02 … 02/04 = 10 buổi
     const days = (await sessionsOf(f.classA.id)).map((s) => s.date);
     expect(days).toContain(attended!.date);
     expect(days.filter((d) => d !== attended!.date).every((d) => new Date(`${d}T00:00:00Z`).getUTCDay() === 4)).toBe(true);
@@ -104,8 +105,8 @@ describe("số buổi theo khóa học", () => {
   it("chỉ xếp đủ số buổi của khóa học; thêm lịch mẫu thứ hai thì các buổi sắp tới tự xếp lại xen kẽ", async () => {
     // Khóa học của lớp A có 10 buổi; hôm nay 01/02.
     const first = await svc.createTemplate(f.admin, templateInput(f.classA.id), now);
-    expect(first.created).toBe(9); // Thứ Ba 03/02 → 31/03 chỉ có 9 buổi
-    expect(first.scheduled).toBe(9);
+    expect(first.created).toBe(10); // 9 Thứ Ba đến 31/03, thêm 07/04 cho đủ 10 buổi
+    expect(first.scheduled).toBe(10);
     await svc.createTemplate(f.admin, templateInput(f.classA.id, { weekday: 4 }), now);
     const list = await sessionsOf(f.classA.id);
     expect(list).toHaveLength(10);
