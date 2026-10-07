@@ -64,6 +64,13 @@
       "when": 1791360461746,
       "tag": "0008_account_permissions",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1791362298137,
+      "tag": "0009_drop_account_permissions",
+      "breakpoints": true
     }
   ]
 }

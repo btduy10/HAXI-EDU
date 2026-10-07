@@ -201,10 +201,7 @@ export default async function AccountsPage({ searchParams }: PageProps<"/admin/a
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-muted-foreground tabular-nums">{index + 1}.</span>
                   <span className="font-medium">{a.username}</span>
-                  <Badge variant={a.role === "admin" ? "default" : "secondary"}>
-                    {label(a.role)}
-                    {a.role !== "admin" && a.customPermissions ? " · quyền riêng" : ""}
-                  </Badge>
+                  <Badge variant={a.role === "admin" ? "default" : "secondary"}>{label(a.role)}</Badge>
                   {badges(a)}
                 </div>
                 <p className="text-muted-foreground">
@@ -237,10 +234,7 @@ export default async function AccountsPage({ searchParams }: PageProps<"/admin/a
                     <TableCell className="font-medium">{a.username}</TableCell>
                     <TableCell className="whitespace-normal">{a.name}</TableCell>
                     <TableCell>
-                      <Badge variant={a.role === "admin" ? "default" : "secondary"}>
-                    {label(a.role)}
-                    {a.role !== "admin" && a.customPermissions ? " · quyền riêng" : ""}
-                  </Badge>
+                      <Badge variant={a.role === "admin" ? "default" : "secondary"}>{label(a.role)}</Badge>
                     </TableCell>
                     <TableCell className="whitespace-normal">{a.teacherName ?? ""}</TableCell>
                     <TableCell>

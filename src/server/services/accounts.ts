@@ -1,9 +1,8 @@
 import { randomUUID } from "node:crypto";
-import { and, asc, count, eq, ne, sql } from "drizzle-orm";
+import { and, asc, count, eq, ne } from "drizzle-orm";
 import type { z } from "zod";
 import { db, type DbOrTx } from "@/db";
 import { account, session, teachers, twoFactor, user } from "@/db/schema";
-import { type accountPermissionsInput, normalizeRolePermissions } from "@/lib/permissions";
 import type { accountEditInput, accountInput } from "@/lib/validation/entities";
 import { audit } from "../audit";
 import { AppError, notFound, translateDbError } from "../errors";
@@ -27,7 +26,6 @@ export async function listAccounts(actor: Actor) {
       twoFactorEnabled: user.twoFactorEnabled,
       lockedUntil: user.lockedUntil,
       lastLoginAt: user.lastLoginAt,
-      customPermissions: sql<boolean>`${user.customPermissions} is not null`,
     })
     .from(user)
     .leftJoin(teachers, eq(teachers.id, user.teacherId))
@@ -229,39 +227,4 @@ export async function resetAccountTwoFactor(actor: Actor, userId: string) {
     await tx.delete(session).where(eq(session.userId, userId));
     await audit(tx, { userId: actor.userId, action: "account_2fa_reset", tableName: "user", recordId: userId });
   });
-}
-
-/** Cấu hình → Quyền riêng từng tài khoản: các tài khoản không phải Admin kèm vai trò và quyền riêng (null = theo vai trò). */
-export async function listAccountPermissions(actor: Actor) {
-  assertAdmin(actor);
-  const rows = await db
-    .select({ id: user.id, username: user.username, name: user.name, role: user.role, custom: user.customPermissions })
-    .from(user)
-    .where(ne(user.role, "admin"))
-    .orderBy(asc(user.username));
-  return rows.map(({ custom, ...row }) => ({ ...row, permissions: custom ? normalizeRolePermissions(custom) : null }));
-}
-
-/**
- * Admin bật quyền riêng cho một tài khoản (ghi đè quyền của vai trò, gồm cả phạm vi lớp) hoặc tắt (`null`) để quay về vai trò.
- * Không áp cho tài khoản Admin (luôn toàn quyền). Có hiệu lực ở yêu cầu kế tiếp của tài khoản đó.
- */
-export async function updateAccountPermissions(actor: Actor, data: z.output<typeof accountPermissionsInput>) {
-  assertAdmin(actor);
-  const value = data.permissions ? normalizeRolePermissions(data.permissions) : null;
-  await db.transaction(async (tx) => {
-    const [before] = await tx.select({ role: user.role, custom: user.customPermissions }).from(user).where(eq(user.id, data.userId)).limit(1);
-    if (!before) throw notFound("tài khoản");
-    if (before.role === "admin") throw new AppError("CONFLICT", "Tài khoản quản trị luôn có toàn quyền, không cần phân quyền riêng.");
-    await tx.update(user).set({ customPermissions: value, updatedAt: new Date() }).where(eq(user.id, data.userId));
-    await audit(tx, {
-      userId: actor.userId,
-      action: "account_permissions_updated",
-      tableName: "user",
-      recordId: data.userId,
-      oldValue: before.custom ?? null,
-      newValue: value,
-    });
-  });
-  return value;
 }
