@@ -188,9 +188,9 @@ export default async function ClassDetailPage({ params }: PageProps<"/admin/clas
       <section className="grid gap-2">
         <h2 className="text-lg font-semibold">Buổi học</h2>
         <p className="text-sm text-muted-foreground">
-          Buổi học được xếp theo lịch mẫu trong thời gian {formatDate(cls.startDate)} – {formatDate(cls.endDate)}, bỏ ngày nghỉ, đủ số buổi
-          của khóa học. Thêm hoặc sửa lịch mẫu là các buổi sắp tới tự xếp lại (buổi đã dạy và buổi đã sửa riêng được giữ nguyên). Bấm
-          nút dưới đây để xếp bổ sung khi còn thiếu buổi; chạy lại không tạo trùng.
+          Buổi học được xếp theo lịch mẫu (đúng thứ, ca, phòng, GV chính và trợ giảng) trong thời gian {formatDate(cls.startDate)} –{" "}
+          {formatDate(cls.endDate)}, bỏ ngày nghỉ, đủ số buổi của khóa học. Bấm nút dưới đây để xếp lại toàn bộ buổi chưa dạy theo lịch mẫu
+          hiện tại; buổi đã điểm danh, đã ghi sao và buổi đã hủy giữ nguyên.
         </p>
         <div className="flex flex-wrap items-start gap-2">
           {canEdit && (

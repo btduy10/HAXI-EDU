@@ -14,6 +14,7 @@ type Result = {
   warnings: string[];
   courseSessions?: number;
   scheduled?: number;
+  removed?: number;
 };
 
 export function GenerateSessionsButton({
@@ -27,6 +28,12 @@ export function GenerateSessionsButton({
   const [pending, startTransition] = useTransition();
 
   function run() {
+    if (
+      !window.confirm(
+        "Xếp lại lịch của lớp theo lịch mẫu? Các buổi chưa dạy (kể cả buổi xếp tay, buổi đã sửa riêng) được xếp lại đúng thứ, ca, giáo viên của lịch mẫu cho đủ số buổi khóa học. Buổi đã điểm danh, đã ghi sao và buổi đã hủy giữ nguyên.",
+      )
+    )
+      return;
     startTransition(async () => {
       const response = await generateSessionsAction({ classId });
       if (!response.ok) return void toast.error(response.error);
@@ -47,7 +54,7 @@ export function GenerateSessionsButton({
             {result.courseSessions !== undefined && result.scheduled !== undefined && (
               <p>
                 Lớp có {result.scheduled}/{result.courseSessions} buổi theo khóa học
-                {result.alreadyExisting > 0 && ` (đã có sẵn ${result.alreadyExisting} buổi)`}
+                {result.scheduled > result.created && ` (giữ ${result.scheduled - result.created} buổi đã dạy)`}
                 {result.conflicts.length > 0 && ` · bỏ qua do trùng lịch ${result.conflicts.length} buổi`}. Xem các buổi ở menu Thời khóa biểu.
               </p>
             )}

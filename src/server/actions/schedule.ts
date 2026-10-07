@@ -34,7 +34,7 @@ export const updateTemplateAction = async (input: unknown) =>
 export const deleteTemplateAction = async (input: unknown) =>
   runAction(idOnly, input, (a, d) => sessions.deleteTemplate(a, d.id), ADMIN);
 export const generateSessionsAction = async (input: unknown) =>
-  runAction(classIdInput, input, (a, d) => sessions.generateSessions(a, d.classId), ADMIN);
+  runAction(classIdInput, input, (a, d) => sessions.rebuildSchedule(a, d.classId), ADMIN);
 
 export const updateSessionAction = async (input: unknown) => runAction(sessionEditInput, input, sessions.updateSession, ADMIN);
 export const rescheduleSessionAction = async (input: unknown) =>

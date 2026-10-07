@@ -476,7 +476,47 @@ function withNotices<T extends GenerationResult & { updated?: number }>(result: 
 }
 
 /**
- * Sinh buổi học từ lịch mẫu trong khoảng ngày của lớp, bỏ ngày nghỉ.
+ * Nút "Sinh buổi học từ lịch mẫu": xếp lại toàn bộ lịch của lớp theo lịch mẫu hiện tại.
+ * Bỏ mọi buổi thường CHƯA DẠY (chưa điểm danh, chưa ghi sao, chưa hủy) — kể cả buổi xếp tay hay đã sửa riêng —
+ * rồi sinh lại trong khoảng ngày của lớp, đúng thứ, ca, phòng và GV chính/trợ giảng của từng dòng lịch mẫu,
+ * cho đủ số buổi của khóa học. Buổi đã dạy và buổi đã hủy được giữ và vẫn được tính.
+ */
+export async function rebuildSchedule(actor: Actor, classId: string): Promise<GenerationResult & { removed: number }> {
+  assertCan(actor, "classes", "edit");
+  await assertClassAccess(actor, classId);
+  return db.transaction(async (tx) => {
+    await lockSchedule(tx);
+    const [cls] = await tx.select({ status: classes.status }).from(classes).where(eq(classes.id, classId)).limit(1);
+    if (!cls) throw notFound("lớp học");
+    if (cls.status !== "open") throw new AppError("CONFLICT", "Lớp đã đóng, không thể sinh buổi học.");
+    const [template] = await tx.select({ id: scheduleTemplates.id }).from(scheduleTemplates).where(eq(scheduleTemplates.classId, classId)).limit(1);
+    if (!template) throw new AppError("VALIDATION", "Lớp chưa có lịch mẫu.");
+    const removed = await tx
+      .delete(sessions)
+      .where(
+        and(
+          eq(sessions.classId, classId),
+          eq(sessions.kind, "regular"),
+          eq(sessions.status, "planned"),
+          sql`not exists (select 1 from ${attendances} where ${attendances.sessionId} = ${sessions.id})`,
+          sql`not exists (select 1 from ${starLogs} where ${starLogs.sessionId} = ${sessions.id})`,
+        ),
+      )
+      .returning({ id: sessions.id });
+    const result = await generateInTx(tx, actor, classId);
+    await audit(tx, {
+      userId: actor.userId,
+      action: "schedule_rebuilt",
+      tableName: "sessions",
+      recordId: classId,
+      newValue: { removed: removed.length, created: result.created },
+    });
+    return { ...result, removed: removed.length };
+  });
+}
+
+/**
+ * Sinh bổ sung buổi học từ lịch mẫu trong khoảng ngày của lớp, bỏ ngày nghỉ (dùng cho dữ liệu mẫu).
  * Chạy lại nhiều lần an toàn: buổi đã có (kể cả đã dời/sửa giờ) không bị tạo lại hay ghi đè.
  * Buổi trùng GV/phòng không được tạo và được trả về trong `conflicts`.
  */

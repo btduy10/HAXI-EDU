@@ -228,9 +228,11 @@ test("Admin: TKB có bộ lọc, sửa giờ riêng một buổi, trùng lịch 
   await expect(page.getByRole("heading", { name: /Lịch mẫu hằng tuần/ })).toBeVisible();
   await expect(visibleText(page, "Thứ Ba")).toBeVisible();
   await expectNoHorizontalScroll(page);
+  // Nút xếp lại lịch hỏi xác nhận trước.
+  page.once("dialog", (dialog) => void dialog.accept());
   await page.getByRole("button", { name: "Sinh buổi học từ lịch mẫu" }).click();
-  // Khóa học của lớp có 24 buổi; seed đã xếp đủ (cộng buổi xếp tay ở trên) nên bấm lại không tạo thêm.
-  await expect(page.getByText(/Lớp có \d+\/24 buổi theo khóa học \(đã có sẵn \d+ buổi\)/)).toBeVisible();
+  // Khóa học của lớp có 24 buổi: xếp lại các buổi chưa dạy theo lịch mẫu, giữ các buổi đã dạy.
+  await expect(page.getByText(/Lớp có 24\/24 buổi theo khóa học \(giữ \d+ buổi đã dạy\)/)).toBeVisible();
   await page.screenshot({ path: "test-results/shots/class-detail-360.png", fullPage: true });
 
   await page.getByRole("link", { name: "Thêm buổi bù" }).click();
