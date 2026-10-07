@@ -121,6 +121,11 @@ test("Lớp học thêm: Admin thêm ở trang Lớp học, Thời khóa biểu 
 
   await page.goto(`/admin/timetable?date=${day}`);
   await expect(page.getByText("Toán thêm E2E").first()).toBeVisible();
-  await expect(page.getByText("Học thêm").first()).toBeVisible();
+  await expect(page.getByText("Học thêm", { exact: true }).first()).toBeVisible();
   await expectNoHorizontalScroll(page);
+
+  // Xuất: chọn Lớp học thêm rồi tải Excel.
+  await page.getByLabel("Loại lớp cần xuất").selectOption({ label: "Lớp học thêm" });
+  const [download] = await Promise.all([page.waitForEvent("download"), page.getByRole("link", { name: "Excel" }).click()]);
+  expect(download.suggestedFilename()).toMatch(/^lop-hoc-them-.*\.xlsx$/);
 });

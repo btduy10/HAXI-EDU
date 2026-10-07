@@ -1,8 +1,8 @@
 import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 import Link from "next/link";
-import { ExportLinks } from "@/components/class-report";
 import { selectClass } from "@/components/form-dialog";
 import { ManualScheduler } from "@/components/manual-scheduler";
+import { TimetableExport } from "@/components/timetable-export";
 import { MonthView, type TimetableSession, WeekView } from "@/components/timetable";
 import { Button } from "@/components/ui/button";
 import { LinkButton } from "@/components/link-button";
@@ -163,8 +163,7 @@ export async function TimetablePage({
         </LinkButton>
       </div>
 
-      <ExportLinks
-        label="Xuất khoảng đang xem"
+      <TimetableExport
         baseHref={`/api/export/timetable?${new URLSearchParams({ from: range.from, to: range.to, ...Object.fromEntries(Object.entries(filters).filter(([, v]) => v)) })}`}
       />
 
