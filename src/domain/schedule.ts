@@ -81,6 +81,8 @@ export type BusySession = {
   date: string;
   startTime: string;
   endTime: string;
+  /** Ca + Khung giờ của buổi (một dòng Ca học); null = buổi giờ tự do, không gắn ca. */
+  timeSlotId: string | null;
   roomId: string | null;
   /** Những người đứng lớp: GV thực dạy (GV dạy thay nếu có, nếu không là GV của buổi) và trợ giảng. */
   teacherIds: string[];
@@ -93,26 +95,42 @@ export function staffOf(s: { teacherId: string | null; substituteTeacherId?: str
   return [...new Set([main, s.assistantTeacherId].filter((id): id is string => Boolean(id)))];
 }
 
-export type Conflict = { kind: "teacher" | "room"; with: BusySession };
+/** `sameSlot`: trùng vì cùng Ca + Khung giờ (không phải vì giờ chồng nhau của buổi giờ tự do). */
+export type Conflict = { kind: "teacher" | "room"; with: BusySession; sameSlot: boolean };
 
-/** Tìm xung đột GV/phòng theo khoảng giờ THỰC TẾ (không theo tên ca). */
+/**
+ * Tìm xung đột GV/phòng. Hai buổi cùng ngày chỉ trùng khi CÙNG Ca + Khung giờ (cùng một dòng Ca học):
+ * giáo viên dạy nhiều ca, nhiều khung trong ngày là bình thường, kể cả khi giờ các khung chồng nhau.
+ * Buổi không gắn ca (giờ tự do) không có khung để so nên so theo khoảng giờ thực tế.
+ */
 export function findConflicts(
-  candidate: { id?: string; date: string; startTime: string; endTime: string; roomId: string | null; teacherIds: string[] },
+  candidate: {
+    id?: string;
+    date: string;
+    startTime: string;
+    endTime: string;
+    timeSlotId: string | null;
+    roomId: string | null;
+    teacherIds: string[];
+  },
   others: BusySession[],
 ): Conflict[] {
   const conflicts: Conflict[] = [];
   for (const other of others) {
     if (other.id === candidate.id || other.date !== candidate.date) continue;
-    if (!timesOverlap(candidate.startTime, candidate.endTime, other.startTime, other.endTime)) continue;
-    if (candidate.teacherIds.some((id) => other.teacherIds.includes(id))) conflicts.push({ kind: "teacher", with: other });
-    if (candidate.roomId && candidate.roomId === other.roomId) conflicts.push({ kind: "room", with: other });
+    const sameSlot = Boolean(candidate.timeSlotId && other.timeSlotId);
+    if (sameSlot ? candidate.timeSlotId !== other.timeSlotId : !timesOverlap(candidate.startTime, candidate.endTime, other.startTime, other.endTime)) {
+      continue;
+    }
+    if (candidate.teacherIds.some((id) => other.teacherIds.includes(id))) conflicts.push({ kind: "teacher", with: other, sameSlot });
+    if (candidate.roomId && candidate.roomId === other.roomId) conflicts.push({ kind: "room", with: other, sameSlot });
   }
   return conflicts;
 }
 
 export function describeConflict(c: Conflict): string {
   const what = c.kind === "teacher" ? "Giáo viên" : "Phòng";
-  return `${what} đã có buổi ${c.with.label} lúc ${hhmm(c.with.startTime)}–${hhmm(c.with.endTime)}`;
+  return `${what} đã có buổi ${c.with.label} lúc ${hhmm(c.with.startTime)}–${hhmm(c.with.endTime)}${c.sameSlot ? " (cùng ca, cùng khung giờ)" : ""}`;
 }
 
 /**

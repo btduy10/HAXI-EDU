@@ -381,7 +381,15 @@ export async function updateTemplate(
         continue;
       }
       const conflicts = findConflicts(
-        { id: s.id, date: next.date, startTime: next.startTime, endTime: next.endTime, roomId: next.roomId ?? null, teacherIds: staffOf(next) },
+        {
+          id: s.id,
+          date: next.date,
+          startTime: next.startTime,
+          endTime: next.endTime,
+          timeSlotId: next.timeSlotId ?? null,
+          roomId: next.roomId ?? null,
+          teacherIds: staffOf(next),
+        },
         busy,
       );
       if (conflicts.length > 0) {
@@ -390,7 +398,16 @@ export async function updateTemplate(
       }
       await tx.update(sessions).set({ ...patch, updatedAt: new Date() }).where(eq(sessions.id, s.id));
       const index = busy.findIndex((b) => b.id === s.id);
-      const entry = { id: s.id, date: next.date, startTime: next.startTime, endTime: next.endTime, roomId: next.roomId ?? null, teacherIds: staffOf(next), label: cls.code };
+      const entry = {
+        id: s.id,
+        date: next.date,
+        startTime: next.startTime,
+        endTime: next.endTime,
+        timeSlotId: next.timeSlotId ?? null,
+        roomId: next.roomId ?? null,
+        teacherIds: staffOf(next),
+        label: cls.code,
+      };
       if (index >= 0) busy[index] = entry;
       else busy.push(entry);
       result.updated++;
@@ -432,6 +449,7 @@ async function loadBusy(tx: Tx, from: string, to: string): Promise<BusySession[]
       date: sessions.date,
       startTime: sessions.startTime,
       endTime: sessions.endTime,
+      timeSlotId: sessions.timeSlotId,
       roomId: sessions.roomId,
       teacherId: sessions.teacherId,
       substituteTeacherId: sessions.substituteTeacherId,
@@ -441,7 +459,16 @@ async function loadBusy(tx: Tx, from: string, to: string): Promise<BusySession[]
     .from(sessions)
     .innerJoin(classes, eq(classes.id, sessions.classId))
     .where(and(between(sessions.date, from, to), ne(sessions.status, "cancelled")));
-  return rows.map((r) => ({ id: r.id, date: r.date, startTime: r.startTime, endTime: r.endTime, roomId: r.roomId, label: r.label, teacherIds: staffOf(r) }));
+  return rows.map((r) => ({
+    id: r.id,
+    date: r.date,
+    startTime: r.startTime,
+    endTime: r.endTime,
+    timeSlotId: r.timeSlotId,
+    roomId: r.roomId,
+    label: r.label,
+    teacherIds: staffOf(r),
+  }));
 }
 
 type Candidate = {
@@ -449,12 +476,14 @@ type Candidate = {
   date: string;
   startTime: string;
   endTime: string;
+  /** Ca + Khung giờ; null = buổi giờ tự do. */
+  timeSlotId: string | null;
   roomId: string | null;
   /** Người đứng lớp: GV thực dạy (đã tính dạy thay) và trợ giảng. */
   teacherIds: string[];
 };
 
-/** Trùng GV hoặc phòng theo giờ thực tế → CHẶN. */
+/** Trùng GV hoặc phòng trong cùng Ca + Khung giờ (buổi giờ tự do: theo giờ thực tế) → CHẶN. */
 function assertNoConflict(candidate: Candidate, busy: BusySession[]) {
   const conflicts = findConflicts(candidate, busy);
   if (conflicts.length > 0) {
@@ -721,6 +750,7 @@ async function applyChange(
         date: next.date,
         startTime: next.startTime,
         endTime: next.endTime,
+        timeSlotId: next.timeSlotId ?? null,
         roomId: next.roomId ?? null,
         teacherIds: staffOf(next),
       },
@@ -867,7 +897,8 @@ export async function createMakeupSession(
     }
 
     assertNoConflict(
-      { date: input.date, startTime: input.startTime, endTime: input.endTime, roomId: input.roomId, teacherIds: [input.teacherId] },
+      // Buổi bù giờ tự do không gắn ca nên so trùng theo giờ thực tế.
+      { date: input.date, startTime: input.startTime, endTime: input.endTime, timeSlotId: null, roomId: input.roomId, teacherIds: [input.teacherId] },
       await loadBusy(tx, input.date, input.date),
     );
     const [created] = await tx
@@ -934,7 +965,7 @@ export async function createManualSession(
       roomId: input.roomId ?? cls.defaultRoomId,
       teacherId,
     };
-    assertNoConflict({ ...candidate, teacherIds: [teacherId] }, await loadBusy(tx, input.date, input.date));
+    assertNoConflict({ ...candidate, timeSlotId: slot.id, teacherIds: [teacherId] }, await loadBusy(tx, input.date, input.date));
 
     const [created] = await tx
       .insert(sessions)

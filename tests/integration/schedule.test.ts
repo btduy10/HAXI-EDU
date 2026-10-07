@@ -78,19 +78,33 @@ describe("sinh buổi học", () => {
   it("buổi trùng phòng với lớp khác không được tạo và được báo lại", async () => {
     await template(f.classA.id, 2, morning.id);
     await svc.generateSessions(f.admin, f.classA.id);
-    // Lớp B khác tên ca nhưng 09:00–10:30 chồng lên 08:00–09:30 trong cùng phòng Lab.
-    await template(f.classB.id, 2, late.id);
+    // Lớp B cùng Thứ Ba, cùng ca + khung giờ, cùng phòng Lab với lớp A.
+    await template(f.classB.id, 2, morning.id);
     const result = await svc.generateSessions(f.admin, f.classB.id);
     // Khóa học 10 buổi: lớp A chiếm 10 Thứ Ba đầu (06/01–10/03); 10 Thứ Ba đó của lớp B bị trùng phòng.
     // Lớp B được xếp vào các Thứ Ba sau đó cho đủ 10 buổi, vượt ngày kết thúc 31/03 nên ngày kết thúc được lùi tới buổi cuối.
     expect(result.conflicts).toHaveLength(10);
     expect(result.conflicts[0]!.reason).toContain("Phòng");
+    expect(result.conflicts[0]!.reason).toContain("(cùng ca, cùng khung giờ)");
     expect(result.created).toBe(10);
     const dates = (await sessionsOf(f.classB.id)).map((x) => x.date);
     expect([dates[0], dates.at(-1)]).toEqual(["2026-03-17", "2026-05-19"]);
     expect(result.warnings.join(" ")).toContain("được lùi từ 31/03/2026 sang 19/05/2026");
     const [classB] = await db.select().from(classes).where(eq(classes.id, f.classB.id));
     expect(classB!.endDate).toBe("2026-05-19");
+  });
+
+  it("khác khung giờ thì không trùng: cùng GV, cùng phòng, cùng thứ vẫn sinh đủ buổi dù giờ hai khung chồng nhau", async () => {
+    await template(f.classA.id, 2, morning.id);
+    await svc.generateSessions(f.admin, f.classA.id);
+    // Lớp B: cùng Thứ Ba, cùng phòng Lab, cùng GV A nhưng ở khung khác (09:00–10:30 chồng lên 08:00–09:30).
+    await template(f.classB.id, 2, late.id, { teacherId: f.teacherA.id });
+    const result = await svc.generateSessions(f.admin, f.classB.id);
+    expect(result.conflicts).toEqual([]);
+    expect(result.created).toBe(10);
+    const list = await sessionsOf(f.classB.id);
+    expect([list[0]!.date, list.at(-1)!.date]).toEqual(["2026-01-06", "2026-03-10"]);
+    expect(list.every((x) => x.teacherId === f.teacherA.id && x.roomId === f.room.id)).toBe(true);
   });
 
   it("cảnh báo (không chặn) khi sĩ số vượt sức chứa phòng", async () => {
@@ -102,7 +116,7 @@ describe("sinh buổi học", () => {
   });
 });
 
-describe("trùng lịch theo giờ thực tế", () => {
+describe("trùng lịch theo ca + khung giờ", () => {
   let a: typeof sessions.$inferSelect;
   let b: typeof sessions.$inferSelect;
   let room2: typeof rooms.$inferSelect;
@@ -130,12 +144,12 @@ describe("trùng lịch theo giờ thực tế", () => {
       ...patch,
     });
 
-  it("chặn trùng phòng và trùng GV khi giờ chồng lấn, kể cả khác ca", async () => {
+  it("chặn trùng phòng và trùng GV khi cùng ca + khung giờ, kể cả khi giờ riêng của buổi đã sửa", async () => {
     await expect(edit(b, { roomId: f.room.id })).rejects.toMatchObject({ code: "CONFLICT" });
     await expect(edit(b, { teacherId: f.teacherA.id })).rejects.toMatchObject({ code: "CONFLICT" });
     await expect(edit(b, { roomId: f.room.id, startTime: "09:00", endTime: "10:00" })).rejects.toMatchObject({ code: "CONFLICT" });
-    // Nối tiếp nhau (09:30 bắt đầu khi buổi kia kết thúc) thì hợp lệ.
-    await expect(edit(b, { roomId: f.room.id, teacherId: f.teacherA.id, startTime: "09:30", endTime: "11:00" })).resolves.toBeDefined();
+    // Buổi vẫn thuộc khung giờ đó nên sửa giờ riêng không tránh được trùng.
+    await expect(edit(b, { roomId: f.room.id, teacherId: f.teacherA.id, startTime: "09:30", endTime: "11:00" })).rejects.toMatchObject({ code: "CONFLICT" });
   });
 
   it("buổi đã hủy không còn chiếm GV/phòng; khôi phục thì kiểm tra lại", async () => {
@@ -209,16 +223,16 @@ describe("trùng lịch theo giờ thực tế", () => {
     });
     expect(created.warnings).toEqual([]);
 
-    // Cùng ngày, ca sáng (08:00–09:30) chồng lên 09:00–10:30: trùng phòng Lab → chặn.
+    // Cùng ngày, cùng ca + khung giờ: trùng phòng Lab → chặn.
     await expect(
-      svc.createManualSession(f.admin, { classId: f.classB.id, date: "2026-01-07", timeSlotId: morning.id, teacherId: null, roomId: null }),
+      svc.createManualSession(f.admin, { classId: f.classB.id, date: "2026-01-07", timeSlotId: late.id, teacherId: null, roomId: null }),
     ).rejects.toMatchObject({ code: "CONFLICT", message: expect.stringContaining("Phòng") });
-    // Đổi phòng nhưng chọn GV A đang dạy → trùng GV.
+    // Đổi phòng nhưng chọn GV A đang dạy khung đó → trùng GV.
     await expect(
-      svc.createManualSession(f.admin, { classId: f.classB.id, date: "2026-01-07", timeSlotId: morning.id, teacherId: f.teacherA.id, roomId: room2.id }),
+      svc.createManualSession(f.admin, { classId: f.classB.id, date: "2026-01-07", timeSlotId: late.id, teacherId: f.teacherA.id, roomId: room2.id }),
     ).rejects.toMatchObject({ code: "CONFLICT", message: expect.stringContaining("Giáo viên") });
     // Phòng khác, GV khác thì được; chọn GV/phòng riêng được lưu đúng.
-    const other = await svc.createManualSession(f.admin, { classId: f.classB.id, date: "2026-01-07", timeSlotId: morning.id, teacherId: f.teacherB.id, roomId: room2.id });
+    const other = await svc.createManualSession(f.admin, { classId: f.classB.id, date: "2026-01-07", timeSlotId: late.id, teacherId: f.teacherB.id, roomId: room2.id });
     expect((await db.select().from(sessions).where(eq(sessions.id, other.id)))[0]).toMatchObject({ teacherId: f.teacherB.id, roomId: room2.id });
 
     // Buổi xếp tay không bị sinh buổi tạo trùng hay ghi đè, và GV của lớp điểm danh được.

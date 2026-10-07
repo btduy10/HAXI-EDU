@@ -25,10 +25,10 @@ describe("chồng lấn giờ", () => {
 
   it("phát hiện trùng GV và trùng phòng, bỏ qua chính nó và ngày khác", () => {
     const others = [
-      { id: "s1", date: "2026-01-06", startTime: "08:00", endTime: "09:30", roomId: "r1", teacherIds: ["t1"], label: "A" },
-      { id: "s2", date: "2026-01-07", startTime: "08:00", endTime: "09:30", roomId: "r1", teacherIds: ["t1"], label: "A" },
+      { id: "s1", date: "2026-01-06", startTime: "08:00", endTime: "09:30", timeSlotId: "k1", roomId: "r1", teacherIds: ["t1"], label: "A" },
+      { id: "s2", date: "2026-01-07", startTime: "08:00", endTime: "09:30", timeSlotId: "k1", roomId: "r1", teacherIds: ["t1"], label: "A" },
     ];
-    const base = { date: "2026-01-06", startTime: "09:00", endTime: "10:00" };
+    const base = { date: "2026-01-06", startTime: "08:00", endTime: "09:30", timeSlotId: "k1" };
     expect(findConflicts({ ...base, roomId: "r1", teacherIds: ["t2"] }, others).map((c) => c.kind)).toEqual(["room"]);
     expect(findConflicts({ ...base, roomId: "r2", teacherIds: ["t1"] }, others).map((c) => c.kind)).toEqual(["teacher"]);
     expect(findConflicts({ ...base, roomId: "r1", teacherIds: ["t1"] }, others)).toHaveLength(2);
@@ -38,6 +38,24 @@ describe("chồng lấn giờ", () => {
     const withAssistant = [{ ...others[0]!, id: "s3", teacherIds: ["t9", "t5"] }];
     expect(findConflicts({ ...base, roomId: "r2", teacherIds: ["t1", "t5"] }, withAssistant).map((c) => c.kind)).toEqual(["teacher"]);
     expect(findConflicts({ ...base, roomId: "r2", teacherIds: ["t7"] }, withAssistant)).toEqual([]);
+  });
+
+  it("chỉ trùng khi cùng ngày, cùng Ca + Khung giờ; khác khung thì không trùng dù giờ chồng nhau; buổi giờ tự do so theo giờ", () => {
+    const others = [{ id: "s1", date: "2026-01-06", startTime: "19:00", endTime: "20:30", timeSlotId: "k1", roomId: "r1", teacherIds: ["t1"], label: "A" }];
+    const same = { date: "2026-01-06", startTime: "19:00", endTime: "20:30", roomId: "r1", teacherIds: ["t1"] };
+    // Khác khung giờ: GV dạy nhiều ca, nhiều khung trong ngày là bình thường.
+    expect(findConflicts({ ...same, timeSlotId: "k2" }, others)).toEqual([]);
+    // Cùng khung giờ: trùng cả GV lẫn phòng, kể cả khi giờ riêng của buổi đã sửa khác đi.
+    expect(findConflicts({ ...same, timeSlotId: "k1", startTime: "17:00", endTime: "18:00" }, others).map((c) => [c.kind, c.sameSlot])).toEqual([
+      ["teacher", true],
+      ["room", true],
+    ]);
+    // Buổi bù giờ tự do (không gắn ca): so theo khoảng giờ thực tế.
+    expect(findConflicts({ ...same, timeSlotId: null, startTime: "20:00", endTime: "21:00" }, others).map((c) => [c.kind, c.sameSlot])).toEqual([
+      ["teacher", false],
+      ["room", false],
+    ]);
+    expect(findConflicts({ ...same, timeSlotId: null, startTime: "20:30", endTime: "21:30" }, others)).toEqual([]);
   });
 });
 
