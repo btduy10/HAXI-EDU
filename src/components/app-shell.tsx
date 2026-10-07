@@ -3,9 +3,11 @@
 import {
   BarChart3Icon,
   BookOpenIcon,
+  BriefcaseIcon,
   Building2Icon,
   CalendarCheckIcon,
   CalendarDaysIcon,
+  ChevronDownIcon,
   ClipboardCheckIcon,
   ClipboardListIcon,
   GiftIcon,
@@ -18,6 +20,7 @@ import {
   SchoolIcon,
   ScrollTextIcon,
   SettingsIcon,
+  ShieldIcon,
   StarIcon,
   UserCogIcon,
   UsersIcon,
@@ -33,26 +36,43 @@ import { hardNavigate } from "@/lib/navigate";
 import { cn } from "@/lib/utils";
 
 type NavItem = { href: string; label: string; icon: LucideIcon };
+type NavGroupItem = { label: string; icon: LucideIcon; children: NavItem[] };
+type NavEntry = NavItem | NavGroupItem;
+
+const isGroup = (entry: NavEntry): entry is NavGroupItem => "children" in entry;
+const isActive = (pathname: string, href: string) => pathname === href || pathname.startsWith(`${href}/`);
 
 // Toàn bộ mục menu. Máy chủ quyết định người dùng thấy mục nào (theo vai trò và bảng phân quyền).
-const NAV: Record<"admin" | "teacher", NavItem[]> = {
+const NAV: { admin: NavEntry[]; teacher: NavItem[] } = {
   admin: [
     { href: "/admin/dashboard", label: "Tổng quan", icon: LayoutDashboardIcon },
+    {
+      label: "Giám đốc",
+      icon: BriefcaseIcon,
+      children: [
+        { href: "/admin/courses", label: "Khóa học", icon: BookOpenIcon },
+        { href: "/admin/rooms-slots", label: "Phòng & Ca học", icon: Building2Icon },
+        { href: "/admin/teachers", label: "Giáo viên", icon: UsersIcon },
+        { href: "/admin/stars", label: "Sao & Avatar", icon: StarIcon },
+        { href: "/admin/rewards", label: "Quà & Tổng kết", icon: GiftIcon },
+      ],
+    },
+    {
+      label: "Admin",
+      icon: ShieldIcon,
+      children: [
+        { href: "/admin/accounts", label: "Tài khoản", icon: UserCogIcon },
+        { href: "/admin/settings", label: "Cấu hình", icon: SettingsIcon },
+        { href: "/admin/audit", label: "Nhật ký", icon: ScrollTextIcon },
+      ],
+    },
     { href: "/admin/students", label: "Học viên", icon: GraduationCapIcon },
-    { href: "/admin/teachers", label: "Giáo viên", icon: UsersIcon },
-    { href: "/admin/courses", label: "Khóa học", icon: BookOpenIcon },
-    { href: "/admin/classes", label: "Lớp học", icon: SchoolIcon },
-    { href: "/admin/rooms-slots", label: "Phòng & Ca học", icon: Building2Icon },
     { href: "/admin/enrollments", label: "Ghi danh", icon: ClipboardListIcon },
+    { href: "/admin/classes", label: "Lớp học", icon: SchoolIcon },
     { href: "/admin/timetable", label: "Thời khóa biểu", icon: CalendarDaysIcon },
     { href: "/admin/attendance", label: "Điểm danh", icon: ClipboardCheckIcon },
-    { href: "/admin/stars", label: "Sao & Avatar", icon: StarIcon },
-    { href: "/admin/rewards", label: "Quà & Tổng kết", icon: GiftIcon },
     { href: "/admin/timesheet", label: "Chấm công", icon: CalendarCheckIcon },
     { href: "/admin/reports", label: "Báo cáo", icon: BarChart3Icon },
-    { href: "/admin/accounts", label: "Tài khoản", icon: UserCogIcon },
-    { href: "/admin/audit", label: "Nhật ký", icon: ScrollTextIcon },
-    { href: "/admin/settings", label: "Cấu hình", icon: SettingsIcon },
   ],
   teacher: [
     { href: "/teacher/dashboard", label: "Tổng quan", icon: LayoutDashboardIcon },
@@ -85,13 +105,53 @@ function NavLink({ item, active, onNavigate }: { item: NavItem; active: boolean;
   );
 }
 
-function NavLinks({ items, onNavigate }: { items: NavItem[]; onNavigate?: () => void }) {
+// Nhóm menu bấm để mở/đóng; tự mở khi trang hiện tại thuộc nhóm.
+function NavGroup({ group, pathname, onNavigate }: { group: NavGroupItem; pathname: string; onNavigate?: () => void }) {
+  const containsActive = group.children.some((item) => isActive(pathname, item.href));
+  const [open, setOpen] = useState(containsActive);
+  const [lastPath, setLastPath] = useState(pathname);
+  if (lastPath !== pathname) {
+    setLastPath(pathname);
+    if (containsActive) setOpen(true);
+  }
+  const Icon = group.icon;
+  return (
+    <div className="grid gap-1">
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen((value) => !value)}
+        className={cn(
+          "flex min-h-11 items-center gap-3 rounded-lg px-3 text-left text-sm transition-colors hover:bg-sidebar-accent",
+          containsActive ? "font-bold" : "font-medium",
+        )}
+      >
+        <Icon className="size-4 shrink-0" aria-hidden />
+        <span className="flex-1">{group.label}</span>
+        <ChevronDownIcon className={cn("size-4 shrink-0 transition-transform", open && "rotate-180")} aria-hidden />
+      </button>
+      {open && (
+        <div className="ml-4 grid gap-1 border-l border-sidebar-border pl-2">
+          {group.children.map((item) => (
+            <NavLink key={item.href} item={item} active={isActive(pathname, item.href)} onNavigate={onNavigate} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function NavLinks({ items, onNavigate }: { items: NavEntry[]; onNavigate?: () => void }) {
   const pathname = usePathname();
   return (
     <nav className="grid gap-1 p-2">
-      {items.map((item) => (
-        <NavLink key={item.href} item={item} active={pathname === item.href || pathname.startsWith(`${item.href}/`)} onNavigate={onNavigate} />
-      ))}
+      {items.map((entry) =>
+        isGroup(entry) ? (
+          <NavGroup key={entry.label} group={entry} pathname={pathname} onNavigate={onNavigate} />
+        ) : (
+          <NavLink key={entry.href} item={entry} active={isActive(pathname, entry.href)} onNavigate={onNavigate} />
+        ),
+      )}
     </nav>
   );
 }
@@ -130,9 +190,14 @@ export function AppShell({
   children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
-  const items = [...NAV.teacher, ...NAV.admin]
-    .filter((item) => hrefs.includes(item.href))
-    .map((item) => ({ ...item, label: labels?.[item.href] ?? item.label }));
+  const visible = (list: NavItem[]) =>
+    list.filter((item) => hrefs.includes(item.href)).map((item) => ({ ...item, label: labels?.[item.href] ?? item.label }));
+  // Nhóm chỉ hiện khi còn ít nhất một mục con được phép.
+  const items: NavEntry[] = [...NAV.teacher, ...NAV.admin].flatMap((entry): NavEntry[] => {
+    if (!isGroup(entry)) return visible([entry]);
+    const children = visible(entry.children);
+    return children.length > 0 ? [{ ...entry, children }] : [];
+  });
   // Logo có chữ màu navy nên phần đầu thanh điều hướng giữ nền trắng.
   const sidebarBrand = (
     <div className="flex items-center gap-3 bg-white px-4 py-3 text-foreground">
