@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { FormDialogButton } from "@/components/action-buttons";
+import { ConfirmButton, FormDialogButton } from "@/components/action-buttons";
 import { AutoSubmitSelect } from "@/components/auto-submit-select";
 import type { Field } from "@/components/form-dialog";
 import { LinkButton } from "@/components/link-button";
@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { PAYMENT_METHOD_LABEL, TUITION_STATUS_LABEL, type TuitionStatus } from "@/domain/tuition";
 import { LABELS, formatDate, formatMoney, todayIso } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { cancelReceiptAction, createReceiptAction, setClassFeeAction, setDiscountAction } from "@/server/actions/admin";
+import { cancelReceiptAction, createReceiptAction, deleteReceiptAction, setClassFeeAction, setDiscountAction } from "@/server/actions/admin";
 import { listClassFees, listReceipts, listTuition } from "@/server/services/tuition";
 import { requireMenu } from "@/server/session";
 
@@ -281,9 +281,21 @@ export default async function TuitionPage({ searchParams }: PageProps<"/admin/tu
                 </div>
                 <div className="flex items-center gap-1">
                   {r.status === "cancelled" ? (
-                    <Badge variant="destructive" title={r.cancelReason ?? undefined}>
-                      Đã hủy
-                    </Badge>
+                    <>
+                      <Badge variant="destructive" title={r.cancelReason ?? undefined}>
+                        Đã hủy
+                      </Badge>
+                      {role === "admin" && (
+                        <ConfirmButton
+                          label="Xóa"
+                          confirmText={`Xóa hẳn phiếu thu đã hủy ${r.code}? Thao tác này không hoàn tác được.`}
+                          action={deleteReceiptAction}
+                          input={{ id: r.id }}
+                          successMessage="Đã xóa phiếu thu."
+                          className="h-9"
+                        />
+                      )}
+                    </>
                   ) : (
                     <>
                       <LinkButton variant="outline" className="h-9" href={`/admin/tuition/receipts/${r.id}`}>

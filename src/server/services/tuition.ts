@@ -182,6 +182,31 @@ export async function cancelReceipt(actor: Actor, data: z.output<typeof cancelRe
   });
 }
 
+/** Xóa hẳn một phiếu thu ĐÃ HỦY (chỉ Admin). Phiếu còn hiệu lực phải hủy trước; nội dung phiếu bị xóa được ghi vào nhật ký. */
+export async function deleteReceipt(actor: Actor, id: string) {
+  assertAdmin(actor);
+  await db.transaction(async (tx) => {
+    const [before] = await tx.select().from(tuitionReceipts).where(eq(tuitionReceipts.id, id)).for("update").limit(1);
+    if (!before) throw notFound("phiếu thu");
+    if (before.status !== "cancelled") throw new AppError("CONFLICT", "Chỉ xóa được phiếu thu đã hủy. Hãy hủy phiếu trước.");
+    await tx.delete(tuitionReceipts).where(eq(tuitionReceipts.id, id));
+    await audit(tx, {
+      userId: actor.userId,
+      action: "tuition_receipt_deleted",
+      tableName: "tuition_receipts",
+      recordId: id,
+      oldValue: {
+        receiptNo: before.receiptNo,
+        enrollmentId: before.enrollmentId,
+        amount: before.amount,
+        method: before.method,
+        paidAt: before.paidAt,
+        cancelReason: before.cancelReason,
+      },
+    });
+  });
+}
+
 const receiptSelection = {
   id: tuitionReceipts.id,
   receiptNo: tuitionReceipts.receiptNo,

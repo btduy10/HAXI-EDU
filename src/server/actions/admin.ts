@@ -121,4 +121,5 @@ export const setClassFeeAction = async (input: unknown) => runAction(classFeeInp
 export const setDiscountAction = async (input: unknown) => runAction(discountInput, input, tuition.setDiscount, TUITION);
 export const createReceiptAction = async (input: unknown) => runAction(receiptInput, input, tuition.createReceipt, TUITION);
 export const cancelReceiptAction = async (input: unknown) => runAction(cancelReceiptInput, input, tuition.cancelReceipt, TUITION);
+export const deleteReceiptAction = async (input: unknown) => runAction(idOnly, input, (a, d) => tuition.deleteReceipt(a, d.id), TUITION);
 export const updateCenterInfoAction = async (input: unknown) => runAction(centerInfoInput, input, tuition.updateCenterInfo, ADMIN);

@@ -193,4 +193,21 @@ test("Học phí: đặt học phí lớp, thu hai lần, theo dõi trạng thá
   await expect(page.getByRole("heading", { name: "Giấy báo học phí" }).first()).toBeVisible();
   await expect(page.getByText(/đã đóng đủ học phí/).first()).toBeVisible();
   await expectNoHorizontalScroll(page);
+
+  // Admin hủy một phiếu thu rồi xóa hẳn phiếu đã hủy; phiếu còn hiệu lực không có nút Xóa.
+  await page.goto(`/admin/tuition?classId=${classId}`);
+  await expect(page.getByRole("button", { name: "Xóa", exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "Hủy", exact: true }).first().click();
+  await page.locator("#f-reason").fill("Ghi nhầm E2E");
+  await page.getByRole("button", { name: "Hủy phiếu" }).click();
+  await expect(page.getByText("Đã hủy phiếu thu.")).toBeVisible();
+  await expect(page.getByText("Đã hủy", { exact: true })).toBeVisible();
+  page.once("dialog", (dialog) => {
+    expect(dialog.message()).toContain("Xóa hẳn phiếu thu đã hủy");
+    void dialog.accept();
+  });
+  await page.getByRole("button", { name: "Xóa", exact: true }).click();
+  await expect(page.getByText("Đã xóa phiếu thu.")).toBeVisible();
+  await expect(page.getByText("Đã hủy", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "In phiếu" })).toHaveCount(1);
 });

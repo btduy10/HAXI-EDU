@@ -88,6 +88,25 @@ describe("học phí", () => {
     expect(logs.map((l) => l.action).sort()).toEqual(["tuition_receipt_cancelled", "tuition_receipt_created"]);
   });
 
+  it("Admin xóa được phiếu thu đã hủy; phiếu còn hiệu lực phải hủy trước; người khác không xóa được", async () => {
+    await svc.setClassFee(f.admin, { classId: f.classA.id, tuitionFee: 1_000_000 });
+    const wrong = await svc.createReceipt(f.admin, receipt(a1, 300_000));
+    const kept = await svc.createReceipt(f.admin, receipt(a1, 200_000));
+    // Phiếu còn hiệu lực: không xóa được.
+    await expect(svc.deleteReceipt(f.admin, wrong.id)).rejects.toMatchObject({ code: "CONFLICT" });
+    await svc.cancelReceipt(f.admin, { id: wrong.id, reason: "Ghi nhầm" });
+    await expect(svc.deleteReceipt(withPerms(f.actorA, { tuition: FULL }), wrong.id)).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await svc.deleteReceipt(f.admin, wrong.id);
+    await expect(svc.deleteReceipt(f.admin, wrong.id)).rejects.toMatchObject({ code: "NOT_FOUND" });
+
+    // Chỉ còn phiếu hiệu lực; số đã đóng không đổi; số phiếu đã dùng không cấp lại.
+    expect((await svc.listReceipts(f.admin)).map((r) => r.id)).toEqual([kept.id]);
+    expect(await rowOf(f.admin, a1)).toMatchObject({ paid: 200_000, status: "partial" });
+    expect((await svc.createReceipt(f.admin, receipt(a1, 100_000))).code).toBe("PT-000003");
+    const [log] = await db.select().from(auditLogs).where(eq(auditLogs.action, "tuition_receipt_deleted"));
+    expect(log!.oldValue).toMatchObject({ receiptNo: 1, amount: 300_000, cancelReason: "Ghi nhầm" });
+  });
+
   it("quyền theo menu Học phí và phạm vi lớp: không có quyền thì bị từ chối, lớp khác coi như không tồn tại", async () => {
     await svc.setClassFee(f.admin, { classId: f.classA.id, tuitionFee: 1_000_000 });
     await svc.setClassFee(f.admin, { classId: f.classB.id, tuitionFee: 1_000_000 });
