@@ -15,6 +15,9 @@ import {
   timeOfDay,
 } from "./common";
 
+/** Ca học cố định: Admin chọn, không nhập tên. */
+export const SLOT_NAMES = ["Ca sáng", "Ca chiều", "Ca tối"] as const;
+export const SLOT_NAME_LABELS: Record<(typeof SLOT_NAMES)[number], string> = { "Ca sáng": "Sáng", "Ca chiều": "Chiều", "Ca tối": "Tối" };
 /** Số khung giờ tối đa của một ca (Khung 1 … Khung 10). */
 export const MAX_SLOT_FRAMES = 10;
 
@@ -59,7 +62,7 @@ export const roomInput = z.object({
 
 export const timeSlotInput = z
   .object({
-    name: reqText(50),
+    name: z.enum(SLOT_NAMES, { error: "Chọn Sáng, Chiều hoặc Tối" }),
     frame: intIn(1, MAX_SLOT_FRAMES),
     defaultStart: timeOfDay,
     defaultEnd: timeOfDay,

@@ -399,7 +399,7 @@ describe("điểm danh", () => {
 
 describe("khung giờ của ca học", () => {
   it("một ca có nhiều khung giờ; không trùng số khung trong cùng ca; khác ca thì được", async () => {
-    const afternoon = { name: "Ca chiều", defaultStart: "13:30", defaultEnd: "15:00" };
+    const afternoon = { name: "Ca chiều", defaultStart: "13:30", defaultEnd: "15:00" } as const;
     const first = await catalog.createTimeSlot(f.admin, { ...afternoon, frame: 1 });
     await catalog.createTimeSlot(f.admin, { name: "Ca chiều", frame: 2, defaultStart: "15:15", defaultEnd: "16:45" });
     await expect(catalog.createTimeSlot(f.admin, { name: "Ca chiều", frame: 2, defaultStart: "17:00", defaultEnd: "18:00" })).rejects.toMatchObject({
@@ -411,7 +411,7 @@ describe("khung giờ của ca học", () => {
     await expect(catalog.updateTimeSlot(f.admin, first.id, { ...afternoon, frame: 2 })).rejects.toMatchObject({ code: "VALIDATION" });
     // "Ca sáng" (đã có Khung 1) vẫn thêm Khung 2 được; người không có quyền Thêm thì không.
     await catalog.createTimeSlot(f.admin, { name: "Ca sáng", frame: 2, defaultStart: "10:00", defaultEnd: "11:30" });
-    await expect(catalog.createTimeSlot(f.actorA, { name: "Ca X", frame: 1, defaultStart: "10:00", defaultEnd: "11:30" })).rejects.toMatchObject({
+    await expect(catalog.createTimeSlot(f.actorA, { name: "Ca tối", frame: 1, defaultStart: "10:00", defaultEnd: "11:30" })).rejects.toMatchObject({
       code: "FORBIDDEN",
     });
   });

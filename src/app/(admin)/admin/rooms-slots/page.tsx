@@ -3,7 +3,7 @@ import { CrudSection } from "@/components/crud-section";
 import type { Field } from "@/components/form-dialog";
 import { orderSlotFrames } from "@/domain/time-slots";
 import { formatDate, formatTime } from "@/lib/format";
-import { MAX_SLOT_FRAMES } from "@/lib/validation/entities";
+import { MAX_SLOT_FRAMES, SLOT_NAMES, SLOT_NAME_LABELS } from "@/lib/validation/entities";
 import {
   createHolidayAction,
   createRoomAction,
@@ -26,7 +26,14 @@ const roomFields: Field[] = [
 ];
 
 const slotFields: Field[] = [
-  { name: "name", label: "Tên ca", required: true, hint: "Một ca có nhiều khung giờ: thêm từng khung với cùng tên ca (vd. Ca chiều)." },
+  {
+    name: "name",
+    label: "Ca",
+    type: "select",
+    required: true,
+    options: SLOT_NAMES.map((value) => ({ value, label: SLOT_NAME_LABELS[value] })),
+    hint: "Một ca có nhiều khung giờ: thêm từng khung với cùng ca.",
+  },
   {
     name: "frame",
     label: "Khung giờ",
@@ -87,12 +94,12 @@ export default async function RoomsSlotsPage() {
       <CrudSection
         title="Ca học"
         numbered
-        columns={["Tên ca", "Khung giờ", "Bắt đầu", "Kết thúc"]}
+        columns={["Ca", "Khung giờ", "Bắt đầu", "Kết thúc"]}
         mergeFirstColumn
         rows={orderSlotFrames(slots).map((s) => ({
           id: s.id,
           label: `${s.name} – Khung ${s.frame}`,
-          cells: [s.name, `Khung ${s.frame}`, formatTime(s.defaultStart), formatTime(s.defaultEnd)],
+          cells: [(SLOT_NAME_LABELS as Record<string, string>)[s.name] ?? s.name, `Khung ${s.frame}`, formatTime(s.defaultStart), formatTime(s.defaultEnd)],
           values: { name: s.name, frame: String(s.frame), defaultStart: formatTime(s.defaultStart), defaultEnd: formatTime(s.defaultEnd) },
         }))}
         fields={slotFields}

@@ -85,6 +85,13 @@
       "when": 1791364503216,
       "tag": "0011_time_slot_frame_no",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1791365073958,
+      "tag": "0012_time_slot_periods",
+      "breakpoints": true
     }
   ]
 }
