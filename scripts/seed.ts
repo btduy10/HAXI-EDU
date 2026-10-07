@@ -111,9 +111,9 @@ async function main() {
       const [morning, , evening] = await tx
         .insert(s.timeSlots)
         .values([
-          { name: "Ca sáng", defaultStart: "08:00", defaultEnd: "09:30" },
-          { name: "Ca chiều", defaultStart: "14:00", defaultEnd: "15:30" },
-          { name: "Ca tối", defaultStart: "18:00", defaultEnd: "19:30" },
+          { name: "Ca sáng", frame: 1, defaultStart: "08:00", defaultEnd: "09:30" },
+          { name: "Ca chiều", frame: 1, defaultStart: "14:00", defaultEnd: "15:30" },
+          { name: "Ca tối", frame: 1, defaultStart: "18:00", defaultEnd: "19:30" },
         ])
         .returning();
 

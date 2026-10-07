@@ -22,8 +22,8 @@ beforeEach(async () => {
   [morning, late] = (await db
     .insert(timeSlots)
     .values([
-      { name: "Ca sáng", defaultStart: "08:00", defaultEnd: "09:30" },
-      { name: "Ca muộn", defaultStart: "10:00", defaultEnd: "11:30" },
+      { name: "Ca sáng", frame: 1, defaultStart: "08:00", defaultEnd: "09:30" },
+      { name: "Ca muộn", frame: 1, defaultStart: "10:00", defaultEnd: "11:30" },
     ])
     .returning()) as [typeof timeSlots.$inferSelect, typeof timeSlots.$inferSelect];
   [teacherC] = (await db.insert(teachers).values({ code: "GVC", fullName: "Trợ giảng C" }).returning()) as [typeof teachers.$inferSelect];

@@ -16,8 +16,8 @@ beforeEach(async () => {
   [morning, evening] = (await db
     .insert(timeSlots)
     .values([
-      { name: "Ca sáng", defaultStart: "08:00", defaultEnd: "09:30" },
-      { name: "Ca tối", defaultStart: "18:00", defaultEnd: "19:30" },
+      { name: "Ca sáng", frame: 1, defaultStart: "08:00", defaultEnd: "09:30" },
+      { name: "Ca tối", frame: 1, defaultStart: "18:00", defaultEnd: "19:30" },
     ])
     .returning()) as [typeof timeSlots.$inferSelect, typeof timeSlots.$inferSelect];
 });

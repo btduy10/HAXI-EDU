@@ -3,6 +3,7 @@ import { CrudSection } from "@/components/crud-section";
 import type { Field } from "@/components/form-dialog";
 import { orderSlotFrames } from "@/domain/time-slots";
 import { formatDate, formatTime } from "@/lib/format";
+import { MAX_SLOT_FRAMES } from "@/lib/validation/entities";
 import {
   createHolidayAction,
   createRoomAction,
@@ -26,6 +27,15 @@ const roomFields: Field[] = [
 
 const slotFields: Field[] = [
   { name: "name", label: "Tên ca", required: true, hint: "Một ca có nhiều khung giờ: thêm từng khung với cùng tên ca (vd. Ca chiều)." },
+  {
+    name: "frame",
+    label: "Khung giờ",
+    type: "select",
+    required: true,
+    defaultValue: "1",
+    options: Array.from({ length: MAX_SLOT_FRAMES }, (_, i) => ({ value: String(i + 1), label: `Khung ${i + 1}` })),
+    hint: "Mỗi ca không có hai khung cùng số.",
+  },
   { name: "defaultStart", label: "Giờ bắt đầu mặc định", type: "time", required: true },
   {
     name: "defaultEnd",
@@ -83,7 +93,7 @@ export default async function RoomsSlotsPage() {
           id: s.id,
           label: `${s.name} – Khung ${s.frame}`,
           cells: [s.name, `Khung ${s.frame}`, formatTime(s.defaultStart), formatTime(s.defaultEnd)],
-          values: { name: s.name, defaultStart: formatTime(s.defaultStart), defaultEnd: formatTime(s.defaultEnd) },
+          values: { name: s.name, frame: String(s.frame), defaultStart: formatTime(s.defaultStart), defaultEnd: formatTime(s.defaultEnd) },
         }))}
         fields={slotFields}
         createAction={can("add") ? createTimeSlotAction : undefined}

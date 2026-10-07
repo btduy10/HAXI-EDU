@@ -18,8 +18,8 @@ beforeEach(async () => {
   [morning, late] = (await db
     .insert(timeSlots)
     .values([
-      { name: "Ca sáng", defaultStart: "08:00", defaultEnd: "09:30" },
-      { name: "Ca sáng muộn", defaultStart: "09:00", defaultEnd: "10:30" },
+      { name: "Ca sáng", frame: 1, defaultStart: "08:00", defaultEnd: "09:30" },
+      { name: "Ca sáng muộn", frame: 1, defaultStart: "09:00", defaultEnd: "10:30" },
     ])
     .returning()) as [typeof timeSlots.$inferSelect, typeof timeSlots.$inferSelect];
 });
@@ -66,7 +66,7 @@ describe("sinh buổi học", () => {
     const [slot] = await db.select().from(timeSlots).where(eq(timeSlots.id, morning.id));
     expect(slot).toMatchObject({ defaultStart: "08:00:00", defaultEnd: "09:30:00" });
 
-    await catalog.updateTimeSlot(f.admin, morning.id, { name: "Ca sáng", defaultStart: "07:00", defaultEnd: "08:30" });
+    await catalog.updateTimeSlot(f.admin, morning.id, { name: "Ca sáng", frame: 1, defaultStart: "07:00", defaultEnd: "08:30" });
     const afterSlotChange = await sessionsOf(f.classA.id);
     expect(afterSlotChange.find((s) => s.id === second!.id)).toMatchObject({ startTime: "08:00:00", endTime: "09:30:00" });
 
@@ -394,5 +394,25 @@ describe("điểm danh", () => {
     expect((await attendance.listOverdueSessions(f.actorA, now)).map((s) => s.date)).toEqual(["2026-01-06"]);
     expect((await attendance.listOverdueSessions(f.actorB, now)).map((s) => s.date)).toEqual(["2026-01-20"]);
     expect((await attendance.listOverdueSessions(f.actorA, now))[0]!.locked).toBe(true);
+  });
+});
+
+describe("khung giờ của ca học", () => {
+  it("một ca có nhiều khung giờ; không trùng số khung trong cùng ca; khác ca thì được", async () => {
+    const afternoon = { name: "Ca chiều", defaultStart: "13:30", defaultEnd: "15:00" };
+    const first = await catalog.createTimeSlot(f.admin, { ...afternoon, frame: 1 });
+    await catalog.createTimeSlot(f.admin, { name: "Ca chiều", frame: 2, defaultStart: "15:15", defaultEnd: "16:45" });
+    await expect(catalog.createTimeSlot(f.admin, { name: "Ca chiều", frame: 2, defaultStart: "17:00", defaultEnd: "18:00" })).rejects.toMatchObject({
+      code: "VALIDATION",
+      fieldErrors: { frame: "Ca chiều đã có Khung 2. Hãy chọn khung khác." },
+    });
+    // Sửa giữ nguyên số khung của chính nó thì được; đổi sang số khung đã có thì bị chặn.
+    await catalog.updateTimeSlot(f.admin, first.id, { ...afternoon, frame: 1, defaultEnd: "14:50" });
+    await expect(catalog.updateTimeSlot(f.admin, first.id, { ...afternoon, frame: 2 })).rejects.toMatchObject({ code: "VALIDATION" });
+    // "Ca sáng" (đã có Khung 1) vẫn thêm Khung 2 được; người không có quyền Thêm thì không.
+    await catalog.createTimeSlot(f.admin, { name: "Ca sáng", frame: 2, defaultStart: "10:00", defaultEnd: "11:30" });
+    await expect(catalog.createTimeSlot(f.actorA, { name: "Ca X", frame: 1, defaultStart: "10:00", defaultEnd: "11:30" })).rejects.toMatchObject({
+      code: "FORBIDDEN",
+    });
   });
 });

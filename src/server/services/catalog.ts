@@ -4,7 +4,8 @@ import { db } from "@/db";
 import { classes, courses, holidays, rooms, teachers, timeSlots, user } from "@/db/schema";
 import type { courseInput, holidayInput, roomInput, teacherInput, timeSlotInput } from "@/lib/validation/entities";
 import { audit } from "../audit";
-import { type Actor, assertSignedIn, can, isAdmin } from "../guard";
+import { AppError } from "../errors";
+import { type Actor, assertCan, assertSignedIn, can, isAdmin } from "../guard";
 import { assertKnownRole } from "../settings";
 import { createRow, deleteRow, updateRow } from "./crud";
 
@@ -75,11 +76,27 @@ export async function listTimeSlotsForGrid() {
     .from(timeSlots)
     .orderBy(asc(timeSlots.defaultStart));
 }
-export const createTimeSlot = (actor: Actor, data: z.output<typeof timeSlotInput>) =>
-  createRow(actor, timeSlots, "time_slots", data, "rooms");
+/** Một ca không có hai khung cùng số (vd. hai "Khung 2" của Ca chiều). */
+async function assertFrameFree(data: z.output<typeof timeSlotInput>, exceptId?: string) {
+  const conditions = [eq(timeSlots.name, data.name), eq(timeSlots.frame, data.frame)];
+  if (exceptId) conditions.push(ne(timeSlots.id, exceptId));
+  const [taken] = await db.select({ id: timeSlots.id }).from(timeSlots).where(and(...conditions)).limit(1);
+  if (taken) {
+    const message = `${data.name} đã có Khung ${data.frame}. Hãy chọn khung khác.`;
+    throw new AppError("VALIDATION", message, { frame: message });
+  }
+}
+export async function createTimeSlot(actor: Actor, data: z.output<typeof timeSlotInput>) {
+  assertCan(actor, "rooms", "add");
+  await assertFrameFree(data);
+  return createRow(actor, timeSlots, "time_slots", data, "rooms");
+}
 // Sửa ca chỉ đổi giờ mặc định cho các buổi sinh SAU này; buổi đã sinh giữ giờ riêng.
-export const updateTimeSlot = (actor: Actor, id: string, data: z.output<typeof timeSlotInput>) =>
-  updateRow(actor, timeSlots, "time_slots", id, data, "rooms");
+export async function updateTimeSlot(actor: Actor, id: string, data: z.output<typeof timeSlotInput>) {
+  assertCan(actor, "rooms", "edit");
+  await assertFrameFree(data, id);
+  return updateRow(actor, timeSlots, "time_slots", id, data, "rooms");
+}
 export const deleteTimeSlot = (actor: Actor, id: string) => deleteRow(actor, timeSlots, "time_slots", id);
 
 export async function listHolidays(actor: Actor) {

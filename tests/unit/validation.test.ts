@@ -14,8 +14,8 @@ describe("xác thực dữ liệu vào", () => {
   });
 
   it("ca học và lớp: thời gian kết thúc phải sau bắt đầu", () => {
-    expect(timeSlotInput.safeParse({ name: "Ca", defaultStart: "09:00", defaultEnd: "08:00" }).success).toBe(false);
-    expect(timeSlotInput.parse({ name: "Ca", defaultStart: "08:00:00", defaultEnd: "09:30" })).toMatchObject({ defaultStart: "08:00", defaultEnd: "09:30" });
+    expect(timeSlotInput.safeParse({ name: "Ca", frame: "1", defaultStart: "09:00", defaultEnd: "08:00" }).success).toBe(false);
+    expect(timeSlotInput.parse({ name: "Ca", frame: "2", defaultStart: "08:00:00", defaultEnd: "09:30" })).toMatchObject({ frame: 2, defaultStart: "08:00", defaultEnd: "09:30" });
     const base = { code: "L1", name: "Lớp", courseId: "3f2b1c9e-8a47-4c1d-9b2e-5d6f7a8b9c0d", maxSize: 5 };
     expect(classInput.safeParse({ ...base, startDate: "2026-03-01", endDate: "2026-01-01" }).success).toBe(false);
     expect(classInput.safeParse({ ...base, startDate: "2026-01-01", endDate: "2026-03-01" }).success).toBe(true);

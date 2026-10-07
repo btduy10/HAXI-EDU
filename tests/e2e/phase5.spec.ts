@@ -23,7 +23,7 @@ test.beforeAll(async () => {
   const [student] = await db`select id from students where code = 'HV001'`;
   await db`insert into enrollments (class_id, student_id, joined_at) values (${classId}, ${student!.id}, ${shift(today(), -7)})`;
   // Ca riêng sáng sớm để không trùng các buổi đã có trong dữ liệu mẫu.
-  await db`insert into time_slots (name, default_start, default_end) values ('Ca E2E', '05:00', '05:45')`;
+  await db`insert into time_slots (name, frame, default_start, default_end) values ('Ca E2E', 1, '05:00', '05:45')`;
   await db.end();
 });
 

@@ -79,12 +79,18 @@ export const timeSlots = pgTable(
   {
     id: id(),
     name: text("name").notNull(),
+    /** Số khung trong ca (Khung 1, Khung 2…), Admin chọn khi thêm/sửa; không trùng trong cùng ca. */
+    frame: smallint("frame").notNull(),
     defaultStart: time("default_start").notNull(),
     defaultEnd: time("default_end").notNull(),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
-  (t) => [uniqueIndex("time_slots_name_frame_uq").on(t.name, t.defaultStart, t.defaultEnd)],
+  (t) => [
+    uniqueIndex("time_slots_name_frame_uq").on(t.name, t.defaultStart, t.defaultEnd),
+    uniqueIndex("time_slots_name_frame_no_uq").on(t.name, t.frame),
+    check("time_slots_frame_range", sql`${t.frame} between 1 and 10`),
+  ],
 );
 
 export const classes = pgTable(

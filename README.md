@@ -96,7 +96,7 @@ Nguyên tắc: mọi hàm trong `server/services` nhận `actor` lấy từ phi�
 ### Danh mục (Admin)
 
 - Học viên (tìm kiếm, nhập Excel có xem trước và báo lỗi từng dòng), Giáo viên, Khóa học, Lớp học (phân công GV), Phòng, Ca học, Ngày nghỉ.
-- Ca học: một ca có thể có nhiều khung giờ (thêm từng khung cùng tên ca, chỉ cấm trùng cả tên lẫn giờ). Bảng Ca học gộp ô Tên ca, cột Khung giờ đánh số Khung 1, Khung 2… theo giờ kết thúc (khung kết thúc trước đứng trước); ca có khung bắt đầu sớm hơn đứng trước.
+- Ca học: một ca có thể có nhiều khung giờ. Khi thêm/sửa, nhập Tên ca và chọn **Khung giờ** (Khung 1 … Khung 10); cùng một ca không có hai khung cùng số. Bảng Ca học gộp ô Tên ca, sắp các khung theo số khung; ca có khung bắt đầu sớm hơn đứng trước. Dữ liệu cũ được đánh số khung theo giờ kết thúc (kết thúc trước = số nhỏ hơn).
 - Ghi danh: chặn vượt sĩ số, giữ lịch sử rời lớp.
 - Tài khoản: tạo, đặt lại mật khẩu, khóa/mở, đặt lại 2FA.
 
