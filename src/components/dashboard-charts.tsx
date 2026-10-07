@@ -7,7 +7,7 @@ import type { DashboardCharts as Data } from "@/server/services/dashboard";
 export function DashboardCharts({ data, scopeLabel }: { data: Data; scopeLabel: string }) {
   const totalStudents = data.levels.reduce((sum, l) => sum + l.students, 0);
   return (
-    <div className="grid gap-3 lg:grid-cols-2">
+    <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
       <ChartCard title="Điểm danh 30 ngày qua" subtitle={`Cơ cấu các lượt điểm danh · ${scopeLabel}`}>
         <AttendanceDonut counts={data.attendance} emptyText="Chưa có buổi nào được điểm danh trong 30 ngày qua." />
       </ChartCard>

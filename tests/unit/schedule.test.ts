@@ -89,4 +89,15 @@ describe("khóa điểm danh và danh sách theo ngày ghi danh", () => {
     expect(isEnrolledOn(e, "2026-02-01")).toBe(false);
     expect(isEnrolledOn({ joinedAt: "2026-01-10", leftAt: null }, "2027-01-01")).toBe(true);
   });
+
+  it("buổi đầu vào đúng ngày khai giảng dù không trùng thứ của lịch mẫu", () => {
+    const base = { startDate: "2026-10-10", endDate: "2026-10-31", holidays: new Set<string>(), defaultRoomId: "room", defaultTeacherId: "t" };
+    const thursday = { id: "tp", weekday: 4, timeSlotId: "slot", slotStart: "18:00:00", slotEnd: "19:30:00", startTime: null, endTime: null, roomId: null, teacherId: null, assistantTeacherId: null };
+    const dates = (opts: { firstOnStartDate?: boolean; holidays?: Set<string> }) =>
+      planSessions({ ...base, ...opts, templates: [thursday] }).map((p) => p.date);
+    // 10/10/2026 là Thứ Bảy: buổi 1 vào 10/10 (ca của lịch mẫu), sau đó các Thứ Năm.
+    expect(dates({ firstOnStartDate: true })).toEqual(["2026-10-10", "2026-10-15", "2026-10-22", "2026-10-29"]);
+    expect(dates({})).toEqual(["2026-10-15", "2026-10-22", "2026-10-29"]);
+    expect(dates({ firstOnStartDate: true, holidays: new Set(["2026-10-10"]) })[0]).toBe("2026-10-15");
+  });
 });

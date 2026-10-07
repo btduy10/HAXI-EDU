@@ -45,7 +45,7 @@ export function ClassReportCharts({ rows }: { rows: Row[] }) {
   const byStars = [...rows].sort((a, b) => b.totalStars - a.totalStars);
   const byRate = [...rows].sort((a, b) => b.attendance.rate - a.attendance.rate);
   return (
-    <div className="grid gap-3 lg:grid-cols-2">
+    <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
       <ChartCard title="Cơ cấu điểm danh của lớp" subtitle="Tất cả lượt điểm danh ở các buổi đã dạy" className="lg:col-span-2">
         <AttendanceDonut counts={counts} emptyText="Lớp chưa có buổi nào được điểm danh." />
       </ChartCard>

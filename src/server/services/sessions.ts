@@ -607,6 +607,8 @@ async function generateInTx(tx: Tx, actor: Actor, classId: string, templateId?: 
 
   const planned = planSessions({
     startDate: fromDate && fromDate > cls.startDate ? fromDate : cls.startDate,
+    // Buổi đầu vào đúng ngày khai giảng, trừ khi lớp đã bắt đầu và chỉ sinh tiếp từ hôm nay.
+    firstOnStartDate: !fromDate || fromDate <= cls.startDate,
     endDate: horizon,
     templates,
     holidays: new Set(holidayRows.map((h) => h.date)),

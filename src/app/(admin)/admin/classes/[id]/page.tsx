@@ -218,37 +218,6 @@ export default async function ClassDetailPage({ params }: PageProps<"/admin/clas
                 lịch mẫu”.
               </p>
             )}
-            {overview.upcoming.length > 0 && (
-              <div className="grid gap-1">
-                <p className="font-medium">Buổi sắp tới</p>
-                <ul className="grid gap-1">
-                  {overview.upcoming.map((s) => {
-                    const text = (
-                      <>
-                        <span className="font-medium">
-                          {WEEKDAY_LABELS[isoWeekday(s.date)]} {formatDate(s.date)}
-                        </span>{" "}
-                        · {s.slotName ? `${s.slotName} ` : ""}
-                        {formatTime(s.startTime)}–{formatTime(s.endTime)} · GV: {s.substituteName ?? s.teacherName ?? "chưa có"}
-                        {s.assistantName && ` · Trợ giảng: ${s.assistantName}`}
-                        {s.roomName && ` · ${s.roomName}`}
-                      </>
-                    );
-                    return (
-                      <li key={s.id} className="rounded-md bg-muted/50 px-2 py-1">
-                        {can("view", "timetable") ? (
-                          <Link href={`/admin/sessions/${s.id}`} className="hover:underline">
-                            {text}
-                          </Link>
-                        ) : (
-                          text
-                        )}
-                      </li>
-                    );
-                  })}
-                </ul>
-              </div>
-            )}
           </div>
         ) : (
           <p className="rounded-lg border border-dashed p-3 text-sm text-muted-foreground">Lớp chưa có buổi học nào. Thêm lịch mẫu rồi bấm “Sinh buổi học từ lịch mẫu”.</p>

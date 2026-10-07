@@ -37,6 +37,8 @@ export type PlannedSession = {
 /**
  * Sinh danh sách buổi từ lịch mẫu trong khoảng ngày của lớp, bỏ qua ngày nghỉ.
  * Giờ được SAO CHÉP vào từng buổi nên sửa ca hay sửa buổi khác về sau không ảnh hưởng.
+ * Buổi đầu tiên luôn vào đúng ngày bắt đầu (khai giảng), kể cả khi ngày đó không trùng thứ của lịch mẫu:
+ * buổi này dùng ca, phòng, GV của dòng lịch mẫu có buổi sớm nhất; các buổi sau theo thứ của lịch mẫu.
  */
 export function planSessions(input: {
   startDate: string;
@@ -45,6 +47,8 @@ export function planSessions(input: {
   holidays: ReadonlySet<string>;
   defaultRoomId: string | null;
   defaultTeacherId: string | null;
+  /** Xếp buổi đầu vào đúng `startDate` (ngày khai giảng của lớp). Tắt khi chỉ sinh tiếp từ một ngày giữa khóa. */
+  firstOnStartDate?: boolean;
 }): PlannedSession[] {
   const byWeekday = new Map<number, TemplateForGeneration[]>();
   for (const t of input.templates) byWeekday.set(t.weekday, [...(byWeekday.get(t.weekday) ?? []), t]);
@@ -64,6 +68,10 @@ export function planSessions(input: {
         assistantTeacherId: t.assistantTeacherId,
       });
     }
+  }
+  const first = planned[0];
+  if (input.firstOnStartDate && first && first.date !== input.startDate && !input.holidays.has(input.startDate)) {
+    planned.unshift({ ...first, date: input.startDate });
   }
   return planned;
 }

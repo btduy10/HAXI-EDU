@@ -46,10 +46,11 @@ describe("xếp lại lịch lớp theo lịch mẫu", () => {
     expect(list).toHaveLength(10);
     expect(list[0]!.id).toBe(inserted[0]!.id); // buổi đã dạy giữ nguyên
     const rebuilt = list.slice(1);
-    expect(rebuilt.every((s) => new Date(`${s.date}T00:00:00Z`).getUTCDay() === 3)).toBe(true);
+    // Buổi 1 vào đúng ngày khai giảng 06/01 (Thứ Ba) với ca, GV của lịch mẫu; các buổi sau vào Thứ Tư.
+    expect(rebuilt[0]!.date).toBe("2026-01-06");
+    expect(rebuilt.slice(1).every((s) => new Date(`${s.date}T00:00:00Z`).getUTCDay() === 3)).toBe(true);
     expect(rebuilt.every((s) => s.startTime === "18:00:00" && s.timeSlotId === evening.id)).toBe(true);
     expect(rebuilt.every((s) => s.teacherId === teacherC!.id && s.assistantTeacherId === f.teacherA.id)).toBe(true);
-    expect(rebuilt[0]!.date).toBe("2026-01-07");
 
     // Trang Lớp học hiển thị tình trạng lịch: 10/10 buổi, buổi đầu, đã dạy 1, buổi sắp tới kèm GV.
     const overview = await svc.classScheduleOverview(f.admin, f.classA.id, "2026-01-08");

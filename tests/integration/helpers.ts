@@ -49,8 +49,8 @@ export async function seedFixture() {
   const [classA, classB] = await db
     .insert(s.classes)
     .values([
-      { code: "A", name: "Lớp A", courseId: course!.id, defaultRoomId: room!.id, startDate: "2026-01-05", endDate: "2026-03-31", maxSize: 3 },
-      { code: "B", name: "Lớp B", courseId: course!.id, defaultRoomId: room!.id, startDate: "2026-01-05", endDate: "2026-03-31", maxSize: 3 },
+      { code: "A", name: "Lớp A", courseId: course!.id, defaultRoomId: room!.id, startDate: "2026-01-06", endDate: "2026-03-31", maxSize: 3 },
+      { code: "B", name: "Lớp B", courseId: course!.id, defaultRoomId: room!.id, startDate: "2026-01-06", endDate: "2026-03-31", maxSize: 3 },
     ])
     .returning();
   await db.insert(s.classTeachers).values([
