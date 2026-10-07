@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  AwardIcon,
   BarChart3Icon,
   BookOpenIcon,
   BriefcaseIcon,
@@ -53,8 +54,6 @@ const NAV: { admin: NavEntry[]; teacher: NavItem[] } = {
         { href: "/admin/courses", label: "Khóa học", icon: BookOpenIcon },
         { href: "/admin/rooms-slots", label: "Phòng & Ca học", icon: Building2Icon },
         { href: "/admin/teachers", label: "Giáo viên", icon: UsersIcon },
-        { href: "/admin/stars", label: "Sao & Avatar", icon: StarIcon },
-        { href: "/admin/rewards", label: "Quà & Tổng kết", icon: GiftIcon },
       ],
     },
     {
@@ -71,6 +70,14 @@ const NAV: { admin: NavEntry[]; teacher: NavItem[] } = {
     { href: "/admin/classes", label: "Lớp học", icon: SchoolIcon },
     { href: "/admin/timetable", label: "Thời khóa biểu", icon: CalendarDaysIcon },
     { href: "/admin/attendance", label: "Điểm danh", icon: ClipboardCheckIcon },
+    {
+      label: "Sao & Quà",
+      icon: AwardIcon,
+      children: [
+        { href: "/admin/stars", label: "Sao & Avatar", icon: StarIcon },
+        { href: "/admin/rewards", label: "Quà & Tổng kết", icon: GiftIcon },
+      ],
+    },
     { href: "/admin/timesheet", label: "Chấm công", icon: CalendarCheckIcon },
     { href: "/admin/reports", label: "Báo cáo", icon: BarChart3Icon },
   ],
