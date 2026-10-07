@@ -2,8 +2,9 @@ import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/db";
 import { auditLogs, sessions, students as studentsTable, teachers as teachersTable, user as userTable } from "@/db/schema";
-import { DEFAULT_PERMISSIONS, type Menu, type MenuPermission, type RolePermissions, normalizePermissions } from "@/lib/permissions";
-import { type Actor, can } from "@/server/guard";
+import { DEFAULT_PERMISSIONS, type Menu, type MenuPermission, type RolePermissions, normalizePermissions, resolvePermissions } from "@/lib/permissions";
+import { type Actor, can, seesAllClasses } from "@/server/guard";
+import { navFor } from "@/server/nav";
 import { getPermissionConfig } from "@/server/settings";
 import * as accounts from "@/server/services/accounts";
 import * as attendance from "@/server/services/attendance";
@@ -132,6 +133,41 @@ describe("bảng phân quyền", () => {
     expect(can(f.actorA, "attendance", "add")).toBe(true);
     expect(can(f.actorA, "students", "view")).toBe(false);
     expect(can({ ...f.actorA, role: "khác" }, "attendance", "view")).toBe(false);
+  });
+});
+
+describe("quyền riêng từng tài khoản", () => {
+  it("ghi đè quyền của vai trò (gồm phạm vi lớp); tắt thì quay về vai trò; chỉ Admin, không áp cho tài khoản Admin; có nhật ký", async () => {
+    const config = await getPermissionConfig();
+    const custom = { scope: "all" as const, menus: { ...DEFAULT_PERMISSIONS.teacher.menus, reports: VIEW, students: { view: false, add: true, edit: false } } };
+    await expect(accounts.updateAccountPermissions(f.actorA, { userId: f.actorA.userId, permissions: custom })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(accounts.updateAccountPermissions(f.admin, { userId: f.admin.userId, permissions: custom })).rejects.toMatchObject({ code: "CONFLICT" });
+    await expect(accounts.updateAccountPermissions(f.admin, { userId: "khong-co", permissions: custom })).rejects.toMatchObject({ code: "NOT_FOUND" });
+
+    const saved = await accounts.updateAccountPermissions(f.admin, { userId: f.actorA.userId, permissions: custom });
+    // Thêm mà không có Xem thì bị bỏ.
+    expect(saved!.menus.students).toEqual({ view: false, add: false, edit: false });
+    const [row] = await db.select({ custom: userTable.customPermissions }).from(userTable).where(eq(userTable.id, f.actorA.userId));
+    const permsA = resolvePermissions(config, "teacher", row!.custom);
+    const actorA = { ...f.actorA, perms: permsA };
+    expect(can(actorA, "reports", "view")).toBe(true);
+    expect(seesAllClasses(actorA)).toBe(true);
+    expect(navFor(actorA).hrefs).toContain("/admin/reports");
+    // Tài khoản khác cùng vai trò vẫn theo vai trò.
+    const [rowB] = await db.select({ custom: userTable.customPermissions }).from(userTable).where(eq(userTable.id, f.actorB.userId));
+    const actorB = { ...f.actorB, perms: resolvePermissions(config, "teacher", rowB!.custom) };
+    expect(can(actorB, "reports", "view")).toBe(false);
+    expect(navFor(actorB).hrefs).not.toContain("/admin/reports");
+
+    const list = await accounts.listAccountPermissions(f.admin);
+    expect(list.find((a) => a.id === f.actorA.userId)!.permissions).toEqual(saved);
+    expect(list.some((a) => a.role === "admin")).toBe(false);
+
+    await accounts.updateAccountPermissions(f.admin, { userId: f.actorA.userId, permissions: null });
+    const [cleared] = await db.select({ custom: userTable.customPermissions }).from(userTable).where(eq(userTable.id, f.actorA.userId));
+    expect(resolvePermissions(config, "teacher", cleared!.custom)).toEqual(config.teacher);
+    const logs = await db.select().from(auditLogs).where(eq(auditLogs.action, "account_permissions_updated"));
+    expect(logs).toHaveLength(2);
   });
 });
 

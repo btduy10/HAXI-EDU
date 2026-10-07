@@ -16,6 +16,8 @@ export const user = pgTable("user", {
   // "admin" hoặc khóa của một vai trò trong Cấu hình → Phân quyền (vai trò do Admin tự tạo nên không dùng enum).
   role: text("role").notNull().default("teacher"),
   teacherId: uuid("teacher_id").references(() => teachers.id, { onDelete: "set null" }),
+  // Quyền riêng của tài khoản ({scope, menus}), ghi đè quyền của vai trò. null = theo vai trò.
+  customPermissions: jsonb("custom_permissions"),
   mustChangePassword: boolean("must_change_password").notNull().default(true),
   lockedUntil: timestamp("locked_until", { withTimezone: true }),
   failedAttempts: integer("failed_attempts").notNull().default(0),

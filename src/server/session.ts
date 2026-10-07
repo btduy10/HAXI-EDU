@@ -2,7 +2,10 @@ import "server-only";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { cache } from "react";
-import { type Menu, NO_PERMISSIONS, type PermissionAction, type UserRole } from "@/lib/permissions";
+import { eq } from "drizzle-orm";
+import { db } from "@/db";
+import { user } from "@/db/schema";
+import { type Menu, type PermissionAction, type UserRole, resolvePermissions } from "@/lib/permissions";
 import { auth } from "./auth";
 import { AppError } from "./errors";
 import { type Actor, can, unauthenticated } from "./guard";
@@ -34,15 +37,19 @@ export const getSessionUser = cache(async (): Promise<SessionUser | null> => {
   };
 });
 
-// Bảng phân quyền đọc lại mỗi request nên Admin đổi là có hiệu lực ngay.
+// Bảng phân quyền và quyền riêng của tài khoản đọc lại mỗi request nên Admin đổi là có hiệu lực ngay.
 const loadPermissions = cache(() => getPermissionConfig());
+const loadCustomPermissions = cache(async (userId: string) => {
+  const [row] = await db.select({ custom: user.customPermissions }).from(user).where(eq(user.id, userId)).limit(1);
+  return row?.custom ?? null;
+});
 
-async function actorOf(user: SessionUser): Promise<Actor> {
-  const base = { userId: user.id, role: user.role, teacherId: user.teacherId };
-  // Vai trò không còn trong Cấu hình (đã bị xóa) thì không có quyền gì.
-  if (user.role === "admin") return base;
-  const config = await loadPermissions();
-  return { ...base, perms: Object.hasOwn(config, user.role) ? config[user.role]! : NO_PERMISSIONS };
+async function actorOf(sessionUser: SessionUser): Promise<Actor> {
+  const base = { userId: sessionUser.id, role: sessionUser.role, teacherId: sessionUser.teacherId };
+  if (sessionUser.role === "admin") return base;
+  // Quyền riêng của tài khoản (nếu có) ghi đè quyền của vai trò; vai trò đã bị xóa thì không có quyền gì.
+  const [config, custom] = await Promise.all([loadPermissions(), loadCustomPermissions(sessionUser.id)]);
+  return { ...base, perms: resolvePermissions(config, sessionUser.role, custom) };
 }
 
 /** Bước bắt buộc còn thiếu trước khi được dùng hệ thống. */

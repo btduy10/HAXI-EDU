@@ -94,16 +94,37 @@ export function normalizePermissions(value: unknown): PermissionConfig {
         ? raw.label.trim().slice(0, ROLE_LABEL_MAX)
         : "";
     if (!label) continue;
-    const rawMenus = raw.menus && typeof raw.menus === "object" ? raw.menus : {};
-    const menus = {} as Record<Menu, MenuPermission>;
-    for (const menu of PERMISSION_MENUS) {
-      const parsed = menuPermission.safeParse(rawMenus[menu.key]);
-      const item = parsed.success ? parsed.data : fallback.menus[menu.key];
-      const supported = menu.actions as readonly PermissionAction[];
-      const view = item.view && supported.includes("view");
-      menus[menu.key] = { view, add: view && item.add && supported.includes("add"), edit: view && item.edit && supported.includes("edit") };
-    }
-    out[role] = { label, scope: raw.scope === "own" || raw.scope === "all" ? raw.scope : fallback.scope, menus };
+    out[role] = { label, ...normalizeRolePermissions(raw, fallback) };
   }
   return out;
 }
+
+/** Chuẩn hóa một bảng quyền ({scope, menus}) của vai trò hoặc của một tài khoản; phần thiếu/sai lấy theo `fallback`. */
+export function normalizeRolePermissions(value: unknown, fallback: RolePermissions = NO_PERMISSIONS): RolePermissions {
+  const raw = (value && typeof value === "object" ? value : {}) as { scope?: unknown; menus?: Record<string, unknown> };
+  const rawMenus = raw.menus && typeof raw.menus === "object" ? raw.menus : {};
+  const menus = {} as Record<Menu, MenuPermission>;
+  for (const menu of PERMISSION_MENUS) {
+    const parsed = menuPermission.safeParse(rawMenus[menu.key]);
+    const item = parsed.success ? parsed.data : fallback.menus[menu.key];
+    const supported = menu.actions as readonly PermissionAction[];
+    const view = item.view && supported.includes("view");
+    menus[menu.key] = { view, add: view && item.add && supported.includes("add"), edit: view && item.edit && supported.includes("edit") };
+  }
+  return { scope: raw.scope === "own" || raw.scope === "all" ? raw.scope : fallback.scope, menus };
+}
+
+/**
+ * Quyền thực tế của một tài khoản không phải Admin: quyền riêng của tài khoản (nếu Admin đã bật),
+ * không thì quyền của vai trò; vai trò không còn trong Cấu hình thì không có quyền gì.
+ */
+export function resolvePermissions(config: PermissionConfig, role: string, custom: unknown): RolePermissions {
+  if (custom && typeof custom === "object") return normalizeRolePermissions(custom);
+  return Object.hasOwn(config, role) ? config[role]! : NO_PERMISSIONS;
+}
+
+/** Admin bật/tắt quyền riêng của một tài khoản. `permissions: null` = quay về quyền của vai trò. */
+export const accountPermissionsInput = z.object({
+  userId: z.string().min(1).max(100),
+  permissions: roleConfig.omit({ label: true }).nullable(),
+});

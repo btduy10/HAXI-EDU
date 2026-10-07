@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import { FormDialogButton } from "@/components/action-buttons";
-import { PermissionMatrix } from "@/components/permission-matrix";
+import { AccountPermissions, PermissionMatrix } from "@/components/permission-matrix";
+import { updateAccountPermissionsAction } from "@/server/actions/admin";
 import { updatePermissionsAction, updateSettingsAction } from "@/server/actions/rewards";
-import { listAccounts } from "@/server/services/accounts";
+import { listAccountPermissions, listAccounts } from "@/server/services/accounts";
 import { listTeachers } from "@/server/services/catalog";
 import { readPermissions, readSettings } from "@/server/services/reports";
 import { requirePageUser } from "@/server/session";
@@ -11,11 +12,12 @@ export const metadata: Metadata = { title: "Cấu hình" };
 
 export default async function SettingsPage() {
   const { actor } = await requirePageUser("admin");
-  const [settings, permissions, teachers, accounts] = await Promise.all([
+  const [settings, permissions, teachers, accounts, accountPermissions] = await Promise.all([
     readSettings(actor),
     readPermissions(actor),
     listTeachers(actor),
     listAccounts(actor),
+    listAccountPermissions(actor),
   ]);
   // Ai đang mang từng vai trò: số tài khoản và tên giáo viên (cột Vai trò ở menu Giáo viên).
   const members = Object.fromEntries(
@@ -78,6 +80,18 @@ export default async function SettingsPage() {
           </p>
         </div>
         <PermissionMatrix initial={permissions} action={updatePermissionsAction} members={members} />
+      </section>
+
+      <section className="grid gap-3">
+        <div>
+          <h2 className="text-lg font-semibold">Quyền riêng từng tài khoản</h2>
+          <p className="text-sm text-muted-foreground">
+            Mặc định mỗi tài khoản dùng quyền của vai trò. Chọn <strong>Tài khoản</strong>, tick <strong>Phân quyền riêng</strong> để chỉnh phạm vi lớp
+            và Xem / Thêm / Sửa từng menu riêng cho tài khoản đó (ghi đè quyền của vai trò). Các menu Tài khoản, Nhật ký, Cấu hình luôn chỉ
+            dành cho Quản trị.
+          </p>
+        </div>
+        <AccountPermissions accounts={accountPermissions} roles={permissions} action={updateAccountPermissionsAction} />
       </section>
     </div>
   );

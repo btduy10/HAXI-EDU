@@ -89,6 +89,7 @@ Nguyên tắc: mọi hàm trong `server/services` nhận `actor` lấy từ phi�
   - **Xem / Thêm / Sửa** theo từng menu. Tick Xem thì menu hiện trên thanh menu của vai trò đó và mở cùng trang Admin dùng, giới hạn trong phạm vi lớp.
   - Mặc định: Giáo viên điểm danh và chấm sao lớp mình; Giáo viên trực thấy mọi lớp và hỗ trợ điểm danh.
   - Luôn chỉ Admin: xóa dữ liệu; Tài khoản, Nhật ký, Cấu hình; nhập Excel; mở khóa điểm danh; tiêu chí sao, cấp bậc, kho avatar, tặng avatar.
+  - **Quyền riêng từng tài khoản** (Cấu hình → Quyền riêng từng tài khoản): chọn tài khoản, tick "Phân quyền riêng" để chỉnh phạm vi lớp và Xem / Thêm / Sửa từng menu riêng cho tài khoản đó, ghi đè quyền của vai trò; bỏ tick thì quay về quyền của vai trò. Không áp cho tài khoản Quản trị; trang Tài khoản ghi "· quyền riêng" cạnh vai trò.
   - Ngoài Admin, không ai thấy hay ghi được ngày sinh, giới tính, phụ huynh, điện thoại, ghi chú của học viên.
 - Thứ tự menu quản trị: Tổng quan, **Giám đốc** (Khóa học, Phòng & Ca học, Giáo viên, Sao & Avatar, Quà & Tổng kết), **Admin** (Tài khoản, Cấu hình, Nhật ký), Học viên, Ghi danh, Lớp học, Thời khóa biểu, Điểm danh, Chấm công, Báo cáo. Nhóm bấm để mở/đóng, tự mở khi đang ở trang thuộc nhóm; nhóm chỉ hiện khi vai trò được xem ít nhất một mục trong nhóm.
 - Quyền được kiểm tra ở máy chủ trong từng service (`can`/`assertCan` trong `src/server/guard.ts`); ẩn menu và nút chỉ là phần hiển thị.

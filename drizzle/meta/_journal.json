@@ -57,6 +57,13 @@
       "when": 1791326937794,
       "tag": "0007_class_staffing",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1791360461746,
+      "tag": "0008_account_permissions",
+      "breakpoints": true
     }
   ]
 }

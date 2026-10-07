@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { NEW_PASSWORD, loadAdminSecret, login, sql, totp } from "./helpers";
+import { NEW_PASSWORD, expectNoHorizontalScroll, loadAdminSecret, login, sql, totp } from "./helpers";
 
 // Chạy sau phase1–4: admin đã bật 2FA, gv.lan đã đổi mật khẩu. Dùng lớp mới RB-TG01 để không ảnh hưởng lớp khác.
 test.describe.configure({ mode: "serial" });
@@ -88,4 +88,35 @@ test("Phân công GV chính + trợ giảng kèm lương, lịch mẫu tự sinh
   expect(await db`select id from sessions where id = ${sessionId}`).toHaveLength(0);
   expect(await db`select id from attendances where session_id = ${sessionId}`).toHaveLength(0);
   await db.end();
+});
+
+test("Cấu hình: Admin phân quyền riêng cho tài khoản gv.lan (Xem Báo cáo); gv.lan thấy và mở được menu Báo cáo", async ({ page, browser }) => {
+  await login(page, "admin", NEW_PASSWORD);
+  await page.getByLabel("Mã xác thực").fill(totp(loadAdminSecret()));
+  await page.getByRole("button", { name: "Xác nhận" }).click();
+  await expect(page).toHaveURL(/\/admin\/dashboard$/);
+
+  const db = sql();
+  const [lan] = await db`select id from "user" where username = 'gv.lan'`;
+  await db.end();
+  await page.goto("/admin/settings");
+  await page.getByLabel("Tài khoản", { exact: true }).selectOption(lan!.id as string);
+  await page.getByLabel("Phân quyền riêng cho tài khoản này").check();
+  await page.getByLabel(/^gv.lan – .*: Xem Báo cáo$/).check();
+  await page.getByRole("button", { name: "Lưu quyền tài khoản" }).click();
+  await expect(page.getByText("Đã lưu quyền của tài khoản gv.lan.")).toBeVisible();
+  await expectNoHorizontalScroll(page);
+
+  const teacherContext = await browser.newContext({ viewport: { width: 360, height: 740 }, isMobile: true, hasTouch: true });
+  const teacher = await teacherContext.newPage();
+  await login(teacher, "gv.lan", NEW_PASSWORD);
+  await expect(teacher).toHaveURL(/\/teacher\/dashboard$/);
+  const menu = teacher.getByRole("dialog");
+  await expect(async () => {
+    await teacher.getByRole("button", { name: "Mở menu" }).click();
+    await expect(menu).toBeVisible({ timeout: 1000 });
+  }).toPass();
+  await menu.getByRole("link", { name: "Báo cáo", exact: true }).click();
+  await expect(teacher).toHaveURL(/\/admin\/reports/);
+  await teacherContext.close();
 });

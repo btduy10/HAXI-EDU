@@ -1,5 +1,6 @@
 "use server";
 
+import { accountPermissionsInput } from "@/lib/permissions";
 import { idOnly } from "@/lib/validation/common";
 import {
   accountEditInput,
@@ -95,6 +96,8 @@ export const deleteEnrollmentAction = async (input: unknown) =>
 
 export const createAccountAction = async (input: unknown) => runAction(accountInput, input, accounts.createAccount, ADMIN);
 export const updateAccountAction = async (input: unknown) => runAction(accountEditInput, input, accounts.updateAccount, ADMIN);
+export const updateAccountPermissionsAction = async (input: unknown) =>
+  runAction(accountPermissionsInput, input, accounts.updateAccountPermissions, "/");
 export const resetPasswordAction = async (input: unknown) =>
   runAction(resetPasswordInput, input, (a, d) => accounts.resetAccountPassword(a, d.id, d.password, d.mustChange), ADMIN);
 export const lockAccountAction = async (input: unknown) =>
