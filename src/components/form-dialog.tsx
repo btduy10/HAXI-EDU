@@ -14,7 +14,8 @@ export type FieldOption = { value: string; label: string };
 export type Field = {
   name: string;
   label: string;
-  type?: "text" | "number" | "date" | "time" | "textarea" | "select" | "password";
+  /** "money": số tiền (đồng), hiển thị có dấu phẩy phân cách hàng nghìn khi nhập; gửi đi chỉ gồm chữ số. */
+  type?: "text" | "number" | "date" | "time" | "textarea" | "select" | "password" | "money";
   options?: FieldOption[];
   required?: boolean;
   hint?: string;
@@ -50,6 +51,22 @@ export function showLevelChanges(data: unknown) {
   }
 }
 
+/** 2000000 → "2,000,000" (bỏ mọi ký tự không phải chữ số và số 0 thừa ở đầu). */
+export function formatMoneyInput(value: string): string {
+  const digits = value.replace(/\D/g, "").replace(/^0+(?=\d)/, "");
+  return digits.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+}
+
+// Định dạng lại ô tiền sau mỗi lần gõ, giữ con trỏ đúng sau chữ số vừa nhập.
+function reformatMoney(input: HTMLInputElement) {
+  const digitsBeforeCaret = input.value.slice(0, input.selectionStart ?? input.value.length).replace(/\D/g, "").length;
+  const next = formatMoneyInput(input.value);
+  input.value = next;
+  let caret = 0;
+  for (let seen = 0; caret < next.length && seen < digitsBeforeCaret; caret++) if (/\d/.test(next[caret]!)) seen++;
+  input.setSelectionRange(caret, caret);
+}
+
 export const selectClass =
   "h-11 w-full rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50";
 
@@ -82,7 +99,10 @@ export function FormDialog({
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     const values: Record<string, string> = {};
-    for (const field of fields) values[field.name] = String(form.get(field.name) ?? "");
+    for (const field of fields) {
+      const value = String(form.get(field.name) ?? "");
+      values[field.name] = field.type === "money" ? value.replace(/\D/g, "") : value;
+    }
     setPending(true);
     setError(null);
     setFieldErrors({});
@@ -156,6 +176,16 @@ export function FormDialog({
                   <Textarea {...common} rows={3} />
                 ) : field.type === "password" ? (
                   <PasswordInput {...common} autoComplete="new-password" className="h-11" />
+                ) : field.type === "money" ? (
+                  <Input
+                    {...common}
+                    defaultValue={formatMoneyInput(common.defaultValue)}
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="off"
+                    className="h-11 tabular-nums"
+                    onInput={(event) => reformatMoney(event.currentTarget)}
+                  />
                 ) : (
                   <Input
                     {...common}

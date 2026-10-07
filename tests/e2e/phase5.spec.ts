@@ -147,8 +147,12 @@ test("Học phí: đặt học phí lớp, thu hai lần, theo dõi trạng thá
     await expect(page.getByText(text)).toHaveCount(0);
   };
 
+  // Lớp chưa đặt học phí: gợi ý sẵn 2,000,000 đồng/khóa; gõ số thì tự thêm dấu phẩy phân cách.
   await page.getByRole("button", { name: "Đặt học phí" }).click();
-  await page.locator("#f-tuitionFee").fill("2000000");
+  await expect(page.locator("#f-tuitionFee")).toHaveValue("2,000,000");
+  await page.locator("#f-tuitionFee").fill("");
+  await page.locator("#f-tuitionFee").pressSequentially("2000000");
+  await expect(page.locator("#f-tuitionFee")).toHaveValue("2,000,000");
   await saved("Đã lưu.");
   await expect(badge("Chưa đóng")).toBeVisible();
 
@@ -162,9 +166,15 @@ test("Học phí: đặt học phí lớp, thu hai lần, theo dõi trạng thá
   await saved("Đã lập phiếu thu.");
   await expect(badge("Đóng một phần")).toBeVisible();
 
+  // Phiếu thu khi chưa đóng đủ: ghi đã đóng bao nhiêu, còn bao nhiêu.
+  await page.getByRole("link", { name: "In phiếu" }).first().click();
+  await expect(page).toHaveURL(/\/admin\/tuition\/receipts\//);
+  await expect(page.getByText("Đã đóng 500.000 đ, còn 1.500.000 đ")).toBeVisible();
+  await page.goto(`/admin/tuition?classId=${classId}`);
+
   // Thu lần 2: số tiền mặc định = còn lại → đã đóng đủ, không còn nút Thu tiền.
   await page.getByRole("button", { name: "Thu tiền" }).first().click();
-  await expect(page.locator("#f-amount")).toHaveValue("1500000");
+  await expect(page.locator("#f-amount")).toHaveValue("1,500,000");
   await saved("Đã lập phiếu thu.");
   await expect(badge("Đã đóng đủ")).toBeVisible();
   await expect(page.getByRole("button", { name: "Thu tiền" })).toHaveCount(0);
@@ -175,6 +185,7 @@ test("Học phí: đặt học phí lớp, thu hai lần, theo dõi trạng thá
   await expect(page).toHaveURL(/\/admin\/tuition\/receipts\//);
   await expect(page.getByRole("heading", { name: "Phiếu thu học phí" })).toBeVisible();
   await expect(page.getByText("Một triệu năm trăm nghìn đồng")).toBeVisible();
+  await expect(page.getByText("Đã đóng đủ tiền")).toBeVisible();
   await expect(page.getByRole("button", { name: "In phiếu thu" })).toBeVisible();
   await expectNoHorizontalScroll(page);
 

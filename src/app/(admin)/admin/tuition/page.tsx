@@ -16,6 +16,9 @@ import { requireMenu } from "@/server/session";
 
 export const metadata: Metadata = { title: "Học phí" };
 
+/** Mức học phí gợi ý sẵn khi đặt học phí cho lớp chưa có (đồng/khóa). */
+const DEFAULT_TUITION_FEE = 2_000_000;
+
 const STATUSES: TuitionStatus[] = ["unpaid", "partial", "paid", "unset"];
 const STATUS_VARIANT: Record<TuitionStatus, "default" | "secondary" | "destructive" | "outline"> = {
   unset: "outline",
@@ -43,7 +46,7 @@ export default async function TuitionPage({ searchParams }: PageProps<"/admin/tu
   const today = todayIso();
 
   const receiptFields = (remaining: number): Field[] => [
-    { name: "amount", label: "Số tiền thu (đ)", type: "number", required: true, hint: `Còn phải đóng ${formatMoney(remaining)}.` },
+    { name: "amount", label: "Số tiền thu (đồng)", type: "money", required: true, hint: `Còn phải đóng ${formatMoney(remaining)}.` },
     {
       name: "method",
       label: "Hình thức",
@@ -57,7 +60,7 @@ export default async function TuitionPage({ searchParams }: PageProps<"/admin/tu
     { name: "note", label: "Ghi chú" },
   ];
   const discountFields: Field[] = [
-    { name: "discount", label: "Giảm học phí (đ)", type: "number", required: true, hint: "Nhập 0 để bỏ giảm." },
+    { name: "discount", label: "Giảm học phí (đồng)", type: "money", required: true, hint: "Nhập 0 để bỏ giảm." },
     { name: "reason", label: "Lý do", hint: "Vd. anh chị em, học bổng." },
   ];
 
@@ -133,8 +136,16 @@ export default async function TuitionPage({ searchParams }: PageProps<"/admin/tu
             <FormDialogButton
               label="Đặt học phí"
               title={`Học phí lớp ${cls.code}`}
-              fields={[{ name: "tuitionFee", label: "Học phí cả khóa (đ/học viên)", type: "number", hint: "Để trống = chưa đặt học phí." }]}
-              initial={{ tuitionFee: cls.tuitionFee === null ? "" : String(cls.tuitionFee) }}
+              fields={[
+                {
+                  name: "tuitionFee",
+                  label: "Học phí (đồng/khóa)",
+                  type: "money",
+                  hint: "Học phí cả khóa của mỗi học viên. Để trống = chưa đặt học phí.",
+                },
+              ]}
+              // Lớp chưa đặt học phí: gợi ý sẵn mức mặc định, Admin sửa lại nếu khác.
+              initial={{ tuitionFee: String(cls.tuitionFee ?? DEFAULT_TUITION_FEE) }}
               fixed={{ classId: cls.id }}
               action={setClassFeeAction}
               variant="outline"

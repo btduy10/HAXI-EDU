@@ -57,7 +57,9 @@ export default async function ReceiptPage({ params }: PageProps<"/admin/tuition/
           <PrintRow label="Hình thức">{PAYMENT_METHOD_LABEL[receipt.method]}</PrintRow>
           {balance && balance.status !== "unset" && (
             <PrintRow label="Tình hình học phí">
-              Phải đóng {formatMoney(balance.due)} · Đã đóng {formatMoney(balance.paid)} · Còn lại {formatMoney(balance.remaining)}
+              {balance.remaining === 0
+                ? "Đã đóng đủ tiền"
+                : `Đã đóng ${formatMoney(balance.paid)}, còn ${formatMoney(balance.remaining)}`}
             </PrintRow>
           )}
         </dl>
