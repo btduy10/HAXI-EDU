@@ -129,3 +129,57 @@ test("Lớp học thêm: Admin thêm ở trang Lớp học, Thời khóa biểu 
   const [download] = await Promise.all([page.waitForEvent("download"), page.getByRole("link", { name: "Excel" }).click()]);
   expect(download.suggestedFilename()).toMatch(/^lop-hoc-them-.*\.xlsx$/);
 });
+
+test("Học phí: đặt học phí lớp, thu hai lần, theo dõi trạng thái, mở phiếu thu và giấy báo", async ({ page }) => {
+  await login(page, "admin", NEW_PASSWORD);
+  await page.getByLabel("Mã xác thực").fill(totp(loadAdminSecret()));
+  await page.getByRole("button", { name: "Xác nhận" }).click();
+  await expect(page).toHaveURL(/\/admin\/dashboard$/);
+
+  // Menu Học phí nằm ngay sau Chấm công.
+  await page.goto(`/admin/tuition?classId=${classId}`);
+  await expect(page.getByRole("heading", { name: "Học phí", exact: true })).toBeVisible();
+  const badge = (text: string) => page.locator("li").getByText(text, { exact: true }).first();
+  await expect(badge("Chưa đặt học phí")).toBeVisible();
+  const saved = async (text: string) => {
+    await page.getByRole("button", { name: "Lưu" }).click();
+    await expect(page.getByText(text)).toBeVisible();
+    await expect(page.getByText(text)).toHaveCount(0);
+  };
+
+  await page.getByRole("button", { name: "Đặt học phí" }).click();
+  await page.locator("#f-tuitionFee").fill("2000000");
+  await saved("Đã lưu.");
+  await expect(badge("Chưa đóng")).toBeVisible();
+
+  // Thu lần 1: 500.000 đ → đóng một phần. Thu vượt số còn lại bị chặn.
+  await page.getByRole("button", { name: "Thu tiền" }).first().click();
+  await page.locator("#f-amount").fill("2500000");
+  await page.getByRole("button", { name: "Lưu" }).click();
+  await expect(page.getByText(/lớn hơn số còn phải đóng/).first()).toBeVisible();
+  await page.locator("#f-amount").fill("500000");
+  await page.locator("#f-payerName").fill("Phụ huynh E2E");
+  await saved("Đã lập phiếu thu.");
+  await expect(badge("Đóng một phần")).toBeVisible();
+
+  // Thu lần 2: số tiền mặc định = còn lại → đã đóng đủ, không còn nút Thu tiền.
+  await page.getByRole("button", { name: "Thu tiền" }).first().click();
+  await expect(page.locator("#f-amount")).toHaveValue("1500000");
+  await saved("Đã lập phiếu thu.");
+  await expect(badge("Đã đóng đủ")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Thu tiền" })).toHaveCount(0);
+  await expectNoHorizontalScroll(page);
+
+  // Phiếu thu mới nhất: số tiền bằng chữ.
+  await page.getByRole("link", { name: "In phiếu" }).first().click();
+  await expect(page).toHaveURL(/\/admin\/tuition\/receipts\//);
+  await expect(page.getByRole("heading", { name: "Phiếu thu học phí" })).toBeVisible();
+  await expect(page.getByText("Một triệu năm trăm nghìn đồng")).toBeVisible();
+  await expect(page.getByRole("button", { name: "In phiếu thu" })).toBeVisible();
+  await expectNoHorizontalScroll(page);
+
+  await page.goto(`/admin/tuition/notice?classId=${classId}`);
+  await expect(page.getByRole("heading", { name: "Giấy báo học phí" }).first()).toBeVisible();
+  await expect(page.getByText(/đã đóng đủ học phí/).first()).toBeVisible();
+  await expectNoHorizontalScroll(page);
+});

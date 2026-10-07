@@ -28,6 +28,7 @@ export const PERMISSION_MENUS = [
   { key: "stars", label: "Sao & Avatar", href: "/admin/stars", actions: ["view", "add", "edit"], hint: "Thêm = ghi sao; Sửa = hoàn tác sao, đổi avatar. Tiêu chí, cấp bậc, kho avatar chỉ Admin chỉnh." },
   { key: "rewards", label: "Quà & Tổng kết", href: "/admin/rewards", actions: ["view", "add", "edit"], hint: "Thêm = quà, mốc quà; Sửa = sửa quà, đóng lớp, duyệt và trao quà, đổi quà bằng sao cho học viên." },
   { key: "timesheet", label: "Chấm công", href: "/admin/timesheet", actions: ["view"], hint: "Phạm vi “lớp của mình” chỉ thấy công của chính mình." },
+  { key: "tuition", label: "Học phí", href: "/admin/tuition", actions: ["view", "add", "edit"], hint: "Thêm = lập phiếu thu; Sửa = đặt học phí lớp, giảm học phí. Hủy phiếu thu chỉ Admin." },
   { key: "reports", label: "Báo cáo", href: "/admin/reports", actions: ["view"], hint: "Gồm cả xuất Excel/PDF." },
 ] as const satisfies readonly { key: string; label: string; href: string; actions: readonly PermissionAction[]; hint: string }[];
 

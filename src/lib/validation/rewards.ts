@@ -25,6 +25,14 @@ export const approveInput = z.object({ classId: id, summaryIds: z.array(id).min(
 export const redeemInput = z.object({ studentId: id, tierId: id });
 export const handoverIdInput = z.object({ handoverId: id });
 
+/** Thông tin trung tâm in ở đầu giấy báo học phí và phiếu thu. */
+export const centerInfoInput = z.object({
+  name: reqText(100),
+  address: optText(200),
+  phone: optText(50),
+  bank: optText(300),
+});
+
 export const settingsInput = z.object({
   attendance_lock_days: intIn(0, 365),
   max_deduction_per_session: intIn(0, 50),

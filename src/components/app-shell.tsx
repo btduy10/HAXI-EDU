@@ -2,6 +2,7 @@
 
 import {
   AwardIcon,
+  BanknoteIcon,
   BarChart3Icon,
   BookOpenIcon,
   BriefcaseIcon,
@@ -79,6 +80,7 @@ const NAV: { admin: NavEntry[]; teacher: NavItem[] } = {
       ],
     },
     { href: "/admin/timesheet", label: "Chấm công", icon: CalendarCheckIcon },
+    { href: "/admin/tuition", label: "Học phí", icon: BanknoteIcon },
     { href: "/admin/reports", label: "Báo cáo", icon: BarChart3Icon },
   ],
   teacher: [
@@ -219,7 +221,7 @@ export function AppShell({
 
   return (
     <div className="flex min-h-dvh flex-col md:flex-row">
-      <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b bg-white px-3 md:hidden">
+      <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b bg-white px-3 md:hidden print:hidden">
         <Sheet open={open} onOpenChange={setOpen}>
           <SheetTrigger render={<Button variant="ghost" size="icon" aria-label="Mở menu" />}>
             <MenuIcon />
@@ -237,7 +239,7 @@ export function AppShell({
         <BrandLogo height={40} />
       </header>
 
-      <aside className="sticky top-0 hidden h-dvh w-60 shrink-0 flex-col bg-sidebar text-sidebar-foreground md:flex">
+      <aside className="sticky top-0 hidden h-dvh w-60 shrink-0 flex-col bg-sidebar text-sidebar-foreground md:flex print:hidden">
         {sidebarBrand}
         <div className="flex-1 overflow-y-auto">
           <NavLinks items={items} />
@@ -245,7 +247,7 @@ export function AppShell({
         <AccountLinks userName={userName} />
       </aside>
 
-      <main className="min-w-0 flex-1 p-3 sm:p-6">{children}</main>
+      <main className="min-w-0 flex-1 p-3 sm:p-6 print:p-0">{children}</main>
     </div>
   );
 }

@@ -37,3 +37,15 @@ export async function assertKnownRole(role: string, tx: DbOrTx = db, allowAdmin 
     throw new AppError("VALIDATION", "Vai trò không tồn tại. Hãy tải lại trang.", { role: "Vai trò không tồn tại" });
   }
 }
+
+export const CENTER_INFO_KEY = "center_info";
+export type CenterInfo = { name: string; address: string; phone: string; bank: string };
+const CENTER_DEFAULT: CenterInfo = { name: "HAXI STEM", address: "", phone: "", bank: "" };
+
+/** Thông tin trung tâm in ở đầu giấy báo học phí và phiếu thu (Cấu hình → Thông tin trung tâm). */
+export async function getCenterInfo(tx: DbOrTx = db): Promise<CenterInfo> {
+  const [row] = await tx.select().from(appSettings).where(eq(appSettings.key, CENTER_INFO_KEY)).limit(1);
+  const raw = (row?.value && typeof row.value === "object" ? row.value : {}) as Record<string, unknown>;
+  const text = (key: keyof CenterInfo) => (typeof raw[key] === "string" && raw[key] ? (raw[key] as string) : CENTER_DEFAULT[key]);
+  return { name: text("name"), address: text("address"), phone: text("phone"), bank: text("bank") };
+}

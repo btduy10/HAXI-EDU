@@ -1,6 +1,8 @@
 "use server";
 
 import { idOnly } from "@/lib/validation/common";
+import { centerInfoInput } from "@/lib/validation/rewards";
+import { cancelReceiptInput, classFeeInput, discountInput, receiptInput } from "@/lib/validation/tuition";
 import {
   accountEditInput,
   accountInput,
@@ -31,6 +33,7 @@ import { runAction } from "../action";
 import * as accounts from "../services/accounts";
 import * as catalog from "../services/catalog";
 import * as extraClasses from "../services/extra-classes";
+import * as tuition from "../services/tuition";
 import * as classes from "../services/classes";
 import * as students from "../services/students";
 
@@ -112,3 +115,10 @@ export const deleteAccountAction = async (input: unknown) =>
   runAction(userIdInput, input, (a, d) => accounts.deleteAccount(a, d.id), ADMIN);
 export const resetTwoFactorAction = async (input: unknown) =>
   runAction(userIdInput, input, (a, d) => accounts.resetAccountTwoFactor(a, d.id), ADMIN);
+
+const TUITION = "/admin/tuition";
+export const setClassFeeAction = async (input: unknown) => runAction(classFeeInput, input, tuition.setClassFee, TUITION);
+export const setDiscountAction = async (input: unknown) => runAction(discountInput, input, tuition.setDiscount, TUITION);
+export const createReceiptAction = async (input: unknown) => runAction(receiptInput, input, tuition.createReceipt, TUITION);
+export const cancelReceiptAction = async (input: unknown) => runAction(cancelReceiptInput, input, tuition.cancelReceipt, TUITION);
+export const updateCenterInfoAction = async (input: unknown) => runAction(centerInfoInput, input, tuition.updateCenterInfo, ADMIN);

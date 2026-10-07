@@ -1,21 +1,24 @@
 import type { Metadata } from "next";
 import { FormDialogButton } from "@/components/action-buttons";
 import { PermissionMatrix } from "@/components/permission-matrix";
+import { updateCenterInfoAction } from "@/server/actions/admin";
 import { updatePermissionsAction, updateSettingsAction } from "@/server/actions/rewards";
 import { listAccounts } from "@/server/services/accounts";
 import { listTeachers } from "@/server/services/catalog";
 import { readPermissions, readSettings } from "@/server/services/reports";
+import { readCenterInfo } from "@/server/services/tuition";
 import { requirePageUser } from "@/server/session";
 
 export const metadata: Metadata = { title: "Cấu hình" };
 
 export default async function SettingsPage() {
   const { actor } = await requirePageUser("admin");
-  const [settings, permissions, teachers, accounts] = await Promise.all([
+  const [settings, permissions, teachers, accounts, center] = await Promise.all([
     readSettings(actor),
     readPermissions(actor),
     listTeachers(actor),
     listAccounts(actor),
+    readCenterInfo(actor),
   ]);
   // Ai đang mang từng vai trò: số tài khoản và tên giáo viên (cột Vai trò ở menu Giáo viên).
   const members = Object.fromEntries(
@@ -66,6 +69,38 @@ export default async function SettingsPage() {
           </div>
         ))}
       </dl>
+
+      <section className="grid gap-3">
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="text-lg font-semibold">Thông tin trung tâm</h2>
+          <FormDialogButton
+            label="Sửa thông tin"
+            title="Thông tin trung tâm"
+            description="In ở đầu giấy báo học phí và phiếu thu."
+            fields={[
+              { name: "name", label: "Tên trung tâm", required: true },
+              { name: "address", label: "Địa chỉ" },
+              { name: "phone", label: "Điện thoại" },
+              { name: "bank", label: "Thông tin chuyển khoản", type: "textarea", hint: "Vd. ngân hàng, số tài khoản, chủ tài khoản." },
+            ]}
+            initial={center}
+            action={updateCenterInfoAction}
+          />
+        </div>
+        <dl className="grid gap-1 rounded-lg border p-3 text-sm">
+          {[
+            ["Tên trung tâm", center.name],
+            ["Địa chỉ", center.address],
+            ["Điện thoại", center.phone],
+            ["Chuyển khoản", center.bank],
+          ].map(([label, value]) => (
+            <div key={label} className="flex gap-2">
+              <dt className="w-28 shrink-0 text-muted-foreground">{label}</dt>
+              <dd className="min-w-0 break-words whitespace-pre-line">{value || "—"}</dd>
+            </div>
+          ))}
+        </dl>
+      </section>
 
       <section className="grid gap-3">
         <div>

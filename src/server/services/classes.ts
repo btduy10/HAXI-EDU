@@ -1,7 +1,7 @@
 import { and, asc, count, desc, eq, gte, inArray, lt, sql } from "drizzle-orm";
 import type { z } from "zod";
 import { db } from "@/db";
-import { attendances, classTeachers, classes, courses, enrollments, rooms, sessions, students, teachers } from "@/db/schema";
+import { attendances, classTeachers, classes, courses, enrollments, rooms, sessions, students, teachers, tuitionReceipts } from "@/db/schema";
 import type { classInput, classTeacherInput, classTeacherUpdate, enrollInput, leaveInput } from "@/lib/validation/entities";
 import { audit } from "../audit";
 import { AppError, notFound, translateDbError } from "../errors";
@@ -222,6 +222,8 @@ export async function deleteEnrollment(actor: Actor, id: string) {
     if (!before) throw notFound("ghi danh");
     const [cls] = await tx.select({ status: classes.status }).from(classes).where(eq(classes.id, before.classId)).limit(1);
     if (cls?.status !== "open") throw new AppError("CONFLICT", "Lớp đã đóng và đã chốt tổng kết nên không xóa ghi danh được.");
+    const [receipt] = await tx.select({ id: tuitionReceipts.id }).from(tuitionReceipts).where(eq(tuitionReceipts.enrollmentId, id)).limit(1);
+    if (receipt) throw new AppError("CONFLICT", "Lượt ghi danh này đã có phiếu thu học phí nên không xóa được.");
 
     const inPeriod = await tx
       .select({ id: sessions.id })

@@ -34,6 +34,8 @@ export const attendanceStatus = pgEnum("attendance_status", ["present", "excused
 export const criteriaType = pgEnum("criteria_type", ["reward", "penalty"]);
 export const avatarUnlockType = pgEnum("avatar_unlock_type", ["by_level", "gifted"]);
 export const handoverStatus = pgEnum("handover_status", ["pending", "given"]);
+export const paymentMethod = pgEnum("payment_method", ["cash", "transfer"]);
+export const receiptStatus = pgEnum("receipt_status", ["active", "cancelled"]);
 
 export const students = pgTable(
   "students",
@@ -105,6 +107,8 @@ export const classes = pgTable(
     startDate: date("start_date").notNull(),
     endDate: date("end_date").notNull(),
     maxSize: integer("max_size").notNull(),
+    // Học phí của lớp (đồng/học viên cho cả khóa); null = chưa đặt học phí.
+    tuitionFee: integer("tuition_fee"),
     status: classStatus("status").notNull().default("open"),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
@@ -158,6 +162,9 @@ export const enrollments = pgTable(
       .references(() => students.id),
     joinedAt: date("joined_at").notNull(),
     leftAt: date("left_at"),
+    // Giảm học phí riêng của học viên ở lớp này (đồng) và lý do.
+    feeDiscount: integer("fee_discount").notNull().default(0),
+    feeDiscountReason: text("fee_discount_reason"),
     status: enrollmentStatus("status").notNull().default("active"),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
@@ -437,4 +444,30 @@ export const giftRedemptions = pgTable(
     redeemedAt: timestamp("redeemed_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("gift_redemptions_student_idx").on(t.studentId), check("gift_redemptions_stars_chk", sql`${t.stars} > 0`)],
+);
+
+// Phiếu thu học phí: mỗi lần phụ huynh đóng tiền cho một lượt ghi danh là một phiếu. Phiếu không bị xóa, chỉ hủy.
+// Đã đóng của học viên ở một lớp = tổng `amount` của các phiếu còn hiệu lực.
+export const tuitionReceipts = pgTable(
+  "tuition_receipts",
+  {
+    id: id(),
+    // Số phiếu tăng dần, in dạng PT-000123.
+    receiptNo: integer("receipt_no").notNull().generatedAlwaysAsIdentity().unique(),
+    enrollmentId: uuid("enrollment_id")
+      .notNull()
+      .references(() => enrollments.id),
+    amount: integer("amount").notNull(),
+    method: paymentMethod("method").notNull(),
+    paidAt: date("paid_at").notNull(),
+    payerName: text("payer_name"),
+    note: text("note"),
+    collectedBy: text("collected_by").references(() => user.id, { onDelete: "set null" }),
+    status: receiptStatus("status").notNull().default("active"),
+    cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+    cancelledBy: text("cancelled_by").references(() => user.id, { onDelete: "set null" }),
+    cancelReason: text("cancel_reason"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("tuition_receipts_enrollment_idx").on(t.enrollmentId), check("tuition_receipts_amount_chk", sql`${t.amount} > 0`)],
 );
