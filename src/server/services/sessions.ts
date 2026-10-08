@@ -69,6 +69,7 @@ const sessionColumns = {
   kind: sessions.kind,
   status: sessions.status,
   content: sessions.content,
+  teacherRemark: sessions.teacherRemark,
   note: sessions.note,
   attendanceUnlockedUntil: sessions.attendanceUnlockedUntil,
   attendanceCount: sql<number>`(select count(*)::int from ${attendances} where ${attendances.sessionId} = ${sessions.id})`,

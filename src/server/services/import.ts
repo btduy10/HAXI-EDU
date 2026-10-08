@@ -39,7 +39,16 @@ export function assertXlsxUpload(file: ImportUpload) {
   }
 }
 
-export async function parseStudentWorkbook(bytes: Uint8Array): Promise<RawImportRow[]> {
+/**
+ * Đọc trang tính đầu tiên của tệp Excel theo dòng tiêu đề: mỗi dòng dữ liệu thành `{ rowNumber, cells }`.
+ * `required` = các cột bắt buộc phải có trong dòng tiêu đề; dòng trống bị bỏ qua.
+ */
+export async function parseWorkbook<K extends string>(
+  bytes: Uint8Array,
+  columns: readonly { key: K; header: string }[],
+  required: readonly K[],
+  missingHeaderMessage: string,
+): Promise<{ rowNumber: number; cells: Partial<Record<K, unknown>> }[]> {
   const workbook = new ExcelJS.Workbook();
   try {
     await workbook.xlsx.load(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer);
@@ -49,19 +58,17 @@ export async function parseStudentWorkbook(bytes: Uint8Array): Promise<RawImport
   const sheet = workbook.worksheets[0];
   if (!sheet) throw new AppError("VALIDATION", "Tệp không có trang tính nào.");
 
-  const columnOf = new Map<ImportKey, number>();
+  const columnOf = new Map<K, number>();
   sheet.getRow(1).eachCell((cell, col) => {
-    const match = IMPORT_COLUMNS.find((c) => normalizeHeader(c.header) === normalizeHeader(cellValue(cell.value)));
+    const match = columns.find((c) => normalizeHeader(c.header) === normalizeHeader(cellValue(cell.value)));
     if (match) columnOf.set(match.key, col);
   });
-  if (!columnOf.has("code") || !columnOf.has("fullName")) {
-    throw new AppError("VALIDATION", 'Dòng tiêu đề phải có cột "Mã HV" và "Họ tên". Hãy dùng tệp mẫu.');
-  }
+  if (required.some((key) => !columnOf.has(key))) throw new AppError("VALIDATION", missingHeaderMessage);
 
-  const rows: RawImportRow[] = [];
+  const rows: { rowNumber: number; cells: Partial<Record<K, unknown>> }[] = [];
   sheet.eachRow((row, rowNumber) => {
     if (rowNumber === 1) return;
-    const cells: RawImportRow["cells"] = {};
+    const cells: Partial<Record<K, unknown>> = {};
     let hasValue = false;
     for (const [key, col] of columnOf) {
       const value = cellValue(row.getCell(col).value);
@@ -74,6 +81,9 @@ export async function parseStudentWorkbook(bytes: Uint8Array): Promise<RawImport
   if (rows.length > IMPORT_MAX_ROWS) throw new AppError("VALIDATION", `Mỗi lần nhập tối đa ${IMPORT_MAX_ROWS} dòng.`);
   return rows;
 }
+
+export const parseStudentWorkbook = (bytes: Uint8Array): Promise<RawImportRow[]> =>
+  parseWorkbook<ImportKey>(bytes, IMPORT_COLUMNS, ["code", "fullName"], 'Dòng tiêu đề phải có cột "Mã HV" và "Họ tên". Hãy dùng tệp mẫu.');
 
 export type ImportPreview = { rows: ImportRowResult[]; validCount: number; errorCount: number };
 

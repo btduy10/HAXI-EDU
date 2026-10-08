@@ -72,6 +72,8 @@ export const ATTENDANCE_STATUSES = ["present", "late", "left_early", "excused", 
 export const attendanceInput = z.object({
   sessionId: id,
   content: optText(500),
+  /** Nhận xét của giáo viên sau buổi dạy. Không gửi = giữ nguyên; gửi rỗng = xóa. */
+  remark: optText(1000).optional(),
   entries: z
     .array(z.object({ studentId: id, status: z.enum(ATTENDANCE_STATUSES), note: optText(200) }))
     .min(1)

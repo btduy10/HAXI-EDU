@@ -26,6 +26,8 @@ import {
   timeSlotInput,
   extraClassInput,
   extraClassUpdate,
+  syllabusInput,
+  syllabusUpdate,
   timeSlotUpdate,
   userIdInput,
 } from "@/lib/validation/entities";
@@ -33,6 +35,7 @@ import { runAction } from "../action";
 import * as accounts from "../services/accounts";
 import * as catalog from "../services/catalog";
 import * as extraClasses from "../services/extra-classes";
+import * as syllabus from "../services/syllabus";
 import * as tuition from "../services/tuition";
 import * as classes from "../services/classes";
 import * as students from "../services/students";
@@ -123,3 +126,9 @@ export const createReceiptAction = async (input: unknown) => runAction(receiptIn
 export const cancelReceiptAction = async (input: unknown) => runAction(cancelReceiptInput, input, tuition.cancelReceipt, TUITION);
 export const deleteReceiptAction = async (input: unknown) => runAction(idOnly, input, (a, d) => tuition.deleteReceipt(a, d.id), TUITION);
 export const updateCenterInfoAction = async (input: unknown) => runAction(centerInfoInput, input, tuition.updateCenterInfo, ADMIN);
+
+const SYLLABUS = "/admin/syllabus";
+export const createSyllabusLessonAction = async (input: unknown) => runAction(syllabusInput, input, syllabus.createLesson, SYLLABUS);
+export const updateSyllabusLessonAction = async (input: unknown) =>
+  runAction(syllabusUpdate, input, (a, d) => syllabus.updateLesson(a, d.id, d.data), SYLLABUS);
+export const deleteSyllabusLessonAction = async (input: unknown) => runAction(idOnly, input, (a, d) => syllabus.deleteLesson(a, d.id), SYLLABUS);

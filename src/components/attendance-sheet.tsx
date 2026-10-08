@@ -3,7 +3,7 @@
 import { MessageSquareIcon } from "lucide-react";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
-import type { ActionFn } from "@/components/form-dialog";
+import { type ActionFn, selectClass } from "@/components/form-dialog";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,6 +13,10 @@ import { cn } from "@/lib/utils";
 
 type Status = "present" | "late" | "left_early" | "excused" | "absent";
 type Row = { studentId: string; code: string; fullName: string; status: Status; note: string };
+type Lesson = { subjectCode: string; period: number; title: string };
+
+/** Giá trị của lựa chọn "Khác (tự nhập)" trong ô chọn nội dung buổi học. */
+const OTHER = "__other__";
 
 // Nhãn ngắn để 5 nút vừa một hàng trên màn hình 360px.
 const STATUSES: { value: Status; short: string; label: string; active: string }[] = [
@@ -27,6 +31,8 @@ export function AttendanceSheet({
   sessionId,
   initialRows,
   initialContent,
+  initialRemark,
+  lessons,
   recorded,
   blockedReason,
   saveAction,
@@ -34,12 +40,21 @@ export function AttendanceSheet({
   sessionId: string;
   initialRows: Row[];
   initialContent: string;
+  initialRemark: string;
+  /** Bài học trong Syllabus của lớp; rỗng thì ô nội dung là ô gõ tự do. */
+  lessons: Lesson[];
   recorded: boolean;
   blockedReason: string | null;
   saveAction: ActionFn;
 }) {
   const [rows, setRows] = useState(initialRows);
   const [content, setContent] = useState(initialContent);
+  const [remark, setRemark] = useState(initialRemark);
+  // Tên bài lưu vào nội dung buổi học: "Tiết 3 – Tên bài", kèm mã môn khi lớp có nhiều môn.
+  const manySubjects = new Set(lessons.map((l) => l.subjectCode)).size > 1;
+  const lessonLabels = lessons.map((l) => `${manySubjects ? `${l.subjectCode} · ` : ""}Tiết ${l.period} – ${l.title}`);
+  // Nội dung cũ không khớp bài nào thì mở sẵn ở "Khác" để không mất chữ đã nhập.
+  const [choice, setChoice] = useState(initialContent === "" ? "" : lessonLabels.includes(initialContent) ? initialContent : OTHER);
   const [noteOpen, setNoteOpen] = useState<Set<string>>(() => new Set(initialRows.filter((r) => r.note).map((r) => r.studentId)));
   const [dirty, setDirty] = useState(!recorded);
   const [pending, startTransition] = useTransition();
@@ -55,6 +70,7 @@ export function AttendanceSheet({
       const result = await saveAction({
         sessionId,
         content,
+        remark,
         entries: rows.map((r) => ({ studentId: r.studentId, status: r.status, note: r.note })),
       });
       if (!result.ok) return void toast.error(result.error);
@@ -140,15 +156,58 @@ export function AttendanceSheet({
       </ul>
 
       <div className="grid gap-1.5">
-        <Label htmlFor="session-content">Nội dung buổi học</Label>
+        <Label htmlFor={lessons.length > 0 ? "session-lesson" : "session-content"}>Nội dung buổi học</Label>
+        {lessons.length > 0 && (
+          <select
+            id="session-lesson"
+            className={selectClass}
+            value={choice}
+            disabled={readOnly}
+            onChange={(e) => {
+              const next = e.target.value;
+              setChoice(next);
+              // Chọn bài: nội dung là tên bài. Chọn "Khác": giữ chữ đang có nếu đó là nội dung tự nhập, không thì để trống.
+              setContent(next === OTHER ? (lessonLabels.includes(content) ? "" : content) : next);
+              setDirty(true);
+            }}
+          >
+            <option value="">— Chưa chọn —</option>
+            {lessonLabels.map((label) => (
+              <option key={label} value={label}>
+                {label}
+              </option>
+            ))}
+            <option value={OTHER}>Khác (tự nhập)</option>
+          </select>
+        )}
+        {(lessons.length === 0 || choice === OTHER) && (
+          <Textarea
+            id="session-content"
+            value={content}
+            maxLength={500}
+            readOnly={readOnly}
+            rows={2}
+            aria-label="Nội dung buổi học (tự nhập)"
+            placeholder={lessons.length > 0 ? "Nhập nội dung buổi học" : undefined}
+            onChange={(e) => {
+              setContent(e.target.value);
+              setDirty(true);
+            }}
+          />
+        )}
+      </div>
+
+      <div className="grid gap-1.5">
+        <Label htmlFor="session-remark">Nhận xét của giáo viên sau buổi dạy</Label>
         <Textarea
-          id="session-content"
-          value={content}
-          maxLength={500}
+          id="session-remark"
+          value={remark}
+          maxLength={1000}
           readOnly={readOnly}
-          rows={2}
+          rows={3}
+          placeholder={readOnly ? undefined : "Tình hình lớp, tiến độ, đề xuất… (không bắt buộc)"}
           onChange={(e) => {
-            setContent(e.target.value);
+            setRemark(e.target.value);
             setDirty(true);
           }}
         />

@@ -202,6 +202,26 @@ export const scheduleTemplates = pgTable(
   ],
 );
 
+// Syllabus: danh sách bài học của từng lớp (Mã môn + Tiết + Tên bài). Giáo viên chọn tên bài khi điểm danh.
+export const syllabusLessons = pgTable(
+  "syllabus_lessons",
+  {
+    id: id(),
+    classId: uuid("class_id")
+      .notNull()
+      .references(() => classes.id, { onDelete: "cascade" }),
+    subjectCode: text("subject_code").notNull(),
+    period: integer("period").notNull(),
+    title: text("title").notNull(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    uniqueIndex("syllabus_lessons_class_subject_period_uq").on(t.classId, t.subjectCode, t.period),
+    check("syllabus_lessons_period_chk", sql`${t.period} >= 1`),
+  ],
+);
+
 // Lớp học thêm: lớp ngoài hệ thống, chỉ để giữ phòng hằng tuần trên Thời khóa biểu (không điểm danh, sao, chấm công).
 export const extraClasses = pgTable(
   "extra_classes",
@@ -251,6 +271,8 @@ export const sessions = pgTable(
     status: sessionStatus("status").notNull().default("planned"),
     content: text("content"),
     note: text("note"),
+    // Nhận xét chung của giáo viên sau buổi dạy (nhập ở trang điểm danh).
+    teacherRemark: text("teacher_remark"),
     attendanceUnlockedUntil: timestamp("attendance_unlocked_until", { withTimezone: true }),
     attendanceUnlockedBy: text("attendance_unlocked_by").references(() => user.id, { onDelete: "set null" }),
     createdAt: createdAt(),

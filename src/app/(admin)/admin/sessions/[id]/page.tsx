@@ -42,6 +42,7 @@ export default async function SessionDetailPage({ params }: PageProps<"/admin/se
     ...(session.substituteName ? ([["GV dạy thay", session.substituteName]] as [string, string][]) : []),
     ...(session.originalDate ? ([["Ngày gốc", formatDate(session.originalDate)]] as [string, string][]) : []),
     ...(session.content ? ([["Nội dung", session.content]] as [string, string][]) : []),
+    ...(session.teacherRemark ? ([["Nhận xét của giáo viên", session.teacherRemark]] as [string, string][]) : []),
     ...(session.note ? ([["Ghi chú", session.note]] as [string, string][]) : []),
   ];
 

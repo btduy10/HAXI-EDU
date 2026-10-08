@@ -211,3 +211,64 @@ test("Học phí: đặt học phí lớp, thu hai lần, theo dõi trạng thá
   await expect(page.getByText("Đã hủy", { exact: true })).toHaveCount(0);
   await expect(page.getByRole("link", { name: "In phiếu" })).toHaveCount(1);
 });
+
+test("Syllabus: Admin thêm bài và tải tệp mẫu; GV điểm danh chọn tên bài, ghi nhận xét; Admin xem ở chi tiết buổi", async ({ page, browser }) => {
+  await login(page, "admin", NEW_PASSWORD);
+  await page.getByLabel("Mã xác thực").fill(totp(loadAdminSecret()));
+  await page.getByRole("button", { name: "Xác nhận" }).click();
+  await expect(page).toHaveURL(/\/admin\/dashboard$/);
+
+  // Thêm một bài cho lớp RB-TG01; trùng Lớp + Mã môn + Tiết bị chặn.
+  await page.goto(`/admin/syllabus?classId=${classId}`);
+  const addLesson = async (title: string) => {
+    await page.getByRole("button", { name: "Thêm", exact: true }).click();
+    await page.locator("#f-subjectCode").fill("ROB");
+    await page.locator("#f-period").fill("1");
+    await page.locator("#f-title").fill(title);
+    await page.getByRole("button", { name: "Lưu" }).click();
+  };
+  await addLesson("Làm quen với robot E2E");
+  await expect(page.getByText("Đã lưu.")).toBeVisible();
+  await expect(page.getByText("Làm quen với robot E2E").first()).toBeVisible();
+  await expect(page.getByText("Đã lưu.")).toHaveCount(0);
+  await addLesson("Trùng tiết");
+  await expect(page.getByText("Lớp này đã có bài ở Mã môn và Tiết đó.").first()).toBeVisible();
+  await page.getByRole("button", { name: "Hủy" }).click();
+  await expectNoHorizontalScroll(page);
+  const [download] = await Promise.all([page.waitForEvent("download"), page.getByRole("link", { name: "Tải tệp mẫu" }).click()]);
+  expect(download.suggestedFilename()).toBe("mau-syllabus.xlsx");
+
+  // Buổi học hôm nay của lớp, do GV01 (gv.lan) dạy.
+  const db = sql();
+  const [lan] = await db`select teacher_id from "user" where username = 'gv.lan'`;
+  const [session] = await db`
+    insert into sessions (class_id, date, start_time, end_time, teacher_id)
+    values (${classId}, ${today()}, '06:00', '06:45', ${lan!.teacher_id})
+    returning id`;
+  await db.end();
+  const sessionId = session!.id as string;
+
+  const teacherContext = await browser.newContext({ viewport: { width: 360, height: 740 }, isMobile: true, hasTouch: true });
+  const teacher = await teacherContext.newPage();
+  await login(teacher, "gv.lan", NEW_PASSWORD);
+  await expect(teacher).toHaveURL(/\/teacher\/dashboard$/);
+  await teacher.goto(`/teacher/sessions/${sessionId}/attendance`);
+  await teacher.getByLabel("Nội dung buổi học", { exact: true }).selectOption({ label: "Tiết 1 – Làm quen với robot E2E" });
+  // Chọn "Khác" thì hiện ô gõ; chọn lại bài thì ô gõ ẩn đi.
+  await teacher.getByLabel("Nội dung buổi học", { exact: true }).selectOption({ label: "Khác (tự nhập)" });
+  await expect(teacher.getByLabel("Nội dung buổi học (tự nhập)")).toBeVisible();
+  await teacher.getByLabel("Nội dung buổi học", { exact: true }).selectOption({ label: "Tiết 1 – Làm quen với robot E2E" });
+  await expect(teacher.getByLabel("Nội dung buổi học (tự nhập)")).toHaveCount(0);
+  await teacher.getByLabel("Nhận xét của giáo viên sau buổi dạy").fill("Lớp học tốt E2E");
+  await expectNoHorizontalScroll(teacher);
+  await teacher.getByRole("button", { name: "Lưu điểm danh" }).click();
+  await expect(teacher.getByText(/Đã lưu điểm danh/)).toBeVisible();
+  await teacher.reload();
+  await expect(teacher.getByLabel("Nội dung buổi học", { exact: true })).toHaveValue("Tiết 1 – Làm quen với robot E2E");
+  await expect(teacher.getByLabel("Nhận xét của giáo viên sau buổi dạy")).toHaveValue("Lớp học tốt E2E");
+  await teacherContext.close();
+
+  await page.goto(`/admin/sessions/${sessionId}`);
+  await expect(page.getByText("Tiết 1 – Làm quen với robot E2E")).toBeVisible();
+  await expect(page.getByText("Lớp học tốt E2E")).toBeVisible();
+});

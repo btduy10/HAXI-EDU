@@ -79,6 +79,14 @@ export const extraClassInput = z.object({
   teacherId: optId,
 });
 
+/** Một bài trong Syllabus của lớp. */
+export const syllabusInput = z.object({
+  classId: id,
+  subjectCode: reqText(30).transform((v) => v.replace(/\s+/g, " ")),
+  period: intIn(1, 999),
+  title: reqText(200),
+});
+
 export const holidayInput = z.object({
   date: isoDate,
   reason: reqText(200),
@@ -184,4 +192,5 @@ export const courseUpdate = withId(courseInput);
 export const roomUpdate = withId(roomInput);
 export const timeSlotUpdate = withId(timeSlotInput);
 export const extraClassUpdate = withId(extraClassInput);
+export const syllabusUpdate = withId(syllabusInput);
 export const classUpdate = withId(classInput);

@@ -16,6 +16,7 @@ import {
   GraduationCapIcon,
   KeyRoundIcon,
   LayoutDashboardIcon,
+  ListOrderedIcon,
   LogOutIcon,
   type LucideIcon,
   MenuIcon,
@@ -55,6 +56,7 @@ const NAV: { admin: NavEntry[]; teacher: NavItem[] } = {
         { href: "/admin/courses", label: "Khóa học", icon: BookOpenIcon },
         { href: "/admin/rooms-slots", label: "Phòng & Ca học", icon: Building2Icon },
         { href: "/admin/teachers", label: "Giáo viên", icon: UsersIcon },
+        { href: "/admin/syllabus", label: "Syllabus", icon: ListOrderedIcon },
       ],
     },
     {

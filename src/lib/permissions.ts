@@ -19,6 +19,7 @@ export const ACTION_LABELS: Record<PermissionAction, string> = { view: "Xem", ad
 export const PERMISSION_MENUS = [
   { key: "students", label: "Học viên", href: "/admin/students", actions: ["view", "add", "edit"], hint: "Không hiện số điện thoại, phụ huynh, ngày sinh, ghi chú." },
   { key: "teachers", label: "Giáo viên", href: "/admin/teachers", actions: ["view", "add", "edit"], hint: "" },
+  { key: "syllabus", label: "Syllabus", href: "/admin/syllabus", actions: ["view", "add", "edit"], hint: "Danh sách bài học của từng lớp. Xóa và nhập Excel chỉ Admin." },
   { key: "courses", label: "Khóa học", href: "/admin/courses", actions: ["view", "add", "edit"], hint: "" },
   { key: "classes", label: "Lớp học", href: "/admin/classes", actions: ["view", "add", "edit"], hint: "Sửa gồm cả phân công giáo viên, lịch mẫu và sinh buổi học." },
   { key: "rooms", label: "Phòng & Ca học", href: "/admin/rooms-slots", actions: ["view", "add", "edit"], hint: "Gồm cả ngày nghỉ." },

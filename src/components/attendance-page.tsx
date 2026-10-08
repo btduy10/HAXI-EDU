@@ -66,6 +66,8 @@ export async function AttendancePage({
         sessionId={sessionId}
         initialRows={sheet.rows}
         initialContent={session.content ?? ""}
+        initialRemark={sheet.teacherRemark}
+        lessons={sheet.lessons}
         recorded={sheet.recorded}
         blockedReason={
           sheet.blockedReason ??

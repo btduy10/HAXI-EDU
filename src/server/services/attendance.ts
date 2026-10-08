@@ -9,6 +9,7 @@ import { audit } from "../audit";
 import { AppError, notFound } from "../errors";
 import { type Actor, assertAdmin, assertCan, assertClassOpen, assertSessionAccess, can, seesAllClasses } from "../guard";
 import { getSettings } from "../settings";
+import { lessonsForClass } from "./syllabus";
 
 const UNLOCK_HOURS = 24;
 
@@ -65,15 +66,19 @@ export async function getAttendanceSheet(actor: Actor, sessionId: string, now: D
   await assertSessionAccess(actor, sessionId);
   const [session] = await db.select().from(sessions).where(eq(sessions.id, sessionId)).limit(1);
   if (!session) throw notFound("buổi học");
-  const [roster, existing, settings] = await Promise.all([
+  const [roster, existing, settings, lessons] = await Promise.all([
     sessionRoster(db, session),
     db.select().from(attendances).where(eq(attendances.sessionId, sessionId)),
     getSettings(),
+    // Bài học trong Syllabus của lớp của buổi: người vào được buổi thì đọc được, không cần quyền menu Syllabus.
+    lessonsForClass(session.classId),
   ]);
   const byStudent = new Map(existing.map((a) => [a.studentId, a]));
   const reason = blockedReason(session, settings.attendance_lock_days, now);
   return {
     recorded: existing.length > 0,
+    lessons,
+    teacherRemark: session.teacherRemark ?? "",
     // Buổi chưa điểm danh cần quyền Thêm; buổi đã điểm danh cần quyền Sửa.
     canSave: can(actor, "attendance", existing.length > 0 ? "edit" : "add"),
     blockedReason: reason,
@@ -142,7 +147,12 @@ export async function saveAttendance(actor: Actor, input: z.output<typeof attend
     }
     await tx
       .update(sessions)
-      .set({ status: "done", content: input.content ?? session.content, updatedAt: now })
+      .set({
+        status: "done",
+        content: input.content ?? session.content,
+        teacherRemark: input.remark === undefined ? session.teacherRemark : input.remark,
+        updatedAt: now,
+      })
       .where(eq(sessions.id, session.id));
     return { changed };
   });
