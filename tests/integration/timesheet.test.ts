@@ -1,19 +1,38 @@
 import { and, eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/db";
-import { classTeachers, sessions } from "@/db/schema";
+import { auditLogs, sessions, timeSlots, timesheetEntries, timesheetOverrides } from "@/db/schema";
+import { DEFAULT_PERMISSIONS, type MenuPermission, type RolePermissions } from "@/lib/permissions";
+import type { Actor } from "@/server/guard";
+import * as svc from "@/server/services/timesheet";
 import { teacherTimesheet, timesheetDoc } from "@/server/services/timesheet";
 import { type Fixture, resetDb, seedFixture } from "./helpers";
 
 let f: Fixture;
+let morning: typeof timeSlots.$inferSelect;
+let afternoon: typeof timeSlots.$inferSelect;
 // Thứ Tư 21/01/2026 (giờ Việt Nam).
 const now = new Date("2026-01-21T05:00:00Z");
 const january = { from: "2026-01-01", to: "2026-01-31" };
 
+const withTimesheet = (actor: Actor, scope: RolePermissions["scope"], timesheet: MenuPermission): Actor => ({
+  ...actor,
+  perms: { scope, menus: { ...DEFAULT_PERMISSIONS.teacher.menus, timesheet } },
+});
+const FULL: MenuPermission = { view: true, add: true, edit: true };
+const VIEW: MenuPermission = { view: true, add: false, edit: false };
+
 beforeEach(async () => {
   await resetDb();
   f = await seedFixture();
-  const a = { classId: f.classA.id, teacherId: f.teacherA.id, startTime: "08:00", endTime: "09:30" };
+  [morning, afternoon] = (await db
+    .insert(timeSlots)
+    .values([
+      { name: "Ca sáng", frame: 1, defaultStart: "08:00", defaultEnd: "09:30" },
+      { name: "Ca chiều", frame: 1, defaultStart: "14:00", defaultEnd: "16:00" },
+    ])
+    .returning()) as [typeof timeSlots.$inferSelect, typeof timeSlots.$inferSelect];
+  const a = { classId: f.classA.id, teacherId: f.teacherA.id, timeSlotId: morning.id, startTime: "08:00", endTime: "09:30" };
   await db.insert(sessions).values([
     { ...a, date: "2026-01-06", status: "done" },
     { ...a, date: "2026-01-13", status: "done", substituteTeacherId: f.teacherB.id }, // GV B dạy thay
@@ -26,19 +45,31 @@ beforeEach(async () => {
   ]);
 });
 
+const sessionOn = async (date: string) => (await db.select().from(sessions).where(and(eq(sessions.classId, f.classA.id), eq(sessions.date, date))))[0]!;
+const entry = (over: Partial<Parameters<typeof svc.createTimesheetEntry>[1]> = {}) => ({
+  teacherId: f.teacherA.id,
+  date: "2026-01-10",
+  timeSlotId: afternoon.id,
+  classId: f.classB.id,
+  role: "main" as const,
+  note: null,
+  ...over,
+});
+
 describe("chấm công giáo viên", () => {
-  it("tính công cho người thực dạy theo khoảng ngày; bỏ buổi hủy; tách buổi chưa điểm danh và chưa tới ngày", async () => {
+  it("tính công cho người thực dạy theo khoảng ngày; bỏ buổi hủy; tách buổi chưa điểm danh và chưa tới ngày; không tính tiền", async () => {
     const { rows, summary } = await teacherTimesheet(f.admin, january, now);
     expect(rows).toHaveLength(5);
     expect(summary).toEqual([
-      { teacherId: f.teacherA.id, teacherCode: "GVA", teacherName: "Giáo viên A", taught: 1, substitute: 0, assistant: 0, minutes: 90, pending: 1, upcoming: 1, amount: 0, missingRate: 1 },
-      { teacherId: f.teacherB.id, teacherCode: "GVB", teacherName: "Giáo viên B", taught: 2, substitute: 1, assistant: 0, minutes: 150, pending: 0, upcoming: 0, amount: 0, missingRate: 2 },
+      { teacherId: f.teacherA.id, teacherCode: "GVA", teacherName: "Giáo viên A", taught: 1, substitute: 0, assistant: 0, minutes: 90, pending: 1, upcoming: 1 },
+      { teacherId: f.teacherB.id, teacherCode: "GVB", teacherName: "Giáo viên B", taught: 2, substitute: 1, assistant: 0, minutes: 150, pending: 0, upcoming: 0 },
     ]);
-    expect(rows.filter((r) => r.teacherId === f.teacherA.id).map((r) => [r.date, r.state])).toEqual([
-      ["2026-01-06", "taught"],
-      ["2026-01-20", "pending"],
-      ["2026-01-27", "upcoming"],
+    expect(rows.filter((r) => r.teacherId === f.teacherA.id).map((r) => [r.date, r.state, r.slotLabel])).toEqual([
+      ["2026-01-06", "taught", "Sáng – Khung 1"],
+      ["2026-01-20", "pending", "Sáng – Khung 1"],
+      ["2026-01-27", "upcoming", "Sáng – Khung 1"],
     ]);
+    expect(Object.keys(rows[0]!)).not.toContain("rate");
   });
 
   it("lọc theo giáo viên và theo lớp (tính theo khóa)", async () => {
@@ -50,21 +81,16 @@ describe("chấm công giáo viên", () => {
     expect(course.summary.map((s) => [s.teacherCode, s.taught])).toEqual([["GVA", 2], ["GVB", 1]]);
   });
 
-  it("tính công trợ giảng riêng và thành tiền theo lương/buổi của phân công", async () => {
-    // GV A dạy chính lớp A 300.000đ/buổi; GV B trợ giảng lớp A 150.000đ/buổi (B dạy chính lớp B chưa nhập lương).
-    await db.update(classTeachers).set({ ratePerSession: 300_000 }).where(eq(classTeachers.teacherId, f.teacherA.id));
-    await db.insert(classTeachers).values({ classId: f.classA.id, teacherId: f.teacherB.id, role: "assistant", ratePerSession: 150_000 });
+  it("tính công trợ giảng riêng", async () => {
     await db.update(sessions).set({ assistantTeacherId: f.teacherB.id }).where(and(eq(sessions.classId, f.classA.id), eq(sessions.date, "2026-01-06")));
 
     const { rows, summary } = await teacherTimesheet(f.admin, january, now);
-    const a = summary.find((s) => s.teacherId === f.teacherA.id)!;
-    const b = summary.find((s) => s.teacherId === f.teacherB.id)!;
-    expect(a).toMatchObject({ taught: 1, assistant: 0, amount: 300_000, missingRate: 0 });
-    // B: dạy chính lớp B (chưa có lương), dạy thay lớp A ngày 13 (150.000 theo phân công ở lớp A), trợ giảng ngày 06.
-    expect(b).toMatchObject({ taught: 2, substitute: 1, assistant: 1, amount: 300_000, missingRate: 1 });
-    expect(rows.filter((r) => r.date === "2026-01-06").map((r) => [r.teacherCode, r.role, r.rate])).toEqual([
-      ["GVA", "main", 300_000],
-      ["GVB", "assistant", 150_000],
+    expect(summary.find((s) => s.teacherId === f.teacherA.id)).toMatchObject({ taught: 1, assistant: 0 });
+    // B: dạy chính lớp B, dạy thay lớp A ngày 13, trợ giảng ngày 06.
+    expect(summary.find((s) => s.teacherId === f.teacherB.id)).toMatchObject({ taught: 2, substitute: 1, assistant: 1 });
+    expect(rows.filter((r) => r.date === "2026-01-06").map((r) => [r.teacherCode, r.role, r.part])).toEqual([
+      ["GVA", "main", "lead"],
+      ["GVB", "assistant", "assistant"],
     ]);
     const onlyB = await teacherTimesheet(f.admin, { ...january, teacherId: f.teacherB.id }, now);
     expect(onlyB.rows.map((r) => r.role).sort()).toEqual(["assistant", "main", "substitute"]);
@@ -75,25 +101,143 @@ describe("chấm công giáo viên", () => {
   });
 });
 
+describe("chấm công bổ sung", () => {
+  it("dòng công ghi tay cộng vào tổng công theo vai trò, không tạo buổi học; sửa và xóa được", async () => {
+    const before = (await db.select().from(sessions)).length;
+    const main = await svc.createTimesheetEntry(f.admin, entry({ note: "Dạy bù ngoài lịch" }));
+    await svc.createTimesheetEntry(f.admin, entry({ date: "2026-01-11", role: "assistant" }));
+    expect((await db.select().from(sessions)).length).toBe(before);
+
+    let sheet = await teacherTimesheet(f.admin, january, now);
+    // GV A: 1 công từ buổi học + 1 công bổ sung (120 phút theo khung chiều) + 1 công trợ giảng bổ sung.
+    expect(sheet.summary.find((s) => s.teacherId === f.teacherA.id)).toMatchObject({ taught: 2, assistant: 1, minutes: 90 + 120 + 120 });
+    expect(sheet.rows.filter((r) => r.source === "manual").map((r) => [r.date, r.classCode, r.role, r.state, r.slotLabel, r.note])).toEqual([
+      ["2026-01-10", "B", "main", "taught", "Chiều – Khung 1", "Dạy bù ngoài lịch"],
+      ["2026-01-11", "B", "assistant", "taught", "Chiều – Khung 1", null],
+    ]);
+    // Lọc theo lớp và theo giáo viên áp dụng cả cho công bổ sung.
+    expect((await teacherTimesheet(f.admin, { ...january, classId: f.classA.id }, now)).rows.some((r) => r.source === "manual")).toBe(false);
+    expect((await teacherTimesheet(f.admin, { ...january, teacherId: f.teacherB.id }, now)).rows.some((r) => r.source === "manual")).toBe(false);
+
+    // Sửa: đổi ngày, ca, lớp, giáo viên.
+    await svc.updateTimesheetEntry(f.admin, main.id, entry({ teacherId: f.teacherB.id, date: "2026-01-12", timeSlotId: morning.id, classId: f.classA.id }));
+    sheet = await teacherTimesheet(f.admin, january, now);
+    expect(sheet.rows.filter((r) => r.id === main.id).map((r) => [r.teacherCode, r.date, r.classCode, r.slotLabel])).toEqual([
+      ["GVB", "2026-01-12", "A", "Sáng – Khung 1"],
+    ]);
+
+    await svc.deleteTimesheetEntry(f.admin, main.id);
+    expect((await db.select().from(timesheetEntries)).map((e) => e.date)).toEqual(["2026-01-11"]);
+    const logged = await db.select().from(auditLogs).where(eq(auditLogs.tableName, "timesheet_entries"));
+    expect(logged.map((l) => l.action).sort()).toEqual(["create", "create", "delete", "update"]);
+  });
+
+  it("không có hai dòng công của một giáo viên cùng Ngày + Ca + Khung giờ", async () => {
+    const clash = { code: "VALIDATION", fieldErrors: { timeSlotId: "Giáo viên đã có công ở ngày, ca và khung giờ này." } };
+    // GV A đã có buổi ngày 06/01 ca sáng.
+    await expect(svc.createTimesheetEntry(f.admin, entry({ date: "2026-01-06", timeSlotId: morning.id }))).rejects.toMatchObject(clash);
+    // Khác khung giờ hoặc khác giáo viên thì được.
+    const first = await svc.createTimesheetEntry(f.admin, entry({ date: "2026-01-06" }));
+    await svc.createTimesheetEntry(f.admin, entry({ date: "2026-01-06", teacherId: f.teacherB.id }));
+    await expect(svc.createTimesheetEntry(f.admin, entry({ date: "2026-01-06" }))).rejects.toMatchObject(clash);
+    // Sửa chính dòng đó thì không tự trùng với mình; sửa sang khung đã có công thì bị chặn.
+    await svc.updateTimesheetEntry(f.admin, first.id, entry({ date: "2026-01-06", note: "ghi chú" }));
+    await expect(svc.updateTimesheetEntry(f.admin, first.id, entry({ date: "2026-01-06", timeSlotId: morning.id }))).rejects.toMatchObject(clash);
+  });
+
+  it("theo quyền Thêm/Sửa của menu Chấm công; xóa chỉ Admin; phạm vi lớp của mình chỉ thao tác công của chính mình", async () => {
+    const viewer = withTimesheet(f.actorA, "all", VIEW);
+    await expect(svc.createTimesheetEntry(viewer, entry())).rejects.toMatchObject({ code: "FORBIDDEN" });
+    const mine = await svc.createTimesheetEntry(f.admin, entry());
+    const others = await svc.createTimesheetEntry(f.admin, entry({ teacherId: f.teacherB.id }));
+    await expect(svc.updateTimesheetEntry(viewer, mine.id, entry())).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(svc.adjustSessionTimesheet(viewer, { sessionId: (await sessionOn("2026-01-06")).id, part: "lead", date: "2026-01-05", timeSlotId: null, classId: f.classA.id, note: null })).rejects.toMatchObject({ code: "FORBIDDEN" });
+
+    const own = withTimesheet(f.actorA, "own", FULL);
+    await svc.createTimesheetEntry(own, entry({ date: "2026-01-15" }));
+    await expect(svc.createTimesheetEntry(own, entry({ date: "2026-01-15", teacherId: f.teacherB.id }))).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await svc.updateTimesheetEntry(own, mine.id, entry({ note: "tự sửa" }));
+    await expect(svc.updateTimesheetEntry(own, others.id, entry({ teacherId: f.teacherB.id, note: "x" }))).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(svc.updateTimesheetEntry(own, mine.id, entry({ teacherId: f.teacherB.id, date: "2026-01-16" }))).rejects.toMatchObject({ code: "NOT_FOUND" });
+    // Buổi 13/01 do GV B dạy thay: dòng công là của B, GV A không sửa được.
+    const subbed = await sessionOn("2026-01-13");
+    await expect(svc.adjustSessionTimesheet(own, { sessionId: subbed.id, part: "lead", date: "2026-01-14", timeSlotId: null, classId: f.classA.id, note: null })).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(svc.deleteTimesheetEntry(own, mine.id)).rejects.toMatchObject({ code: "FORBIDDEN" });
+
+    const all = withTimesheet(f.actorA, "all", FULL);
+    await svc.updateTimesheetEntry(all, others.id, entry({ teacherId: f.teacherB.id, note: "sửa hộ" }));
+    await expect(svc.deleteTimesheetEntry(all, others.id)).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+});
+
+describe("sửa chấm công của buổi học", () => {
+  it("chỉ đổi Ngày / Ca / Lớp trên bảng công, buổi học giữ nguyên; lọc theo giá trị sau khi sửa; sửa về gốc thì bỏ dấu Đã sửa", async () => {
+    const session = await sessionOn("2026-01-06");
+    const adjust = (over: Partial<Parameters<typeof svc.adjustSessionTimesheet>[1]>) =>
+      svc.adjustSessionTimesheet(f.admin, { sessionId: session.id, part: "lead", date: session.date, timeSlotId: session.timeSlotId, classId: session.classId, note: null, ...over });
+
+    await adjust({ date: "2026-02-10", timeSlotId: afternoon.id, classId: f.classB.id, note: "Ghi nhầm ngày" });
+    // Buổi học không đổi.
+    expect(await sessionOn("2026-01-06")).toMatchObject({ date: "2026-01-06", classId: f.classA.id, timeSlotId: morning.id, startTime: "08:00:00" });
+
+    // Tháng 1 không còn dòng này; tháng 2 có, theo lớp B, giờ của khung chiều, không còn phòng của buổi gốc.
+    const jan = await teacherTimesheet(f.admin, january, now);
+    expect(jan.rows.some((r) => r.id === session.id)).toBe(false);
+    expect(jan.summary.find((s) => s.teacherId === f.teacherA.id)).toMatchObject({ taught: 0 });
+    const feb = await teacherTimesheet(f.admin, { from: "2026-02-01", to: "2026-02-28" }, now);
+    const moved = feb.rows.find((r) => r.id === session.id)!;
+    expect(moved).toMatchObject({ date: "2026-02-10", classCode: "B", slotLabel: "Chiều – Khung 1", minutes: 120, edited: true, note: "Ghi nhầm ngày", state: "taught", roomName: null });
+    expect((await teacherTimesheet(f.admin, { from: "2026-02-01", to: "2026-02-28", classId: f.classB.id }, now)).rows.map((r) => r.id)).toEqual([session.id]);
+    expect((await teacherTimesheet(f.admin, { from: "2026-01-01", to: "2026-02-28", classId: f.classA.id }, now)).rows.some((r) => r.id === session.id)).toBe(false);
+
+    // Sửa lần nữa: cập nhật đúng một phần sửa.
+    await adjust({ date: "2026-01-05" });
+    expect(await db.select().from(timesheetOverrides)).toHaveLength(1);
+    expect((await teacherTimesheet(f.admin, january, now)).rows.find((r) => r.id === session.id)).toMatchObject({ date: "2026-01-05", classCode: "A", edited: true, minutes: 90 });
+
+    // Trùng Ngày + Ca + Khung với buổi 20/01 của chính GV A thì bị chặn.
+    await expect(adjust({ date: "2026-01-20" })).rejects.toMatchObject({ code: "VALIDATION" });
+
+    // Sửa về đúng giá trị của buổi: bỏ phần sửa.
+    await adjust({});
+    expect(await db.select().from(timesheetOverrides)).toHaveLength(0);
+    expect((await teacherTimesheet(f.admin, january, now)).rows.find((r) => r.id === session.id)).toMatchObject({ date: "2026-01-06", edited: false });
+    const logged = await db.select().from(auditLogs).where(eq(auditLogs.tableName, "timesheet_overrides"));
+    expect(logged.map((l) => l.action).sort()).toEqual(["create", "delete", "update"]);
+  });
+
+  it("buổi đã hủy hoặc vai không có người thì không sửa được", async () => {
+    const cancelled = await sessionOn("2026-01-08");
+    const input = { part: "lead" as const, date: "2026-01-09", timeSlotId: null, classId: f.classA.id, note: null };
+    await expect(svc.adjustSessionTimesheet(f.admin, { ...input, sessionId: cancelled.id })).rejects.toMatchObject({ code: "NOT_FOUND" });
+    const session = await sessionOn("2026-01-06");
+    await expect(svc.adjustSessionTimesheet(f.admin, { ...input, sessionId: session.id, part: "assistant" })).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+});
+
 describe("xuất chấm công", () => {
-  it("tệp tổng hợp gồm mọi giáo viên kèm dòng tổng; tệp riêng chỉ có một giáo viên", async () => {
+  it("tệp tổng hợp gồm mọi giáo viên kèm dòng tổng; tệp riêng chỉ có một giáo viên; không có cột tiền", async () => {
+    await svc.createTimesheetEntry(f.admin, entry({ note: "Dạy bù" }));
     const all = await timesheetDoc(f.admin, january, now);
     expect(all.filename).toBe("cham-cong-tong-hop-2026-01-01-2026-01-31");
     const [summary, detail] = all.sections;
-    expect(summary!.columns.map((c) => c.header).slice(0, 3)).toEqual(["STT", "Mã GV", "Giáo viên"]);
-    // GV A: 1 công; GV B: 2 công (1 dạy thay); dòng cuối là tổng cộng.
+    expect(summary!.columns.map((c) => c.header)).toEqual(["STT", "Mã GV", "Giáo viên", "Số công", "Trong đó dạy thay", "Công trợ giảng", "Số giờ", "Chưa điểm danh"]);
+    // GV A: 2 công (1 bổ sung); GV B: 2 công (1 dạy thay); dòng cuối là tổng cộng.
     expect(summary!.rows.map((r) => [r[1], r[3], r[4]])).toEqual([
-      [f.teacherA.code, 1, 0],
+      [f.teacherA.code, 2, 0],
       [f.teacherB.code, 2, 1],
-      ["", 3, 1],
+      ["", 4, 1],
     ]);
-    expect(detail!.columns.map((c) => c.header).slice(0, 3)).toEqual(["STT", "Thứ", "Ngày"]);
-    expect(detail!.rows[0]!.slice(1, 3)).toEqual(["Thứ Ba", "06/01/2026"]);
+    const headers = detail!.columns.map((c) => c.header);
+    expect(headers.slice(0, 5)).toEqual(["STT", "Thứ", "Ngày", "Ca", "Giờ"]);
+    expect(headers.join("|")).not.toMatch(/Lương|tiền/i);
+    expect(detail!.rows[0]!.slice(1, 5)).toEqual(["Thứ Ba", "06/01/2026", "Sáng – Khung 1", "08:00–09:30"]);
+    expect(detail!.rows[1]!.at(-1)).toBe("Bổ sung · Dạy bù");
 
     const own = await timesheetDoc(f.admin, { ...january, teacherId: f.teacherB.id }, now);
     expect(own.filename).toBe(`cham-cong-${f.teacherB.code}-2026-01-01-2026-01-31`);
     expect(own.sections[0]!.rows).toHaveLength(1);
-    expect(new Set(own.sections[1]!.rows.map((r) => r[4]))).toEqual(new Set([f.teacherB.code]));
+    expect(new Set(own.sections[1]!.rows.map((r) => r[5]))).toEqual(new Set([f.teacherB.code]));
     // Vai trò Giáo viên mặc định không có menu Chấm công.
     await expect(timesheetDoc(f.actorA, january, now)).rejects.toMatchObject({ code: "FORBIDDEN" });
   });

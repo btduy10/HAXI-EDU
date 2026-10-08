@@ -29,6 +29,9 @@ import {
   syllabusInput,
   syllabusUpdate,
   timeSlotUpdate,
+  timesheetAdjustInput,
+  timesheetEntryInput,
+  timesheetEntryUpdate,
   userIdInput,
 } from "@/lib/validation/entities";
 import { runAction } from "../action";
@@ -36,6 +39,7 @@ import * as accounts from "../services/accounts";
 import * as catalog from "../services/catalog";
 import * as extraClasses from "../services/extra-classes";
 import * as syllabus from "../services/syllabus";
+import * as timesheet from "../services/timesheet";
 import * as tuition from "../services/tuition";
 import * as classes from "../services/classes";
 import * as students from "../services/students";
@@ -78,6 +82,15 @@ export const updateExtraClassAction = async (input: unknown) =>
   runAction(extraClassUpdate, input, (a, d) => extraClasses.updateExtraClass(a, d.id, d.data), ADMIN);
 export const deleteExtraClassAction = async (input: unknown) =>
   runAction(idOnly, input, (a, d) => extraClasses.deleteExtraClass(a, d.id), ADMIN);
+
+export const createTimesheetEntryAction = async (input: unknown) =>
+  runAction(timesheetEntryInput, input, timesheet.createTimesheetEntry, ADMIN);
+export const updateTimesheetEntryAction = async (input: unknown) =>
+  runAction(timesheetEntryUpdate, input, (a, { id, ...data }) => timesheet.updateTimesheetEntry(a, id, data), ADMIN);
+export const deleteTimesheetEntryAction = async (input: unknown) =>
+  runAction(idOnly, input, (a, d) => timesheet.deleteTimesheetEntry(a, d.id), ADMIN);
+export const adjustSessionTimesheetAction = async (input: unknown) =>
+  runAction(timesheetAdjustInput, input, timesheet.adjustSessionTimesheet, ADMIN);
 
 export const createHolidayAction = async (input: unknown) => runAction(holidayInput, input, catalog.createHoliday, ADMIN);
 export const deleteHolidayAction = async (input: unknown) =>

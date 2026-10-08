@@ -147,6 +147,7 @@ test("Admin: cấu hình, đóng lớp, chốt tổng kết, duyệt và trao qu
   await expect(page).toHaveURL(/classId=/);
   await expect(page.getByRole("link", { name: "Cả khóa của lớp RB-NC01" })).toBeVisible();
   await expect(page.getByRole("columnheader", { name: "Số công" })).toBeVisible();
+  await expect(page.getByRole("columnheader", { name: "Thành tiền" })).toHaveCount(0);
   await expect(page.getByRole("heading", { name: /Chi tiết buổi dạy/ })).toBeVisible();
   await page.getByLabel("Giáo viên").selectOption({ label: "GV01 – Nguyễn Thị Lan" });
   await expect(page).toHaveURL(/teacherId=/);

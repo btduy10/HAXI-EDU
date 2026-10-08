@@ -47,7 +47,7 @@ export default async function ClassDetailPage({ params }: PageProps<"/admin/clas
   const roleFields: Field[] = [
     { name: "role", label: "Vai trò", type: "select", required: true, options: toOptions(LABELS.classTeacherRole), defaultValue: "main" },
     ...(showRate
-      ? [{ name: "ratePerSession", label: "Lương mỗi buổi (đồng)", type: "number" as const, hint: "Để trống nếu chưa có. Chấm công dùng để tính thành tiền." }]
+      ? [{ name: "ratePerSession", label: "Lương mỗi buổi (đồng)", type: "number" as const, hint: "Để trống nếu chưa có." }]
       : []),
   ];
   const teacherFields: Field[] = [

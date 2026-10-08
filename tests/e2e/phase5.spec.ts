@@ -272,3 +272,69 @@ test("Syllabus: Admin thêm bài và tải tệp mẫu; GV điểm danh chọn t
   await expect(page.getByText("Tiết 1 – Làm quen với robot E2E")).toBeVisible();
   await expect(page.getByText("Lớp học tốt E2E")).toBeVisible();
 });
+
+test("Chấm công: không còn lương/thành tiền; chấm công bổ sung, sửa dòng công (buổi học giữ nguyên), Admin xóa công bổ sung", async ({ page }) => {
+  const vn = (iso: string) => iso.split("-").reverse().join("/");
+  // Một buổi đã dạy của GV01 ở lớp RB-TG01, giờ riêng để dễ tìm dòng.
+  const db = sql();
+  const [lan] = await db`select teacher_id from "user" where username = 'gv.lan'`;
+  const taughtOn = shift(today(), -5);
+  const [session] = await db`
+    insert into sessions (class_id, date, start_time, end_time, teacher_id, status)
+    values (${classId}, ${taughtOn}, '07:00', '07:45', ${lan!.teacher_id}, 'done')
+    returning id`;
+  await db.end();
+
+  await login(page, "admin", NEW_PASSWORD);
+  await page.getByLabel("Mã xác thực").fill(totp(loadAdminSecret()));
+  await page.getByRole("button", { name: "Xác nhận" }).click();
+  await expect(page).toHaveURL(/\/admin\/dashboard$/);
+
+  await page.goto(`/admin/timesheet?classId=${classId}`);
+  await expect(page.getByRole("heading", { name: "Chấm công giáo viên" })).toBeVisible();
+  await expect(page.getByRole("columnheader", { name: "Số công" })).toBeVisible();
+  await expect(page.getByText(/Thành tiền|Lương\/buổi/)).toHaveCount(0);
+
+  // Chấm công bổ sung: dòng công ghi tay, lớp đang lọc được điền sẵn.
+  await page.getByRole("button", { name: "Chấm công bổ sung" }).click();
+  await page.locator("#f-teacherId").selectOption({ label: "GV01 – Nguyễn Thị Lan" });
+  await page.locator("#f-date").fill(shift(today(), -2));
+  await page.locator("#f-timeSlotId").selectOption({ label: "Ca E2E – Khung 1 (05:00–05:45)" });
+  await expect(page.locator("#f-classId")).toHaveValue(classId);
+  await page.locator("#f-note").fill("Công bổ sung E2E");
+  await page.getByRole("button", { name: "Lưu" }).click();
+  await expect(page.getByText("Đã chấm công bổ sung.")).toBeVisible();
+  const manual = page.getByRole("row").filter({ hasText: "Công bổ sung E2E" });
+  await expect(manual).toContainText("Bổ sung");
+  await expect(manual).toContainText(vn(shift(today(), -2)));
+
+  // Sửa công bổ sung: đổi ngày.
+  await manual.getByRole("button", { name: "Sửa" }).click();
+  await page.locator("#f-date").fill(shift(today(), -3));
+  await page.getByRole("button", { name: "Lưu" }).click();
+  await expect(page.getByText("Đã lưu.")).toBeVisible();
+  await expect(manual).toContainText(vn(shift(today(), -3)));
+  await expect(page.getByText("Đã lưu.")).toHaveCount(0);
+
+  // Sửa dòng công sinh từ buổi học: chỉ đổi trên bảng công, buổi học giữ nguyên ngày.
+  const taught = page.getByRole("row").filter({ hasText: "07:00–07:45" });
+  await expect(taught).toContainText(vn(taughtOn));
+  await taught.getByRole("button", { name: "Sửa" }).click();
+  await page.locator("#f-date").fill(shift(today(), -4));
+  await page.locator("#f-note").fill("Ghi nhầm ngày E2E");
+  await page.getByRole("button", { name: "Lưu" }).click();
+  await expect(page.getByText("Đã lưu.")).toBeVisible();
+  await expect(taught).toContainText(vn(shift(today(), -4)));
+  await expect(taught).toContainText("Đã sửa");
+  const check = sql();
+  const [kept] = await check`select to_char(date, 'YYYY-MM-DD') as date from sessions where id = ${session!.id}`;
+  await check.end();
+  expect(kept!.date).toBe(taughtOn);
+  await expectNoHorizontalScroll(page);
+
+  // Admin xóa công bổ sung.
+  page.once("dialog", (dialog) => dialog.accept());
+  await manual.getByRole("button", { name: "Xóa" }).click();
+  await expect(page.getByText("Đã xóa công bổ sung.")).toBeVisible();
+  await expect(manual).toHaveCount(0);
+});

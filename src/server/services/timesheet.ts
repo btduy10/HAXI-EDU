@@ -1,10 +1,15 @@
-import { and, asc, between, eq, inArray, ne, or } from "drizzle-orm";
+import { and, between, eq, inArray, ne, or } from "drizzle-orm";
+import type { z } from "zod";
 import { db } from "@/db";
-import { classTeachers, classes, courses, rooms, sessions, teachers } from "@/db/schema";
+import { classes, courses, rooms, sessions, teachers, timeSlots, timesheetEntries, timesheetOverrides } from "@/db/schema";
 import { WEEKDAY_LABELS, isoWeekday } from "@/lib/dates";
 import { formatDate, formatTime, todayIso } from "@/lib/format";
+import { SLOT_NAME_LABELS, type timesheetAdjustInput, type timesheetEntryInput } from "@/lib/validation/entities";
+import { audit } from "../audit";
+import { AppError, notFound, translateDbError } from "../errors";
 import type { ExportDoc } from "../export";
 import { type Actor, assertCan, seesAllClasses } from "../guard";
+import { createRow, deleteRow, updateRow } from "./crud";
 
 export type TimesheetFilters = {
   from: string;
@@ -17,6 +22,8 @@ export type TimesheetFilters = {
 export type TimesheetState = "taught" | "pending" | "upcoming";
 /** Vai trò của người được tính công ở một buổi. */
 export type TimesheetRole = "main" | "substitute" | "assistant";
+/** Dòng công của một buổi học: lead = người thực dạy, assistant = trợ giảng. */
+export type TimesheetPart = "lead" | "assistant";
 
 export const TIMESHEET_ROLE_LABEL: Record<TimesheetRole, string> = { main: "Dạy chính", substitute: "Dạy thay", assistant: "Trợ giảng" };
 
@@ -34,93 +41,175 @@ export type TimesheetSummary = {
   minutes: number;
   pending: number;
   upcoming: number;
-  /** Thành tiền = tổng lương/buổi của các công đã dạy có mức lương. */
-  amount: number;
-  /** Số công đã dạy nhưng chưa có mức lương (không cộng vào thành tiền). */
-  missingRate: number;
 };
 
-/**
- * Chấm công giáo viên: các buổi trong khoảng ngày. Mỗi buổi tính công cho người THỰC DẠY (GV dạy thay nếu có,
- * không thì GV của buổi) và, nếu có, cho trợ giảng. Buổi đã hủy không tính; chỉ buổi đã điểm danh mới là một công.
- * Lương/buổi lấy theo phân công của GV ở lớp đó (Lớp học → Giáo viên phụ trách).
- * Phạm vi "lớp của mình": chỉ thấy công của chính mình.
- */
-export async function teacherTimesheet(actor: Actor, filters: TimesheetFilters, now: Date = new Date()) {
-  assertCan(actor, "timesheet", "view");
-  const ownOnly = !seesAllClasses(actor);
-  if (ownOnly && !actor.teacherId) return { rows: [], summary: [] as TimesheetSummary[] };
-  const teacherId = ownOnly ? actor.teacherId : filters.teacherId;
+type LoadFilters = { from: string; to: string; teacherId?: string | null; classId?: string | null };
 
-  const conditions = [between(sessions.date, filters.from, filters.to), ne(sessions.status, "cancelled")];
-  if (filters.classId) conditions.push(eq(sessions.classId, filters.classId));
+/**
+ * Mọi dòng công trong khoảng ngày, gộp từ ba nguồn:
+ * - buổi học chưa hủy: một dòng cho người THỰC DẠY (GV dạy thay nếu có, không thì GV của buổi) và một dòng cho trợ giảng;
+ * - phần sửa của các dòng đó (`timesheet_overrides`): đổi Ngày / Ca – Khung giờ / Lớp chỉ trên bảng công;
+ * - công bổ sung ghi tay (`timesheet_entries`), luôn được tính là một công.
+ * Lọc khoảng ngày và lớp theo giá trị SAU khi sửa.
+ */
+async function loadRows(filters: LoadFilters, today: string) {
+  const { teacherId, classId } = filters;
+  const inRange = (date: string) => date >= filters.from && date <= filters.to;
+
+  // Buổi có phần sửa rơi vào khoảng ngày đang xem cũng phải lấy, dù ngày gốc của buổi nằm ngoài.
+  const movedIn = await db
+    .select({ sessionId: timesheetOverrides.sessionId })
+    .from(timesheetOverrides)
+    .where(between(timesheetOverrides.date, filters.from, filters.to));
+  const movedIds = [...new Set(movedIn.map((o) => o.sessionId))];
+  const moved = movedIds.length ? inArray(sessions.id, movedIds) : undefined;
+
+  const conditions = [ne(sessions.status, "cancelled"), or(between(sessions.date, filters.from, filters.to), moved)!];
+  if (classId) conditions.push(or(eq(sessions.classId, classId), moved)!);
   if (teacherId) {
     conditions.push(
       or(eq(sessions.teacherId, teacherId), eq(sessions.substituteTeacherId, teacherId), eq(sessions.assistantTeacherId, teacherId))!,
     );
   }
+  const entryConditions = [between(timesheetEntries.date, filters.from, filters.to)];
+  if (classId) entryConditions.push(eq(timesheetEntries.classId, classId));
+  if (teacherId) entryConditions.push(eq(timesheetEntries.teacherId, teacherId));
 
-  const found = await db
-    .select({
-      id: sessions.id,
-      classId: sessions.classId,
-      date: sessions.date,
-      startTime: sessions.startTime,
-      endTime: sessions.endTime,
-      status: sessions.status,
-      kind: sessions.kind,
-      teacherId: sessions.teacherId,
-      substituteTeacherId: sessions.substituteTeacherId,
-      assistantTeacherId: sessions.assistantTeacherId,
-      classCode: classes.code,
-      className: classes.name,
-      courseName: courses.name,
-      roomName: rooms.name,
-    })
-    .from(sessions)
-    .innerJoin(classes, eq(classes.id, sessions.classId))
-    .innerJoin(courses, eq(courses.id, classes.courseId))
-    .leftJoin(rooms, eq(rooms.id, sessions.roomId))
-    .where(and(...conditions))
-    .orderBy(asc(sessions.date), asc(sessions.startTime));
+  const [found, entries, slotRows] = await Promise.all([
+    db
+      .select({
+        id: sessions.id,
+        classId: sessions.classId,
+        date: sessions.date,
+        timeSlotId: sessions.timeSlotId,
+        startTime: sessions.startTime,
+        endTime: sessions.endTime,
+        status: sessions.status,
+        kind: sessions.kind,
+        teacherId: sessions.teacherId,
+        substituteTeacherId: sessions.substituteTeacherId,
+        assistantTeacherId: sessions.assistantTeacherId,
+        roomName: rooms.name,
+      })
+      .from(sessions)
+      .leftJoin(rooms, eq(rooms.id, sessions.roomId))
+      .where(and(...conditions)),
+    db.select().from(timesheetEntries).where(and(...entryConditions)),
+    db.select().from(timeSlots),
+  ]);
+  const overrides = found.length
+    ? await db
+        .select()
+        .from(timesheetOverrides)
+        .where(inArray(timesheetOverrides.sessionId, found.map((s) => s.id)))
+    : [];
+  const overrideOf = new Map(overrides.map((o) => [`${o.sessionId}|${o.part}`, o]));
+  const slotOf = new Map(slotRows.map((s) => [s.id, s]));
 
-  // Mỗi buổi → các dòng công: người thực dạy và trợ giảng.
-  const entries = found.flatMap((s) => {
-    const list: { teacherId: string; role: TimesheetRole }[] = [];
+  const fromSessions = found.flatMap((s) => {
     const lead = s.substituteTeacherId ?? s.teacherId;
-    if (lead) list.push({ teacherId: lead, role: s.substituteTeacherId ? "substitute" : "main" });
-    if (s.assistantTeacherId && s.assistantTeacherId !== lead) list.push({ teacherId: s.assistantTeacherId, role: "assistant" });
-    return list.filter((e) => !teacherId || e.teacherId === teacherId).map((e) => ({ ...s, ...e }));
+    const people: { teacherId: string; role: TimesheetRole; part: TimesheetPart }[] = [];
+    if (lead) people.push({ teacherId: lead, role: s.substituteTeacherId ? "substitute" : "main", part: "lead" });
+    if (s.assistantTeacherId && s.assistantTeacherId !== lead) people.push({ teacherId: s.assistantTeacherId, role: "assistant", part: "assistant" });
+    return people.map((p) => {
+      const o = overrideOf.get(`${s.id}|${p.part}`);
+      const timeSlotId = o?.timeSlotId ?? s.timeSlotId;
+      // Đổi sang khung giờ khác thì lấy giờ của khung đó; còn lại giữ giờ thực của buổi.
+      const slot = timeSlotId && timeSlotId !== s.timeSlotId ? slotOf.get(timeSlotId) : undefined;
+      const effClassId = o?.classId ?? s.classId;
+      return {
+        ...p,
+        key: `${s.id}|${p.part}`,
+        id: s.id,
+        source: "session" as "session" | "manual",
+        edited: Boolean(o),
+        note: o?.note ?? null,
+        classId: effClassId,
+        date: o?.date ?? s.date,
+        timeSlotId,
+        startTime: slot?.defaultStart ?? s.startTime,
+        endTime: slot?.defaultEnd ?? s.endTime,
+        status: s.status,
+        kind: s.kind,
+        // Phòng là của buổi gốc; đã đổi lớp thì không còn đúng nên để trống.
+        roomName: effClassId === s.classId ? s.roomName : null,
+      };
+    });
   });
+  const fromEntries = entries.map((e) => {
+    const slot = slotOf.get(e.timeSlotId);
+    return {
+      teacherId: e.teacherId,
+      role: e.role as TimesheetRole,
+      part: null as TimesheetPart | null,
+      key: `manual|${e.id}`,
+      id: e.id,
+      source: "manual" as "session" | "manual",
+      edited: false,
+      note: e.note,
+      classId: e.classId,
+      date: e.date,
+      timeSlotId: e.timeSlotId as string | null,
+      startTime: slot?.defaultStart ?? "00:00",
+      endTime: slot?.defaultEnd ?? "00:00",
+      status: "done" as (typeof found)[number]["status"],
+      kind: "regular" as (typeof found)[number]["kind"],
+      roomName: null as string | null,
+    };
+  });
+  const all = [...fromSessions, ...fromEntries].filter(
+    (r) => inRange(r.date) && (!classId || r.classId === classId) && (!teacherId || r.teacherId === teacherId),
+  );
 
-  const teacherIds = [...new Set(entries.map((e) => e.teacherId))];
-  const classIds = [...new Set(entries.map((e) => e.classId))];
-  const [teacherRows, rateRows] = await Promise.all([
+  const teacherIds = [...new Set(all.map((r) => r.teacherId))];
+  const classIds = [...new Set(all.map((r) => r.classId))];
+  const [teacherRows, classRows] = await Promise.all([
     teacherIds.length ? db.select({ id: teachers.id, code: teachers.code, fullName: teachers.fullName }).from(teachers).where(inArray(teachers.id, teacherIds)) : [],
     classIds.length
       ? db
-          .select({ classId: classTeachers.classId, teacherId: classTeachers.teacherId, rate: classTeachers.ratePerSession })
-          .from(classTeachers)
-          .where(and(inArray(classTeachers.classId, classIds), inArray(classTeachers.teacherId, teacherIds)))
+          .select({ id: classes.id, code: classes.code, name: classes.name, courseName: courses.name })
+          .from(classes)
+          .innerJoin(courses, eq(courses.id, classes.courseId))
+          .where(inArray(classes.id, classIds))
       : [],
   ]);
   const teacherOf = new Map(teacherRows.map((t) => [t.id, t]));
-  const rateOf = new Map(rateRows.map((r) => [`${r.classId}|${r.teacherId}`, r.rate]));
+  const classOf = new Map(classRows.map((c) => [c.id, c]));
+  const slotLabel = (id: string | null) => {
+    const slot = id ? slotOf.get(id) : undefined;
+    return slot ? `${(SLOT_NAME_LABELS as Record<string, string>)[slot.name] ?? slot.name} – Khung ${slot.frame}` : "";
+  };
 
-  const today = todayIso(now);
-  const rows = entries
-    .map((e) => ({
-      ...e,
-      key: `${e.id}|${e.role}`,
-      teacherCode: teacherOf.get(e.teacherId)?.code ?? "",
-      teacherName: teacherOf.get(e.teacherId)?.fullName ?? "",
-      isSubstitute: e.role === "substitute",
-      rate: rateOf.get(`${e.classId}|${e.teacherId}`) ?? null,
-      minutes: Math.max(0, minutesOf(e.endTime) - minutesOf(e.startTime)),
-      state: (e.status === "done" ? "taught" : e.date <= today ? "pending" : "upcoming") as TimesheetState,
+  return all
+    .map((r) => ({
+      ...r,
+      teacherCode: teacherOf.get(r.teacherId)?.code ?? "",
+      teacherName: teacherOf.get(r.teacherId)?.fullName ?? "",
+      classCode: classOf.get(r.classId)?.code ?? "",
+      className: classOf.get(r.classId)?.name ?? "",
+      courseName: classOf.get(r.classId)?.courseName ?? "",
+      slotLabel: slotLabel(r.timeSlotId),
+      isSubstitute: r.role === "substitute",
+      minutes: Math.max(0, minutesOf(r.endTime) - minutesOf(r.startTime)),
+      state: (r.status === "done" ? "taught" : r.date <= today ? "pending" : "upcoming") as TimesheetState,
     }))
     .sort((a, b) => a.teacherCode.localeCompare(b.teacherCode) || a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime));
+}
 
+export type TimesheetRow = Awaited<ReturnType<typeof loadRows>>[number];
+
+/**
+ * Chấm công giáo viên: chỉ ghi nhận ngày công (không tính tiền). Mỗi buổi đã điểm danh là một công cho người thực dạy
+ * và, nếu có, cho trợ giảng; buổi đã hủy không tính; công bổ sung ghi tay luôn là một công.
+ * Phạm vi "lớp của mình": chỉ thấy công của chính mình.
+ */
+export async function teacherTimesheet(actor: Actor, filters: TimesheetFilters, now: Date = new Date()) {
+  assertCan(actor, "timesheet", "view");
+  const ownOnly = !seesAllClasses(actor);
+  if (ownOnly && !actor.teacherId) return { rows: [] as TimesheetRow[], summary: [] as TimesheetSummary[] };
+  const teacherId = ownOnly ? actor.teacherId : filters.teacherId;
+
+  const rows = await loadRows({ ...filters, teacherId }, todayIso(now));
   const byTeacher = new Map<string, TimesheetSummary>();
   for (const r of rows) {
     const item = byTeacher.get(r.teacherId) ?? {
@@ -133,16 +222,12 @@ export async function teacherTimesheet(actor: Actor, filters: TimesheetFilters, 
       minutes: 0,
       pending: 0,
       upcoming: 0,
-      amount: 0,
-      missingRate: 0,
     };
     if (r.state === "taught") {
       if (r.role === "assistant") item.assistant += 1;
       else item.taught += 1;
       if (r.role === "substitute") item.substitute += 1;
       item.minutes += r.minutes;
-      if (r.rate === null) item.missingRate += 1;
-      else item.amount += r.rate;
     } else {
       item[r.state] += 1;
     }
@@ -151,8 +236,108 @@ export async function teacherTimesheet(actor: Actor, filters: TimesheetFilters, 
   return { rows, summary: [...byTeacher.values()] };
 }
 
+/** Phạm vi "lớp của mình": chỉ thao tác trên công của chính mình. NOT_FOUND để không lộ công của người khác. */
+function assertOwnRow(actor: Actor, teacherId: string) {
+  if (!seesAllClasses(actor) && actor.teacherId !== teacherId) throw notFound("dòng công");
+}
+
+/** Một giáo viên không có hai dòng công cùng Ngày + Ca + Khung giờ (cùng quy tắc với trùng lịch). */
+async function assertSlotFree(teacherId: string, date: string, timeSlotId: string | null, exceptKey?: string) {
+  if (!timeSlotId) return;
+  const sameDay = await loadRows({ from: date, to: date, teacherId }, date);
+  if (sameDay.some((r) => r.key !== exceptKey && r.timeSlotId === timeSlotId)) {
+    throw new AppError("VALIDATION", "Giáo viên đã có công ở ngày, ca và khung giờ này.", {
+      timeSlotId: "Giáo viên đã có công ở ngày, ca và khung giờ này.",
+    });
+  }
+}
+
+/** Chấm công bổ sung: thêm một dòng công ghi tay cho giáo viên. */
+export async function createTimesheetEntry(actor: Actor, data: z.output<typeof timesheetEntryInput>) {
+  assertCan(actor, "timesheet", "add");
+  assertOwnRow(actor, data.teacherId);
+  await assertSlotFree(data.teacherId, data.date, data.timeSlotId);
+  return createRow(actor, timesheetEntries, "timesheet_entries", { ...data, createdBy: actor.userId }, "timesheet");
+}
+
+export async function updateTimesheetEntry(actor: Actor, id: string, data: z.output<typeof timesheetEntryInput>) {
+  assertCan(actor, "timesheet", "edit");
+  const [current] = await db.select({ teacherId: timesheetEntries.teacherId }).from(timesheetEntries).where(eq(timesheetEntries.id, id)).limit(1);
+  if (!current) throw notFound("dòng công");
+  assertOwnRow(actor, current.teacherId);
+  assertOwnRow(actor, data.teacherId);
+  await assertSlotFree(data.teacherId, data.date, data.timeSlotId, `manual|${id}`);
+  return updateRow(actor, timesheetEntries, "timesheet_entries", id, data, "timesheet");
+}
+
+export const deleteTimesheetEntry = (actor: Actor, id: string) => deleteRow(actor, timesheetEntries, "timesheet_entries", id);
+
+/**
+ * Sửa một dòng công sinh từ buổi học: chỉ đổi Ngày / Ca – Khung giờ / Lớp trên bảng công, KHÔNG đổi buổi học
+ * (Thời khóa biểu, điểm danh giữ nguyên). Sửa về đúng giá trị của buổi và không có ghi chú thì bỏ phần sửa.
+ */
+export async function adjustSessionTimesheet(actor: Actor, input: z.output<typeof timesheetAdjustInput>) {
+  assertCan(actor, "timesheet", "edit");
+  const [session] = await db
+    .select({
+      id: sessions.id,
+      classId: sessions.classId,
+      date: sessions.date,
+      timeSlotId: sessions.timeSlotId,
+      status: sessions.status,
+      teacherId: sessions.teacherId,
+      substituteTeacherId: sessions.substituteTeacherId,
+      assistantTeacherId: sessions.assistantTeacherId,
+    })
+    .from(sessions)
+    .where(eq(sessions.id, input.sessionId))
+    .limit(1);
+  if (!session || session.status === "cancelled") throw notFound("dòng công");
+  const lead = session.substituteTeacherId ?? session.teacherId;
+  const teacherId = input.part === "lead" ? lead : session.assistantTeacherId !== lead ? session.assistantTeacherId : null;
+  if (!teacherId) throw notFound("dòng công");
+  assertOwnRow(actor, teacherId);
+
+  const timeSlotId = input.timeSlotId ?? session.timeSlotId;
+  await assertSlotFree(teacherId, input.date, timeSlotId, `${session.id}|${input.part}`);
+  const unchanged = input.date === session.date && input.classId === session.classId && timeSlotId === session.timeSlotId && !input.note;
+  const key = and(eq(timesheetOverrides.sessionId, session.id), eq(timesheetOverrides.part, input.part));
+
+  try {
+    return await db.transaction(async (tx) => {
+      const [before] = await tx.select().from(timesheetOverrides).where(key).limit(1);
+      if (unchanged) {
+        if (before) {
+          await tx.delete(timesheetOverrides).where(key);
+          await audit(tx, { userId: actor.userId, action: "delete", tableName: "timesheet_overrides", recordId: before.id, oldValue: before });
+        }
+        return { edited: false };
+      }
+      const values = { date: input.date, timeSlotId: input.timeSlotId, classId: input.classId, note: input.note, updatedBy: actor.userId };
+      const [row] = before
+        ? await tx.update(timesheetOverrides).set({ ...values, updatedAt: new Date() }).where(key).returning()
+        : await tx.insert(timesheetOverrides).values({ ...values, sessionId: session.id, part: input.part }).returning();
+      await audit(tx, {
+        userId: actor.userId,
+        action: before ? "update" : "create",
+        tableName: "timesheet_overrides",
+        recordId: row!.id,
+        oldValue: before,
+        newValue: row,
+      });
+      return { edited: true };
+    });
+  } catch (e) {
+    throw translateDbError(e);
+  }
+}
+
 const STATE_LABEL: Record<TimesheetState, string> = { taught: "Đã dạy", pending: "Chưa điểm danh", upcoming: "Chưa tới ngày" };
 const hoursOf = (minutes: number) => Math.round((minutes / 60) * 10) / 10;
+
+/** Ghi chú của một dòng công: Buổi bù / Bổ sung / Đã sửa, kèm ghi chú người dùng nhập. */
+export const timesheetRemark = (r: Pick<TimesheetRow, "kind" | "source" | "edited" | "note">) =>
+  [r.kind === "makeup" ? "Buổi bù" : "", r.source === "manual" ? "Bổ sung" : "", r.edited ? "Đã sửa" : "", r.note ?? ""].filter(Boolean).join(" · ");
 
 /**
  * Tệp chấm công để xuất. Không chọn giáo viên: tệp tổng hợp mọi giáo viên (tổng công + chi tiết).
@@ -168,9 +353,8 @@ export async function timesheetDoc(actor: Actor, filters: TimesheetFilters, now:
       assistant: sum.assistant + s.assistant,
       minutes: sum.minutes + s.minutes,
       pending: sum.pending + s.pending,
-      amount: sum.amount + s.amount,
     }),
-    { taught: 0, substitute: 0, assistant: 0, minutes: 0, pending: 0, amount: 0 },
+    { taught: 0, substitute: 0, assistant: 0, minutes: 0, pending: 0 },
   );
   return {
     filename: `cham-cong-${single ? single.teacherCode : "tong-hop"}-${filters.from}-${filters.to}`,
@@ -188,24 +372,11 @@ export async function timesheetDoc(actor: Actor, filters: TimesheetFilters, now:
           { header: "Công trợ giảng", width: 15, align: "center" },
           { header: "Số giờ", width: 10, align: "center" },
           { header: "Chưa điểm danh", width: 16, align: "center" },
-          { header: "Thành tiền (đ)", width: 16, align: "right" },
-          { header: "Ghi chú", width: 26 },
         ],
         rows: [
-          ...summary.map((s, i) => [
-            i + 1,
-            s.teacherCode,
-            s.teacherName,
-            s.taught,
-            s.substitute,
-            s.assistant,
-            hoursOf(s.minutes),
-            s.pending,
-            s.amount,
-            s.missingRate > 0 ? `${s.missingRate} công chưa có mức lương` : "",
-          ]),
+          ...summary.map((s, i) => [i + 1, s.teacherCode, s.teacherName, s.taught, s.substitute, s.assistant, hoursOf(s.minutes), s.pending]),
           ...(summary.length > 1
-            ? [["", "", "Tổng cộng", total.taught, total.substitute, total.assistant, hoursOf(total.minutes), total.pending, total.amount, ""]]
+            ? [["", "", "Tổng cộng", total.taught, total.substitute, total.assistant, hoursOf(total.minutes), total.pending]]
             : []),
         ],
       },
@@ -215,6 +386,7 @@ export async function timesheetDoc(actor: Actor, filters: TimesheetFilters, now:
           { header: "STT", width: 6, align: "center" },
           { header: "Thứ", width: 10 },
           { header: "Ngày", width: 12 },
+          { header: "Ca", width: 18 },
           { header: "Giờ", width: 13 },
           { header: "Mã GV", width: 14 },
           { header: "Giáo viên", width: 24 },
@@ -222,14 +394,14 @@ export async function timesheetDoc(actor: Actor, filters: TimesheetFilters, now:
           { header: "Lớp", width: 16 },
           { header: "Khóa học", width: 24 },
           { header: "Phòng", width: 16 },
-          { header: "Ghi chú", width: 12 },
           { header: "Trạng thái", width: 16 },
-          { header: "Lương/buổi (đ)", width: 16, align: "right" },
+          { header: "Ghi chú", width: 28 },
         ],
         rows: rows.map((r, i) => [
           i + 1,
           WEEKDAY_LABELS[isoWeekday(r.date)] ?? "",
           formatDate(r.date),
+          r.slotLabel,
           `${formatTime(r.startTime)}–${formatTime(r.endTime)}`,
           r.teacherCode,
           r.teacherName,
@@ -237,9 +409,8 @@ export async function timesheetDoc(actor: Actor, filters: TimesheetFilters, now:
           r.classCode,
           r.courseName,
           r.roomName ?? "",
-          r.kind === "makeup" ? "Buổi bù" : "",
           STATE_LABEL[r.state],
-          r.rate ?? "",
+          timesheetRemark(r),
         ]),
       },
     ],

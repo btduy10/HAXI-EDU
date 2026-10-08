@@ -87,6 +87,27 @@ export const syllabusInput = z.object({
   title: reqText(200),
 });
 
+export const TIMESHEET_ROLES = ["main", "substitute", "assistant"] as const;
+/** Công bổ sung: dòng công ghi tay của giáo viên ở bảng Chấm công. */
+export const timesheetEntryInput = z.object({
+  teacherId: id,
+  date: isoDate,
+  timeSlotId: id,
+  classId: id,
+  role: z.enum(TIMESHEET_ROLES, { error: "Chọn vai trò" }).default("main"),
+  note: optText(300),
+});
+export const timesheetEntryUpdate = timesheetEntryInput.extend({ id });
+/** Sửa dòng công sinh từ buổi học (chỉ đổi trên bảng công). `timeSlotId` trống = giữ giờ của buổi. */
+export const timesheetAdjustInput = z.object({
+  sessionId: id,
+  part: z.enum(["lead", "assistant"]),
+  date: isoDate,
+  timeSlotId: optId,
+  classId: id,
+  note: optText(300),
+});
+
 export const holidayInput = z.object({
   date: isoDate,
   reason: reqText(200),

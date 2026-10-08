@@ -36,6 +36,7 @@ export const avatarUnlockType = pgEnum("avatar_unlock_type", ["by_level", "gifte
 export const handoverStatus = pgEnum("handover_status", ["pending", "given"]);
 export const paymentMethod = pgEnum("payment_method", ["cash", "transfer"]);
 export const receiptStatus = pgEnum("receipt_status", ["active", "cancelled"]);
+export const timesheetRole = pgEnum("timesheet_role", ["main", "substitute", "assistant"]);
 
 export const students = pgTable(
   "students",
@@ -140,7 +141,7 @@ export const classTeachers = pgTable(
       .notNull()
       .references(() => teachers.id),
     role: classTeacherRole("role").notNull().default("main"),
-    /** Lương mỗi buổi (đồng) của GV ở lớp này; null = chưa nhập. Chấm công dùng để tính thành tiền. */
+    /** Lương mỗi buổi (đồng) của GV ở lớp này; null = chưa nhập. Chỉ để ghi nhận, Chấm công không tính tiền. */
     ratePerSession: integer("rate_per_session"),
     createdAt: createdAt(),
   },
@@ -492,4 +493,57 @@ export const tuitionReceipts = pgTable(
     createdAt: createdAt(),
   },
   (t) => [index("tuition_receipts_enrollment_idx").on(t.enrollmentId), check("tuition_receipts_amount_chk", sql`${t.amount} > 0`)],
+);
+
+// Công bổ sung: dòng công ghi tay cho giáo viên, chỉ nằm ở bảng Chấm công (không tạo buổi học, không điểm danh).
+export const timesheetEntries = pgTable(
+  "timesheet_entries",
+  {
+    id: id(),
+    teacherId: uuid("teacher_id")
+      .notNull()
+      .references(() => teachers.id),
+    classId: uuid("class_id")
+      .notNull()
+      .references(() => classes.id, { onDelete: "cascade" }),
+    date: date("date").notNull(),
+    // Ca + Khung giờ là một dòng time_slots.
+    timeSlotId: uuid("time_slot_id")
+      .notNull()
+      .references(() => timeSlots.id),
+    role: timesheetRole("role").notNull().default("main"),
+    note: text("note"),
+    createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index("timesheet_entries_date_idx").on(t.date), index("timesheet_entries_teacher_idx").on(t.teacherId)],
+);
+
+// Phần sửa của một dòng công sinh từ buổi học: chỉ đổi Ngày / Ca – Khung giờ / Lớp trên bảng Chấm công,
+// buổi học (Thời khóa biểu, điểm danh) giữ nguyên. `part`: lead = người thực dạy, assistant = trợ giảng.
+export const timesheetOverrides = pgTable(
+  "timesheet_overrides",
+  {
+    id: id(),
+    sessionId: uuid("session_id")
+      .notNull()
+      .references(() => sessions.id, { onDelete: "cascade" }),
+    part: text("part").notNull(),
+    date: date("date").notNull(),
+    // null = giữ giờ của buổi học (buổi không gắn ca).
+    timeSlotId: uuid("time_slot_id").references(() => timeSlots.id),
+    classId: uuid("class_id")
+      .notNull()
+      .references(() => classes.id, { onDelete: "cascade" }),
+    note: text("note"),
+    updatedBy: text("updated_by").references(() => user.id, { onDelete: "set null" }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    uniqueIndex("timesheet_overrides_session_part_uq").on(t.sessionId, t.part),
+    index("timesheet_overrides_date_idx").on(t.date),
+    check("timesheet_overrides_part_chk", sql`${t.part} in ('lead', 'assistant')`),
+  ],
 );
