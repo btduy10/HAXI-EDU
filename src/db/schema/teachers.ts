@@ -9,8 +9,6 @@ export const teachers = pgTable("teachers", {
   phone: text("phone"),
   email: text("email"),
   status: teacherStatus("status").notNull().default("active"),
-  // Khóa vai trò (Cấu hình → Phân quyền): quyết định bảng quyền của tài khoản gắn với giáo viên này.
-  role: text("role").notNull().default("teacher"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });

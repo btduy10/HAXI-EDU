@@ -1,12 +1,10 @@
 import { and, asc, desc, eq, ne } from "drizzle-orm";
 import type { z } from "zod";
 import { db } from "@/db";
-import { classes, courses, holidays, rooms, teachers, timeSlots, user } from "@/db/schema";
+import { classes, courses, holidays, rooms, teachers, timeSlots } from "@/db/schema";
 import type { courseInput, holidayInput, roomInput, teacherInput, timeSlotInput } from "@/lib/validation/entities";
-import { audit } from "../audit";
 import { AppError } from "../errors";
-import { type Actor, assertCan, assertSignedIn, can, isAdmin } from "../guard";
-import { assertKnownRole } from "../settings";
+import { type Actor, assertCan, assertSignedIn, can } from "../guard";
 import { createRow, deleteRow, updateRow } from "./crud";
 
 // Danh mục dùng chung: giáo viên, khóa học, phòng, ca học, ngày nghỉ.
@@ -18,32 +16,11 @@ export async function listTeachers(actor: Actor) {
   const rows = await db.select().from(teachers).orderBy(asc(teachers.code));
   return can(actor, "teachers", "view") ? rows : rows.map((t) => ({ ...t, phone: null, email: null }));
 }
-// Cột Vai trò (Giáo viên / Giáo viên trực) quyết định quyền của tài khoản gắn kèm, nên chỉ Admin đặt được:
-// người khác thêm giáo viên thì luôn là "Giáo viên", sửa thì giữ nguyên vai trò đang có.
-export async function createTeacher(actor: Actor, data: z.output<typeof teacherInput>) {
-  if (isAdmin(actor)) await assertKnownRole(data.role);
-  return createRow(actor, teachers, "teachers", isAdmin(actor) ? data : { ...data, role: "teacher" }, "teachers");
-}
-
-export async function updateTeacher(actor: Actor, id: string, data: z.output<typeof teacherInput>) {
-  if (!isAdmin(actor)) {
-    const patch: Partial<typeof data> = { ...data };
-    delete patch.role;
-    return updateRow(actor, teachers, "teachers", id, patch, "teachers");
-  }
-  await assertKnownRole(data.role);
-  const row = await updateRow(actor, teachers, "teachers", id, data, "teachers");
-  // Tài khoản (không phải Quản trị) gắn với giáo viên này nhận vai trò mới ngay ở yêu cầu kế tiếp.
-  const synced = await db
-    .update(user)
-    .set({ role: row.role, updatedAt: new Date() })
-    .where(and(eq(user.teacherId, id), ne(user.role, "admin"), ne(user.role, row.role)))
-    .returning({ id: user.id });
-  for (const account of synced) {
-    await audit(db, { userId: actor.userId, action: "account_role_synced", tableName: "user", recordId: account.id, newValue: { role: row.role, teacherId: id } });
-  }
-  return row;
-}
+// Hồ sơ giáo viên không mang vai trò: quyền gán ở tài khoản (Admin → Tài khoản, cột Vai trò).
+export const createTeacher = (actor: Actor, data: z.output<typeof teacherInput>) =>
+  createRow(actor, teachers, "teachers", data, "teachers");
+export const updateTeacher = (actor: Actor, id: string, data: z.output<typeof teacherInput>) =>
+  updateRow(actor, teachers, "teachers", id, data, "teachers");
 export const deleteTeacher = (actor: Actor, id: string) => deleteRow(actor, teachers, "teachers", id);
 
 export async function listCourses(actor: Actor) {

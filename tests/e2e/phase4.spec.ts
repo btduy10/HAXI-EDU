@@ -265,14 +265,14 @@ test("Phân quyền: Admin mở menu Học viên cho Giáo viên trực; Giáo v
   await page.goto("/admin/settings");
   await expect(page.getByRole("heading", { name: "Phân quyền" })).toBeVisible();
   const box = (name: string) => page.getByRole("checkbox", { name, exact: true });
-  // Một bảng duy nhất: chọn vai trò ở ô "Vai trò"; danh sách giáo viên của vai trò lấy từ menu Giáo viên.
+  // Một bảng duy nhất: chọn vai trò ở ô "Vai trò"; danh sách người mang vai trò lấy từ Tài khoản.
   const roleSelect = page.getByLabel("Vai trò", { exact: true });
   await expect(roleSelect.locator("option")).toHaveText(["Giáo viên (2 tài khoản)", "Giáo viên trực (0 tài khoản)"]);
-  await expect(page.getByText(/Giáo viên mang vai trò này: .*Nguyễn Thị Lan/)).toBeVisible();
+  await expect(page.getByText(/Tài khoản mang vai trò này: .*gv\.lan .*gv\.minh \(Trần Văn Minh\)/)).toBeVisible();
   await expect(box("Giáo viên: Thêm Sao & Avatar")).toBeChecked();
   await expect(box("Giáo viên trực: Xem Điểm danh")).toHaveCount(0);
   await roleSelect.selectOption("duty_teacher");
-  await expect(page.getByText("Chưa có giáo viên nào mang vai trò này.")).toBeVisible();
+  await expect(page.getByText("Chưa có tài khoản nào mang vai trò này.")).toBeVisible();
   await expect(box("Giáo viên trực: Xem Điểm danh")).toBeChecked();
   await box("Giáo viên trực: Sửa Khóa học").check();
   await expect(box("Giáo viên trực: Xem Khóa học")).toBeChecked();
@@ -284,13 +284,20 @@ test("Phân quyền: Admin mở menu Học viên cho Giáo viên trực; Giáo v
   await page.getByRole("button", { name: "Lưu phân quyền" }).click();
   await expect(page.getByText("Đã lưu phân quyền.")).toBeVisible();
 
-  // Menu Giáo viên có cột Vai trò; đổi GV02 sang Giáo viên trực thì bảng phân quyền đếm theo.
+  // Menu Giáo viên không còn cột Vai trò: vai trò chỉ gán ở Tài khoản.
   await page.goto("/admin/teachers");
-  await expect(page.locator("ul:visible > li").first()).toContainText("Vai trò:");
+  await expect(page.locator("ul:visible > li").first()).toContainText("Mã GV:");
+  await expect(page.getByText("Vai trò", { exact: false })).toHaveCount(0);
   await page.getByRole("button", { name: "Sửa Trần Văn Minh" }).click();
+  await expect(page.locator("#f-role")).toHaveCount(0);
+  await page.getByRole("button", { name: "Hủy" }).click();
+  await expectNoHorizontalScroll(page);
+  // Đổi tài khoản gv.minh (gắn với GV02) sang Giáo viên trực ở Tài khoản thì bảng phân quyền đếm theo.
+  await page.goto("/admin/accounts");
+  await page.getByRole("listitem").filter({ hasText: "gv.minh" }).getByRole("button", { name: "Sửa", exact: true }).click();
   await page.locator("#f-role").selectOption({ label: "Giáo viên trực" });
   await page.getByRole("button", { name: "Lưu" }).click();
-  await expect(page.getByText("Đã lưu.")).toBeVisible();
+  await expect(page.getByText("Đã cập nhật tài khoản.")).toBeVisible();
   await expectNoHorizontalScroll(page);
   await page.goto("/admin/settings");
   await expect(page.getByLabel("Vai trò", { exact: true }).locator("option")).toHaveText(["Giáo viên (1 tài khoản)", "Giáo viên trực (1 tài khoản)"]);

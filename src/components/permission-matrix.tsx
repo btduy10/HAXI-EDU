@@ -38,7 +38,7 @@ export function PermissionMatrix({
   initial: PermissionConfig;
   action: ActionFn;
   /** Số tài khoản và tên giáo viên đang mang từng vai trò. */
-  members: Record<string, { accounts: number; teachers: string[] }>;
+  members: Record<string, { accounts: number; names: string[] }>;
 }) {
   const [config, setConfig] = useState(initial);
   const [role, setRole] = useState(Object.keys(initial)[0] ?? "teacher");
@@ -47,8 +47,8 @@ export function PermissionMatrix({
   const keys = Object.keys(config);
   const current = config[role] ?? config[keys[0]!]!;
   const builtin = isBuiltinRole(role);
-  const usage = members[role] ?? { accounts: 0, teachers: [] };
-  const inUse = usage.accounts > 0 || usage.teachers.length > 0;
+  const usage = members[role] ?? { accounts: 0, names: [] };
+  const inUse = usage.accounts > 0;
 
   const patchRole = (patch: Partial<PermissionConfig[string]>) => setConfig((prev) => ({ ...prev, [role]: { ...prev[role]!, ...patch } }));
 
@@ -150,14 +150,14 @@ export function PermissionMatrix({
 
         <p className="text-sm text-muted-foreground">
           {builtin ? `${ROLE_HINTS[role]} Vai trò có sẵn: không đổi tên, không xóa được.` : "Vai trò do bạn tạo: đổi tên được; chỉ xóa được khi chưa gán cho ai."}{" "}
-          {usage.teachers.length > 0 ? (
+          {usage.names.length > 0 ? (
             <>
-              Giáo viên mang vai trò này: <span className="text-foreground">{usage.teachers.join(", ")}</span>.
+              Tài khoản mang vai trò này: <span className="text-foreground">{usage.names.join(", ")}</span>.
             </>
           ) : (
-            "Chưa có giáo viên nào mang vai trò này."
+            "Chưa có tài khoản nào mang vai trò này."
           )}{" "}
-          Gán vai trò ở cột Vai trò trong menu Giáo viên, hoặc khi tạo tài khoản.
+          Gán vai trò ở cột Vai trò trong Admin → Tài khoản.
         </p>
 
         <div className="overflow-x-auto">

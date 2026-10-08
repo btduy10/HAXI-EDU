@@ -23,7 +23,7 @@ import { requirePageUser } from "@/server/session";
 
 export const metadata: Metadata = { title: "Tài khoản" };
 
-const ROLE_HINT = "Tài khoản gắn với giáo viên sẽ lấy vai trò theo cột Vai trò ở menu Giáo viên.";
+const ROLE_HINT = "Quyền của tài khoản theo vai trò này; tick quyền cho từng vai trò ở Cấu hình → Phân quyền.";
 const PASSWORD_HINT = "Mật khẩu tạm, tối thiểu 8 ký tự gồm chữ và số. Người dùng phải đổi ở lần đăng nhập đầu.";
 const one = (v: string | string[] | undefined) => ((Array.isArray(v) ? v[0] : v) ?? "").slice(0, 100);
 
@@ -55,12 +55,12 @@ export default async function AccountsPage({ searchParams }: PageProps<"/admin/a
   const teacherOptions = (keepId: string | null) =>
     teachers
       .filter((t) => t.id === keepId || !linked.has(t.id))
-      .map((t) => ({ value: t.id, label: `${t.code} – ${t.fullName} (${label(t.role)})` }));
+      .map((t) => ({ value: t.id, label: `${t.code} – ${t.fullName}` }));
   const accountFields = (keepId: string | null): Field[] => [
     { name: "username", label: "Tên đăng nhập", required: true },
     { name: "name", label: "Tên hiển thị", required: true },
-    { name: "role", label: "Vai trò", type: "select", required: true, options: roleChoices },
-    { name: "teacherId", label: "Giáo viên gắn kèm", type: "select", options: teacherOptions(keepId), hint: ROLE_HINT },
+    { name: "role", label: "Vai trò", type: "select", required: true, options: roleChoices, hint: ROLE_HINT },
+    { name: "teacherId", label: "Giáo viên gắn kèm", type: "select", options: teacherOptions(keepId) },
   ];
 
   type Account = (typeof accounts)[number];

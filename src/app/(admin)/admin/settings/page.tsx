@@ -4,7 +4,6 @@ import { PermissionMatrix } from "@/components/permission-matrix";
 import { updateCenterInfoAction } from "@/server/actions/admin";
 import { updatePermissionsAction, updateSettingsAction } from "@/server/actions/rewards";
 import { listAccounts } from "@/server/services/accounts";
-import { listTeachers } from "@/server/services/catalog";
 import { readPermissions, readSettings } from "@/server/services/reports";
 import { readCenterInfo } from "@/server/services/tuition";
 import { requirePageUser } from "@/server/session";
@@ -13,20 +12,19 @@ export const metadata: Metadata = { title: "Cấu hình" };
 
 export default async function SettingsPage() {
   const { actor } = await requirePageUser("admin");
-  const [settings, permissions, teachers, accounts, center] = await Promise.all([
+  const [settings, permissions, accounts, center] = await Promise.all([
     readSettings(actor),
     readPermissions(actor),
-    listTeachers(actor),
     listAccounts(actor),
     readCenterInfo(actor),
   ]);
-  // Ai đang mang từng vai trò: số tài khoản và tên giáo viên (cột Vai trò ở menu Giáo viên).
+  // Ai đang mang từng vai trò: các tài khoản được gán vai trò đó ở Admin → Tài khoản.
   const members = Object.fromEntries(
     Object.keys(permissions).map((role) => [
       role,
       {
         accounts: accounts.filter((a) => a.role === role).length,
-        teachers: teachers.filter((t) => t.role === role && t.status === "active").map((t) => t.fullName),
+        names: accounts.filter((a) => a.role === role).map((a) => `${a.username} (${a.name})`),
       },
     ]),
   );

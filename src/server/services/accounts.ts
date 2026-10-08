@@ -32,15 +32,10 @@ export async function listAccounts(actor: Actor) {
     .orderBy(asc(user.role), asc(user.username));
 }
 
-/**
- * Tài khoản gắn với một giáo viên lấy vai trò theo cột Vai trò của giáo viên đó (menu Giáo viên).
- * Quản trị và tài khoản không gắn giáo viên giữ vai trò đã chọn.
- */
-async function roleFor(tx: DbOrTx, chosen: string, teacherId: string | null) {
+/** Vai trò của tài khoản là vai trò Admin chọn (Quản trị hoặc một vai trò ở Cấu hình → Phân quyền), kể cả khi gắn với giáo viên. */
+async function roleFor(tx: DbOrTx, chosen: string) {
   await assertKnownRole(chosen, tx, true);
-  if (chosen === "admin" || !teacherId) return chosen;
-  const [teacher] = await tx.select({ role: teachers.role }).from(teachers).where(eq(teachers.id, teacherId)).limit(1);
-  return teacher?.role ?? chosen;
+  return chosen;
 }
 
 /** Tạo tài khoản với mật khẩu tạm; người dùng bắt buộc đổi ở lần đăng nhập đầu. */
@@ -50,7 +45,7 @@ export async function createAccount(actor: Actor, data: z.output<typeof accountI
   const id = randomUUID();
   try {
     return await db.transaction(async (tx) => {
-      const role = await roleFor(tx, data.role, data.teacherId);
+      const role = await roleFor(tx, data.role);
       await tx.insert(user).values({
         id,
         name: data.name,
@@ -92,7 +87,7 @@ export async function updateAccount(actor: Actor, data: z.output<typeof accountE
       const [before] = await tx.select().from(user).where(eq(user.id, data.id)).for("update").limit(1);
       if (!before) throw notFound("tài khoản");
       const teacherId = data.role === "admin" ? null : data.teacherId;
-      const role = await roleFor(tx, data.role, teacherId);
+      const role = await roleFor(tx, data.role);
 
       if (before.role !== data.role) {
         if (data.id === actor.userId) throw new AppError("CONFLICT", "Không thể tự đổi vai trò của chính mình.", { role: "Không tự đổi được" });

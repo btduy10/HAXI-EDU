@@ -1,7 +1,7 @@
 import { and, count, desc, eq, gte, ilike, inArray, lte } from "drizzle-orm";
 import type { z } from "zod";
 import { db } from "@/db";
-import { appSettings, auditLogs, teachers, user } from "@/db/schema";
+import { appSettings, auditLogs, user } from "@/db/schema";
 import { WEEKDAY_LABELS, isoWeekday } from "@/lib/dates";
 import { formatDate, formatDateTime, formatTime } from "@/lib/format";
 import type { settingsInput } from "@/lib/validation/rewards";
@@ -260,7 +260,7 @@ export async function readPermissions(actor: Actor) {
 
 /**
  * Admin lưu danh sách vai trò và bảng phân quyền (gồm cả vai trò mới tạo, đổi tên, xóa).
- * Có hiệu lực ngay ở yêu cầu kế tiếp của mọi người dùng. Không xóa được vai trò đang gán cho tài khoản hoặc giáo viên.
+ * Có hiệu lực ngay ở yêu cầu kế tiếp của mọi người dùng. Không xóa được vai trò đang gán cho tài khoản.
  */
 export async function updatePermissions(actor: Actor, data: PermissionConfig) {
   assertAdmin(actor);
@@ -274,10 +274,9 @@ export async function updatePermissions(actor: Actor, data: PermissionConfig) {
     const removed = Object.keys(before).filter((key) => !Object.hasOwn(value, key));
     if (removed.length > 0) {
       const [usedByAccount] = await tx.select({ role: user.role }).from(user).where(inArray(user.role, removed)).limit(1);
-      const [usedByTeacher] = await tx.select({ role: teachers.role }).from(teachers).where(inArray(teachers.role, removed)).limit(1);
-      const used = usedByAccount?.role ?? usedByTeacher?.role;
+      const used = usedByAccount?.role;
       if (used) {
-        throw new AppError("CONFLICT", `Vai trò "${before[used]!.label}" đang được gán cho tài khoản hoặc giáo viên nên không xóa được. Hãy đổi vai trò của họ trước.`);
+        throw new AppError("CONFLICT", `Vai trò "${before[used]!.label}" đang được gán cho tài khoản nên không xóa được. Hãy đổi vai trò của tài khoản đó trước.`);
       }
     }
     await tx

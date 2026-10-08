@@ -72,13 +72,14 @@ describe("bảng phân quyền", () => {
     expect(log).toMatchObject({ userId: f.admin.userId, tableName: "app_settings" });
   });
 
-  it("Admin tạo vai trò mới, gán cho giáo viên và tài khoản; không xóa được vai trò đang dùng; tên không trùng", async () => {
+  it("Admin tạo vai trò mới, gán cho tài khoản; không xóa được vai trò đang dùng; tên không trùng", async () => {
     const custom = { label: "Trợ giảng", scope: "own" as const, menus: { ...DEFAULT_PERMISSIONS.teacher.menus, students: VIEW } };
     await reports.updatePermissions(f.admin, { ...DEFAULT_PERMISSIONS, role_tro_giang: custom });
     expect((await getPermissionConfig()).role_tro_giang).toMatchObject({ label: "Trợ giảng", scope: "own" });
 
-    // Gán vai trò mới cho giáo viên B → tài khoản gắn kèm đổi theo; tài khoản không gắn giáo viên chọn thẳng vai trò.
-    await catalog.updateTeacher(f.admin, f.teacherB.id, { code: "GVB", fullName: "Giáo viên B", phone: null, email: null, status: "active", role: "role_tro_giang" });
+    // Gán vai trò mới ở Tài khoản: cả tài khoản gắn giáo viên (GV B) lẫn tài khoản không gắn giáo viên.
+    const accountB = { id: f.actorB.userId, username: "gv.b", name: "Giáo viên B", teacherId: f.teacherB.id };
+    await accounts.updateAccount(f.admin, { ...accountB, role: "role_tro_giang" });
     const [b] = await db.select().from(userTable).where(eq(userTable.id, f.actorB.userId));
     expect(b!.role).toBe("role_tro_giang");
     const { id } = await accounts.createAccount(f.admin, { username: "tro.giang", name: "Trợ giảng", role: "role_tro_giang", teacherId: null, password: "MatKhauTam123" });
@@ -86,18 +87,17 @@ describe("bảng phân quyền", () => {
     await expect(
       accounts.createAccount(f.admin, { username: "la.lung", name: "x", role: "role_khong_co", teacherId: null, password: "MatKhauTam123" }),
     ).rejects.toMatchObject({ code: "VALIDATION" });
-    await expect(
-      catalog.updateTeacher(f.admin, f.teacherA.id, { code: "GVA", fullName: "A", phone: null, email: null, status: "active", role: "admin" }),
-    ).rejects.toMatchObject({ code: "VALIDATION" });
+    await expect(accounts.updateAccount(f.admin, { ...accountB, role: "role_khong_co" })).rejects.toMatchObject({ code: "VALIDATION" });
 
     // Đang có người mang vai trò: không xóa được. Tên trùng (kể cả trùng "Quản trị"): bị từ chối.
     await expect(reports.updatePermissions(f.admin, DEFAULT_PERMISSIONS)).rejects.toMatchObject({ code: "CONFLICT" });
     await expect(reports.updatePermissions(f.admin, { ...DEFAULT_PERMISSIONS, role_tro_giang: { ...custom, label: "giáo viên" } })).rejects.toMatchObject({ code: "VALIDATION" });
     await expect(reports.updatePermissions(f.admin, { ...DEFAULT_PERMISSIONS, role_tro_giang: { ...custom, label: "Quản trị" } })).rejects.toMatchObject({ code: "VALIDATION" });
 
-    // Gỡ vai trò khỏi mọi người rồi mới xóa được.
-    await catalog.updateTeacher(f.admin, f.teacherB.id, { code: "GVB", fullName: "Giáo viên B", phone: null, email: null, status: "active", role: "teacher" });
+    // Gỡ vai trò khỏi mọi tài khoản rồi mới xóa được (còn một tài khoản mang vai trò thì vẫn bị chặn).
     await accounts.deleteAccount(f.admin, id);
+    await expect(reports.updatePermissions(f.admin, DEFAULT_PERMISSIONS)).rejects.toMatchObject({ code: "CONFLICT" });
+    await accounts.updateAccount(f.admin, { ...accountB, role: "teacher" });
     await reports.updatePermissions(f.admin, DEFAULT_PERMISSIONS);
     expect(Object.keys(await getPermissionConfig())).toEqual(["teacher", "duty_teacher"]);
   });
@@ -135,34 +135,37 @@ describe("bảng phân quyền", () => {
   });
 });
 
-describe("vai trò lấy từ cột Vai trò của giáo viên", () => {
-  const teacherB = (role: string) => ({ code: "GVB", fullName: "Giáo viên B", phone: null, email: null, status: "active" as const, role });
+describe("vai trò chỉ gán ở Tài khoản", () => {
+  const teacherB = { code: "GVB", fullName: "Giáo viên B", phone: null, email: null, status: "active" as const };
   const roleOf = async (userId: string) => (await db.select({ role: userTable.role }).from(userTable).where(eq(userTable.id, userId)))[0]!.role;
 
-  it("Admin đổi vai trò giáo viên thì tài khoản gắn kèm đổi theo; tài khoản mới cũng lấy theo giáo viên", async () => {
-    await catalog.updateTeacher(f.admin, f.teacherB.id, teacherB("duty_teacher"));
+  it("tài khoản gắn giáo viên giữ đúng vai trò Admin chọn khi tạo và khi sửa; sửa hồ sơ giáo viên không đổi vai trò", async () => {
+    await accounts.updateAccount(f.admin, { id: f.actorB.userId, username: "gv.b", name: "Giáo viên B", role: "duty_teacher", teacherId: f.teacherB.id });
     expect(await roleOf(f.actorB.userId)).toBe("duty_teacher");
     expect(await roleOf(f.actorA.userId)).toBe("teacher");
     expect(await roleOf(f.admin.userId)).toBe("admin");
-    const [log] = await db.select().from(auditLogs).where(eq(auditLogs.action, "account_role_synced"));
-    expect(log).toMatchObject({ recordId: f.actorB.userId, newValue: { role: "duty_teacher" } });
 
-    // Tạo lại tài khoản cho giáo viên B với lựa chọn "Giáo viên": vẫn nhận vai trò của giáo viên.
+    await catalog.updateTeacher(f.admin, f.teacherB.id, { ...teacherB, fullName: "Tên mới" });
+    expect(await roleOf(f.actorB.userId)).toBe("duty_teacher");
+    expect(await db.select().from(auditLogs).where(eq(auditLogs.action, "account_role_synced"))).toHaveLength(0);
+
+    // Tạo lại tài khoản cho giáo viên B: nhận đúng vai trò được chọn.
     await accounts.deleteAccount(f.admin, f.actorB.userId);
-    const { id } = await accounts.createAccount(f.admin, { username: "gv.b2", name: "B", role: "teacher", teacherId: f.teacherB.id, password: "MatKhauTam123" });
+    const { id } = await accounts.createAccount(f.admin, { username: "gv.b2", name: "B", role: "duty_teacher", teacherId: f.teacherB.id, password: "MatKhauTam123" });
     expect(await roleOf(id)).toBe("duty_teacher");
-    await catalog.updateTeacher(f.admin, f.teacherB.id, teacherB("teacher"));
-    expect(await roleOf(id)).toBe("teacher");
   });
 
-  it("người không phải Admin, dù được tick Sửa Giáo viên, không đổi được vai trò (không tự nâng quyền)", async () => {
+  it("người được tick Sửa Giáo viên sửa hồ sơ giáo viên nhưng không đụng được tới vai trò của tài khoản (không tự nâng quyền)", async () => {
     const editor = withPerms(f.actorB, "own", { teachers: FULL });
-    await catalog.updateTeacher(editor, f.teacherB.id, { ...teacherB("duty_teacher"), fullName: "Tên mới" });
+    await catalog.updateTeacher(editor, f.teacherB.id, { ...teacherB, fullName: "Tên mới" });
     const [stored] = await db.select().from(teachersTable).where(eq(teachersTable.id, f.teacherB.id));
-    expect(stored).toMatchObject({ fullName: "Tên mới", role: "teacher" });
+    expect(stored).toMatchObject({ fullName: "Tên mới" });
+    expect(stored).not.toHaveProperty("role");
     expect(await roleOf(f.actorB.userId)).toBe("teacher");
-    const created = await catalog.createTeacher(editor, { ...teacherB("duty_teacher"), code: "GVC" });
-    expect(created.role).toBe("teacher");
+    await expect(
+      accounts.updateAccount(editor, { id: f.actorB.userId, username: "gv.b", name: "Giáo viên B", role: "duty_teacher", teacherId: f.teacherB.id }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(await roleOf(f.actorB.userId)).toBe("teacher");
   });
 });
 

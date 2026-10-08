@@ -120,6 +120,13 @@
       "when": 1791443309848,
       "tag": "0016_timesheet_entries",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1791499861544,
+      "tag": "0017_drop_teacher_role",
+      "breakpoints": true
     }
   ]
 }

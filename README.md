@@ -84,7 +84,7 @@ Nguyên tắc: mọi hàm trong `server/services` nhận `actor` lấy từ phi�
 
 - Đăng nhập bằng tên đăng nhập, băm Argon2id, buộc đổi mật khẩu lần đầu, khóa tạm sau 5 lần sai (15 phút), giới hạn tốc độ.
 - 2FA (TOTP) bắt buộc với Admin, có mã dự phòng. Chỉ khi chạy thử mới tắt bằng biến môi trường `ADMIN_2FA_REQUIRED=false`.
-- Vai trò: **Quản trị** (toàn quyền), hai vai trò có sẵn **Giáo viên**, **Giáo viên trực**, và các vai trò Admin tự tạo (vd. Lễ tân) ở **Cấu hình → Phân quyền**. Vai trò gán ở cột Vai trò của menu Giáo viên (tài khoản gắn kèm lấy theo) hoặc khi tạo tài khoản. Vai trò đang có người dùng thì không xóa được; vai trò đã xóa hoặc lạ không có quyền gì. Quyền của mỗi vai trò do Admin tick:
+- Vai trò: **Quản trị** (toàn quyền), hai vai trò có sẵn **Giáo viên**, **Giáo viên trực**, và các vai trò Admin tự tạo (vd. Lễ tân) ở **Cấu hình → Phân quyền**. Vai trò gán cho từng tài khoản ở **Admin → Tài khoản** (cột Vai trò), kể cả tài khoản gắn với giáo viên; menu Giáo viên không có cột Vai trò. Vai trò đang gán cho tài khoản thì không xóa được; vai trò đã xóa hoặc lạ không có quyền gì. Quyền của mỗi vai trò do Admin tick:
   - **Phạm vi lớp**: "Chỉ lớp của mình" (lớp được phân công; GV dạy thay có quyền trên đúng buổi mình dạy thay) hoặc "Tất cả lớp".
   - **Xem / Thêm / Sửa** theo từng menu. Tick Xem thì menu hiện trên thanh menu của vai trò đó và mở cùng trang Admin dùng, giới hạn trong phạm vi lớp.
   - Mặc định: Giáo viên điểm danh và chấm sao lớp mình; Giáo viên trực thấy mọi lớp và hỗ trợ điểm danh.

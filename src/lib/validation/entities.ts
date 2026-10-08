@@ -30,8 +30,6 @@ export const teacherInput = z.object({
   phone: optPhone,
   email: optEmail,
   status: z.enum(["active", "inactive"]).default("active"),
-  // Khóa của một vai trò trong Cấu hình → Phân quyền; service kiểm tra vai trò có tồn tại.
-  role: z.string().regex(ROLE_KEY, "Vai trò không hợp lệ").default("teacher"),
 });
 
 export const studentInput = z.object({
