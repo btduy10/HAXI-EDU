@@ -27,28 +27,29 @@ test.beforeAll(async () => {
   await db.end();
 });
 
-test("Phân công GV chính + trợ giảng kèm lương, lịch mẫu tự sinh buổi; trợ giảng điểm danh; Admin xóa buổi đã điểm danh", async ({ page, browser }) => {
+test("Phân công GV chính + trợ giảng, lịch mẫu tự sinh buổi; trợ giảng điểm danh; Admin xóa buổi đã điểm danh", async ({ page, browser }) => {
   await login(page, "admin", NEW_PASSWORD);
   await page.getByLabel("Mã xác thực").fill(totp(loadAdminSecret()));
   await page.getByRole("button", { name: "Xác nhận" }).click();
   await expect(page).toHaveURL(/\/admin\/dashboard$/);
 
-  // Phân công: GV02 dạy chính 300.000đ/buổi, GV01 (gv.lan) trợ giảng 150.000đ/buổi.
+  // Phân công: GV02 dạy chính, GV01 (gv.lan) trợ giảng. Lương không còn đặt ở Lớp học (đặt ở Chấm công → Mức lương).
   await page.goto(`/admin/classes/${classId}`);
   const section = (heading: RegExp) => page.locator("section").filter({ has: page.getByRole("heading", { name: heading }) });
-  for (const [teacher, role, rate] of [
-    ["GV02 – Trần Văn Minh", "GV chính", "300000"],
-    ["GV01 – Nguyễn Thị Lan", "Trợ giảng", "150000"],
+  for (const [teacher, role] of [
+    ["GV02 – Trần Văn Minh", "GV chính"],
+    ["GV01 – Nguyễn Thị Lan", "Trợ giảng"],
   ] as const) {
     await section(/Giáo viên phụ trách/).getByRole("button", { name: "Phân công" }).click();
     await page.locator("#f-teacherId").selectOption({ label: teacher });
     await page.locator("#f-role").selectOption({ label: role });
-    await page.locator("#f-ratePerSession").fill(rate);
+    await expect(page.locator("#f-ratePerSession")).toHaveCount(0);
     await page.getByRole("button", { name: "Lưu" }).click();
     await expect(page.getByText("Đã lưu.")).toBeVisible();
     await expect(page.getByText("Đã lưu.")).toHaveCount(0);
   }
-  await expect(section(/Giáo viên phụ trách/).getByText("300.000 đ").first()).toBeVisible();
+  await expect(section(/Giáo viên phụ trách/).getByText("Trần Văn Minh").first()).toBeVisible();
+  await expect(section(/Giáo viên phụ trách/).getByText(/Lương/)).toHaveCount(0);
 
   // Lịch mẫu thứ hôm nay, có trợ giảng → buổi tự có trên Thời khóa biểu, không cần bấm Sinh buổi.
   await section(/Lịch mẫu hằng tuần/).getByRole("button", { name: "Thêm" }).click();
@@ -273,7 +274,7 @@ test("Syllabus: Admin thêm bài và tải tệp mẫu; GV điểm danh chọn t
   await expect(page.getByText("Lớp học tốt E2E")).toBeVisible();
 });
 
-test("Chấm công: không còn lương/thành tiền; chấm công bổ sung, sửa dòng công (buổi học giữ nguyên), Admin xóa công bổ sung", async ({ page }) => {
+test("Chấm công: đặt mức lương giáo viên theo lớp, thành tiền; chấm công bổ sung, sửa dòng công (buổi học giữ nguyên), Admin xóa công bổ sung", async ({ page }) => {
   const vn = (iso: string) => iso.split("-").reverse().join("/");
   // Một buổi đã dạy của GV01 ở lớp RB-TG01, giờ riêng để dễ tìm dòng.
   const db = sql();
@@ -293,7 +294,32 @@ test("Chấm công: không còn lương/thành tiền; chấm công bổ sung, s
   await page.goto(`/admin/timesheet?classId=${classId}`);
   await expect(page.getByRole("heading", { name: "Chấm công giáo viên" })).toBeVisible();
   await expect(page.getByRole("columnheader", { name: "Số công" })).toBeVisible();
-  await expect(page.getByText(/Thành tiền|Lương\/buổi/)).toHaveCount(0);
+  const lanSummary = page.getByRole("row").filter({ has: page.getByRole("link", { name: /Xuất Excel của/ }) }).filter({ hasText: "GV01" });
+  await expect(lanSummary).toContainText("công chưa có mức lương");
+
+  // Mức lương giáo viên/Nhân viên: đặt 250.000đ/buổi cho GV01 ở lớp RB-TG01; trùng Giáo viên + Lớp bị chặn.
+  await page.getByRole("link", { name: "Mức lương giáo viên/Nhân viên" }).click();
+  await expect(page).toHaveURL(/\/admin\/timesheet\/rates$/);
+  const addRate = async (amount: string) => {
+    await page.getByRole("button", { name: "Thêm", exact: true }).click();
+    await page.locator("#f-teacherId").selectOption({ label: "GV01 – Nguyễn Thị Lan" });
+    await page.locator("#f-classId").selectOption({ label: "RB-TG01 – Lớp có trợ giảng" });
+    await page.locator("#f-rate").fill(amount);
+    await page.getByRole("button", { name: "Lưu" }).click();
+  };
+  await addRate("250000");
+  await expect(page.getByText("Đã lưu.")).toBeVisible();
+  await expect(page.getByText("250.000 đ/buổi").first()).toBeVisible();
+  await expect(page.getByText("Đã lưu.")).toHaveCount(0);
+  await addRate("1");
+  await expect(page.getByText("Giáo viên này đã có mức lương ở lớp đó.").first()).toBeVisible();
+  await page.getByRole("button", { name: "Hủy" }).click();
+  await expectNoHorizontalScroll(page);
+  await page.getByRole("link", { name: "← Chấm công" }).click();
+  await page.goto(`/admin/timesheet?classId=${classId}`);
+  await expect(page.getByRole("columnheader", { name: "Thành tiền" }).first()).toBeVisible();
+  await expect(lanSummary).toContainText("250.000 đ");
+  await expect(lanSummary).not.toContainText("công chưa có mức lương");
 
   // Chấm công bổ sung: dòng công ghi tay, lớp đang lọc được điền sẵn.
   await page.getByRole("button", { name: "Chấm công bổ sung" }).click();

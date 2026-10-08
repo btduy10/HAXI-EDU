@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { WEEKDAY_LABELS, addMonths, endOfMonth, isoWeekday, parseIsoDate, startOfMonth } from "@/lib/dates";
 import { orderSlotFrames } from "@/domain/time-slots";
-import { formatDate, formatTime, todayIso } from "@/lib/format";
+import { formatDate, formatMoney, formatTime, todayIso } from "@/lib/format";
 import { SLOT_NAME_LABELS, TIMESHEET_ROLES } from "@/lib/validation/entities";
 import {
   adjustSessionTimesheetAction,
@@ -54,9 +54,12 @@ export default async function TimesheetPage({ searchParams }: PageProps<"/admin/
       assistant: sum.assistant + s.assistant,
       minutes: sum.minutes + s.minutes,
       pending: sum.pending + s.pending,
+      amount: sum.amount + s.amount,
     }),
-    { taught: 0, substitute: 0, assistant: 0, minutes: 0, pending: 0 },
+    { taught: 0, substitute: 0, assistant: 0, minutes: 0, pending: 0, amount: 0 },
   );
+  // Mức lương là thông tin của mọi người: chỉ người thấy công của tất cả mới vào trang đặt mức lương.
+  const canSeeRates = seesAllClasses(actor);
 
   // Form chấm công bổ sung và sửa chấm công. Phạm vi "lớp của mình" chỉ thao tác trên công của chính mình.
   const slotOptions = orderSlotFrames(slots).map((s) => ({
@@ -126,20 +129,27 @@ export default async function TimesheetPage({ searchParams }: PageProps<"/admin/
         <p className="text-sm text-muted-foreground">
           Mỗi buổi đã điểm danh là một công cho người thực dạy (giáo viên dạy thay nếu có) và một công trợ giảng cho trợ giảng
           của buổi. Buổi đã hủy không tính. Chấm công bổ sung là dòng công ghi tay, không tạo buổi học. Sửa dòng công chỉ đổi
-          trên bảng công, Thời khóa biểu và điểm danh giữ nguyên.
+          trên bảng công, Thời khóa biểu và điểm danh giữ nguyên. Thành tiền = số công đã dạy × mức lương của giáo viên ở lớp đó.
         </p>
       </div>
-      {can("add") && (
-        <div>
-          <FormDialogButton
-            label="Chấm công bổ sung"
-            title="Chấm công bổ sung"
-            description="Ghi thêm một công cho giáo viên. Không tạo buổi học trên Thời khóa biểu."
-            fields={entryFields}
-            initial={{ date: today, teacherId: teacher?.id ?? "", classId: cls?.id ?? "" }}
-            action={createTimesheetEntryAction}
-            successMessage="Đã chấm công bổ sung."
-          />
+      {(canSeeRates || can("add")) && (
+        <div className="flex flex-wrap gap-2">
+          {canSeeRates && (
+            <LinkButton variant="outline" className="h-10" href="/admin/timesheet/rates">
+              Mức lương giáo viên/Nhân viên
+            </LinkButton>
+          )}
+          {can("add") && (
+            <FormDialogButton
+              label="Chấm công bổ sung"
+              title="Chấm công bổ sung"
+              description="Ghi thêm một công cho giáo viên. Không tạo buổi học trên Thời khóa biểu."
+              fields={entryFields}
+              initial={{ date: today, teacherId: teacher?.id ?? "", classId: cls?.id ?? "" }}
+              action={createTimesheetEntryAction}
+              successMessage="Đã chấm công bổ sung."
+            />
+          )}
         </div>
       )}
 
@@ -221,6 +231,8 @@ export default async function TimesheetPage({ searchParams }: PageProps<"/admin/
                   <TableHead className="text-center">Công trợ giảng</TableHead>
                   <TableHead className="text-center">Số giờ</TableHead>
                   <TableHead className="text-center">Chưa điểm danh</TableHead>
+                  <TableHead className="text-right">Mức lương</TableHead>
+                  <TableHead className="text-right">Thành tiền</TableHead>
                   <TableHead>Xuất file riêng</TableHead>
                 </TableRow>
               </TableHeader>
@@ -235,6 +247,15 @@ export default async function TimesheetPage({ searchParams }: PageProps<"/admin/
                     <TableCell className="text-center tabular-nums">{s.assistant}</TableCell>
                     <TableCell className="text-center tabular-nums">{hours(s.minutes)}</TableCell>
                     <TableCell className="text-center tabular-nums">{s.pending}</TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {s.rates.length === 0 ? "—" : s.rates.map((r) => formatMoney(r)).join(" / ")}
+                    </TableCell>
+                    <TableCell className="text-right font-semibold tabular-nums">
+                      {formatMoney(s.amount)}
+                      {s.missingRate > 0 && (
+                        <span className="block text-xs font-normal text-destructive">{s.missingRate} công chưa có mức lương</span>
+                      )}
+                    </TableCell>
                     <TableCell>
                       <a href={exportHref(s.teacherId)} download className={exportClass} aria-label={`Xuất Excel của ${s.teacherName}`}>
                         Excel
@@ -252,6 +273,8 @@ export default async function TimesheetPage({ searchParams }: PageProps<"/admin/
                     <TableCell className="text-center tabular-nums">{total.assistant}</TableCell>
                     <TableCell className="text-center tabular-nums">{hours(total.minutes)}</TableCell>
                     <TableCell className="text-center tabular-nums">{total.pending}</TableCell>
+                    <TableCell />
+                    <TableCell className="text-right tabular-nums">{formatMoney(total.amount)}</TableCell>
                     <TableCell />
                   </TableRow>
                 )}
@@ -281,6 +304,8 @@ export default async function TimesheetPage({ searchParams }: PageProps<"/admin/
                   <TableHead>Khóa học</TableHead>
                   <TableHead>Phòng</TableHead>
                   <TableHead>Trạng thái</TableHead>
+                  <TableHead className="text-right">Mức lương</TableHead>
+                  <TableHead className="text-right">Thành tiền</TableHead>
                   <TableHead>Ghi chú</TableHead>
                   {showActions && <TableHead>Thao tác</TableHead>}
                 </TableRow>
@@ -322,6 +347,8 @@ export default async function TimesheetPage({ searchParams }: PageProps<"/admin/
                         {STATE_LABEL[r.state]}
                       </Badge>
                     </TableCell>
+                    <TableCell className="text-right tabular-nums">{r.rate === null ? "—" : formatMoney(r.rate)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{r.amount === null ? "—" : formatMoney(r.amount)}</TableCell>
                     <TableCell className="max-w-56 whitespace-normal">{r.note ?? ""}</TableCell>
                     {showActions && (
                       <TableCell>

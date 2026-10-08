@@ -28,7 +28,7 @@ beforeEach(async () => {
     .returning()) as [typeof timeSlots.$inferSelect, typeof timeSlots.$inferSelect];
   [teacherC] = (await db.insert(teachers).values({ code: "GVC", fullName: "Trợ giảng C" }).returning()) as [typeof teachers.$inferSelect];
   [lab2] = (await db.insert(rooms).values({ name: "Lab 2", capacity: 10 }).returning()) as [typeof rooms.$inferSelect];
-  await db.insert(classTeachers).values({ classId: f.classA.id, teacherId: teacherC.id, role: "assistant", ratePerSession: 150_000 });
+  await db.insert(classTeachers).values({ classId: f.classA.id, teacherId: teacherC.id, role: "assistant" });
   actorC = { userId: f.admin.userId, role: "teacher", teacherId: teacherC.id };
 });
 
@@ -135,19 +135,18 @@ describe("trợ giảng và phân công", () => {
     expect(mine.map((s) => [s.date, s.classCode, s.assistantName])).toEqual([["2026-02-03", "B", "Trợ giảng C"]]);
   });
 
-  it("sửa vai trò và lương/buổi của phân công; GV không có quyền Chấm công không thấy lương", async () => {
+  it("sửa vai trò của phân công; phân công không còn mang lương (đặt ở Chấm công → Mức lương)", async () => {
     const [row] = await db
       .select()
       .from(classTeachers)
       .where(and(eq(classTeachers.classId, f.classA.id), eq(classTeachers.teacherId, f.teacherA.id)));
-    await classSvc.updateClassTeacher(f.admin, { id: row!.id, role: "main", ratePerSession: 300_000 });
+    await classSvc.updateClassTeacher(f.admin, { id: row!.id, role: "assistant" });
     const asAdmin = await classSvc.listClassTeachers(f.admin, f.classA.id);
-    expect(asAdmin.map((t) => [t.code, t.role, t.ratePerSession])).toEqual([
-      ["GVA", "main", 300_000],
-      ["GVC", "assistant", 150_000],
+    expect(asAdmin.map((t) => [t.code, t.role])).toEqual([
+      ["GVA", "assistant"],
+      ["GVC", "assistant"],
     ]);
-    const asTeacher = await classSvc.listClassTeachers(f.actorA, f.classA.id);
-    expect(asTeacher.map((t) => t.ratePerSession)).toEqual([null, null]);
-    await expect(classSvc.updateClassTeacher(f.actorA, { id: row!.id, role: "assistant", ratePerSession: 1 })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(Object.keys(asAdmin[0]!)).not.toContain("ratePerSession");
+    await expect(classSvc.updateClassTeacher(f.actorA, { id: row!.id, role: "main" })).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 });

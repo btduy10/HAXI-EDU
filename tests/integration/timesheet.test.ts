@@ -1,9 +1,10 @@
 import { and, eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/db";
-import { auditLogs, sessions, timeSlots, timesheetEntries, timesheetOverrides } from "@/db/schema";
+import { auditLogs, sessions, teacherRates, timeSlots, timesheetEntries, timesheetOverrides } from "@/db/schema";
 import { DEFAULT_PERMISSIONS, type MenuPermission, type RolePermissions } from "@/lib/permissions";
 import type { Actor } from "@/server/guard";
+import * as rateSvc from "@/server/services/teacher-rates";
 import * as svc from "@/server/services/timesheet";
 import { teacherTimesheet, timesheetDoc } from "@/server/services/timesheet";
 import { type Fixture, resetDb, seedFixture } from "./helpers";
@@ -57,19 +58,18 @@ const entry = (over: Partial<Parameters<typeof svc.createTimesheetEntry>[1]> = {
 });
 
 describe("chấm công giáo viên", () => {
-  it("tính công cho người thực dạy theo khoảng ngày; bỏ buổi hủy; tách buổi chưa điểm danh và chưa tới ngày; không tính tiền", async () => {
+  it("tính công cho người thực dạy theo khoảng ngày; bỏ buổi hủy; tách buổi chưa điểm danh và chưa tới ngày", async () => {
     const { rows, summary } = await teacherTimesheet(f.admin, january, now);
     expect(rows).toHaveLength(5);
     expect(summary).toEqual([
-      { teacherId: f.teacherA.id, teacherCode: "GVA", teacherName: "Giáo viên A", taught: 1, substitute: 0, assistant: 0, minutes: 90, pending: 1, upcoming: 1 },
-      { teacherId: f.teacherB.id, teacherCode: "GVB", teacherName: "Giáo viên B", taught: 2, substitute: 1, assistant: 0, minutes: 150, pending: 0, upcoming: 0 },
+      { teacherId: f.teacherA.id, teacherCode: "GVA", teacherName: "Giáo viên A", taught: 1, substitute: 0, assistant: 0, minutes: 90, pending: 1, upcoming: 1, rates: [], amount: 0, missingRate: 1 },
+      { teacherId: f.teacherB.id, teacherCode: "GVB", teacherName: "Giáo viên B", taught: 2, substitute: 1, assistant: 0, minutes: 150, pending: 0, upcoming: 0, rates: [], amount: 0, missingRate: 2 },
     ]);
     expect(rows.filter((r) => r.teacherId === f.teacherA.id).map((r) => [r.date, r.state, r.slotLabel])).toEqual([
       ["2026-01-06", "taught", "Sáng – Khung 1"],
       ["2026-01-20", "pending", "Sáng – Khung 1"],
       ["2026-01-27", "upcoming", "Sáng – Khung 1"],
     ]);
-    expect(Object.keys(rows[0]!)).not.toContain("rate");
   });
 
   it("lọc theo giáo viên và theo lớp (tính theo khóa)", async () => {
@@ -98,6 +98,74 @@ describe("chấm công giáo viên", () => {
 
   it("chỉ Admin xem được", async () => {
     await expect(teacherTimesheet(f.actorA, january, now)).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+});
+
+describe("mức lương giáo viên/nhân viên và thành tiền", () => {
+  const rate = (teacherId: string, classId: string, amount: number) => ({ teacherId, classId, rate: amount });
+
+  it("thành tiền = số công đã dạy × mức lương của đúng Giáo viên + Lớp; công chưa có mức lương được đếm riêng", async () => {
+    // GV A ở lớp A 300.000đ/buổi; GV B ở lớp A 150.000đ/buổi (B dạy thay và trợ giảng ở lớp A), B ở lớp B chưa đặt.
+    await rateSvc.createTeacherRate(f.admin, rate(f.teacherA.id, f.classA.id, 300_000));
+    await rateSvc.createTeacherRate(f.admin, rate(f.teacherB.id, f.classA.id, 150_000));
+    await db.update(sessions).set({ assistantTeacherId: f.teacherB.id }).where(and(eq(sessions.classId, f.classA.id), eq(sessions.date, "2026-01-06")));
+
+    let sheet = await teacherTimesheet(f.admin, january, now);
+    // A: 1 công đã dạy (buổi 20/01 chưa điểm danh và 27/01 chưa tới ngày không tính tiền).
+    expect(sheet.summary.find((s) => s.teacherId === f.teacherA.id)).toMatchObject({ taught: 1, rates: [300_000], amount: 300_000, missingRate: 0 });
+    // B: dạy thay lớp A (150.000) + trợ giảng lớp A (150.000) + dạy chính lớp B (chưa có mức lương).
+    expect(sheet.summary.find((s) => s.teacherId === f.teacherB.id)).toMatchObject({ taught: 2, assistant: 1, rates: [150_000], amount: 300_000, missingRate: 1 });
+    expect(sheet.rows.filter((r) => r.teacherId === f.teacherA.id).map((r) => [r.date, r.rate, r.amount])).toEqual([
+      ["2026-01-06", 300_000, 300_000],
+      ["2026-01-20", 300_000, null],
+      ["2026-01-27", 300_000, null],
+    ]);
+
+    // Công bổ sung của A ở lớp B (đặt 200.000) và dòng công sửa sang lớp B đều lấy mức lương của lớp B.
+    const rateB = await rateSvc.createTeacherRate(f.admin, rate(f.teacherA.id, f.classB.id, 200_000));
+    await svc.createTimesheetEntry(f.admin, entry());
+    const session = await sessionOn("2026-01-06");
+    await svc.adjustSessionTimesheet(f.admin, { sessionId: session.id, part: "lead", date: session.date, timeSlotId: session.timeSlotId, classId: f.classB.id, note: null });
+    sheet = await teacherTimesheet(f.admin, january, now);
+    expect(sheet.summary.find((s) => s.teacherId === f.teacherA.id)).toMatchObject({ taught: 2, rates: [200_000], amount: 400_000, missingRate: 0 });
+
+    // Sửa mức lương thì thành tiền đổi theo; xóa mức lương thì công thành "chưa có mức lương".
+    await rateSvc.updateTeacherRate(f.admin, rateB.id, rate(f.teacherA.id, f.classB.id, 250_000));
+    expect((await teacherTimesheet(f.admin, january, now)).summary.find((s) => s.teacherId === f.teacherA.id)).toMatchObject({ amount: 500_000 });
+    await rateSvc.deleteTeacherRate(f.admin, rateB.id);
+    expect((await teacherTimesheet(f.admin, january, now)).summary.find((s) => s.teacherId === f.teacherA.id)).toMatchObject({ amount: 0, missingRate: 2, rates: [] });
+  });
+
+  it("đặt mức lương: cần quyền Sửa và phạm vi tất cả lớp; xóa chỉ Admin; một giáo viên một mức lương mỗi lớp", async () => {
+    const input = rate(f.teacherA.id, f.classA.id, 300_000);
+    await expect(rateSvc.createTeacherRate(f.actorA, input)).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(rateSvc.createTeacherRate(withTimesheet(f.actorA, "all", VIEW), input)).rejects.toMatchObject({ code: "FORBIDDEN" });
+    // Phạm vi "lớp của mình": không tự đặt lương cho mình, cũng không xem danh sách mức lương.
+    const own = withTimesheet(f.actorA, "own", FULL);
+    await expect(rateSvc.createTeacherRate(own, input)).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(rateSvc.listTeacherRates(own)).rejects.toMatchObject({ code: "FORBIDDEN" });
+
+    const editor = withTimesheet(f.actorB, "all", FULL);
+    const created = await rateSvc.createTeacherRate(editor, input);
+    const duplicate = { code: "VALIDATION", fieldErrors: { classId: "Giáo viên này đã có mức lương ở lớp đó." } };
+    await expect(rateSvc.createTeacherRate(editor, { ...input, rate: 1 })).rejects.toMatchObject(duplicate);
+    const other = await rateSvc.createTeacherRate(editor, rate(f.teacherA.id, f.classB.id, 100_000));
+    await expect(rateSvc.updateTeacherRate(editor, other.id, input)).rejects.toMatchObject(duplicate);
+    await rateSvc.updateTeacherRate(editor, created.id, { ...input, rate: 350_000 });
+    await expect(rateSvc.updateTeacherRate(own, created.id, { ...input, rate: 9_000_000 })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(rateSvc.deleteTeacherRate(editor, other.id)).rejects.toMatchObject({ code: "FORBIDDEN" });
+
+    expect((await rateSvc.listTeacherRates(withTimesheet(f.actorB, "all", VIEW))).map((r) => [r.teacherCode, r.classCode, r.rate])).toEqual([
+      ["GVA", "A", 350_000],
+      ["GVA", "B", 100_000],
+    ]);
+    // Người chỉ thấy công của mình vẫn thấy tiền của chính mình trên bảng công.
+    const mine = await teacherTimesheet(withTimesheet(f.actorA, "own", VIEW), january, now);
+    expect(mine.summary).toMatchObject([{ teacherCode: "GVA", amount: 350_000 }]);
+    await rateSvc.deleteTeacherRate(f.admin, other.id);
+    expect(await db.select().from(teacherRates)).toHaveLength(1);
+    const logged = await db.select().from(auditLogs).where(eq(auditLogs.tableName, "teacher_rates"));
+    expect(logged.map((l) => l.action).sort()).toEqual(["create", "create", "delete", "update"]);
   });
 });
 
@@ -216,23 +284,32 @@ describe("sửa chấm công của buổi học", () => {
 });
 
 describe("xuất chấm công", () => {
-  it("tệp tổng hợp gồm mọi giáo viên kèm dòng tổng; tệp riêng chỉ có một giáo viên; không có cột tiền", async () => {
+  it("tệp tổng hợp gồm mọi giáo viên kèm dòng tổng; tệp riêng chỉ có một giáo viên; có cột Mức lương, Thành tiền", async () => {
     await svc.createTimesheetEntry(f.admin, entry({ note: "Dạy bù" }));
+    await rateSvc.createTeacherRate(f.admin, { teacherId: f.teacherA.id, classId: f.classA.id, rate: 300_000 });
+    await rateSvc.createTeacherRate(f.admin, { teacherId: f.teacherA.id, classId: f.classB.id, rate: 200_000 });
+    await rateSvc.createTeacherRate(f.admin, { teacherId: f.teacherB.id, classId: f.classB.id, rate: 250_000 });
     const all = await timesheetDoc(f.admin, january, now);
     expect(all.filename).toBe("cham-cong-tong-hop-2026-01-01-2026-01-31");
     const [summary, detail] = all.sections;
-    expect(summary!.columns.map((c) => c.header)).toEqual(["STT", "Mã GV", "Giáo viên", "Số công", "Trong đó dạy thay", "Công trợ giảng", "Số giờ", "Chưa điểm danh"]);
-    // GV A: 2 công (1 bổ sung); GV B: 2 công (1 dạy thay); dòng cuối là tổng cộng.
-    expect(summary!.rows.map((r) => [r[1], r[3], r[4]])).toEqual([
-      [f.teacherA.code, 2, 0],
-      [f.teacherB.code, 2, 1],
-      ["", 4, 1],
+    expect(summary!.columns.map((c) => c.header)).toEqual([
+      "STT", "Mã GV", "Giáo viên", "Số công", "Trong đó dạy thay", "Công trợ giảng", "Số giờ", "Chưa điểm danh", "Mức lương (đ)", "Thành tiền (đ)", "Ghi chú",
+    ]);
+    // GV A: 2 công (lớp A 300.000 + bổ sung lớp B 200.000); GV B: lớp B 250.000 + dạy thay lớp A chưa có mức lương; dòng cuối là tổng cộng.
+    expect(summary!.rows.map((r) => [r[1], r[3], r[4], r[8], r[9], r[10]])).toEqual([
+      [f.teacherA.code, 2, 0, "200.000 / 300.000", 500_000, ""],
+      [f.teacherB.code, 2, 1, 250_000, 250_000, "1 công chưa có mức lương"],
+      ["", 4, 1, "", 750_000, ""],
     ]);
     const headers = detail!.columns.map((c) => c.header);
     expect(headers.slice(0, 5)).toEqual(["STT", "Thứ", "Ngày", "Ca", "Giờ"]);
-    expect(headers.join("|")).not.toMatch(/Lương|tiền/i);
+    expect(headers.slice(-3)).toEqual(["Mức lương (đ)", "Thành tiền (đ)", "Ghi chú"]);
     expect(detail!.rows[0]!.slice(1, 5)).toEqual(["Thứ Ba", "06/01/2026", "Sáng – Khung 1", "08:00–09:30"]);
-    expect(detail!.rows[1]!.at(-1)).toBe("Bổ sung · Dạy bù");
+    expect(detail!.rows[0]!.slice(-3)).toEqual([300_000, 300_000, ""]);
+    expect(detail!.rows[1]!.slice(-3)).toEqual([200_000, 200_000, "Bổ sung · Dạy bù"]);
+    // Buổi chưa điểm danh: có mức lương nhưng chưa có thành tiền.
+    expect(detail!.rows[2]!.slice(-3)).toEqual([300_000, "", ""]);
+    expect(detail!.rows.find((r) => r[5] === f.teacherB.code && r[8] === "A")!.slice(-3)).toEqual(["", "", "Chưa có mức lương"]);
 
     const own = await timesheetDoc(f.admin, { ...january, teacherId: f.teacherB.id }, now);
     expect(own.filename).toBe(`cham-cong-${f.teacherB.code}-2026-01-01-2026-01-31`);

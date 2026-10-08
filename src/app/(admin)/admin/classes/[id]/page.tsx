@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { LinkButton } from "@/components/link-button";
 import { GenerateSessionsButton } from "@/components/generate-sessions-button";
 import { WEEKDAY_LABELS, isoWeekday, startOfWeek } from "@/lib/dates";
-import { LABELS, formatDate, formatMoney, formatTime, toOptions, todayIso } from "@/lib/format";
+import { LABELS, formatDate, formatTime, toOptions, todayIso } from "@/lib/format";
 import { assignTeacherAction, unassignTeacherAction, updateClassTeacherAction } from "@/server/actions/admin";
 import { createTemplateAction, deleteTemplateAction, updateTemplateAction } from "@/server/actions/schedule";
 import { orNotFound, uuidParam } from "@/server/page";
@@ -42,13 +42,9 @@ export default async function ClassDetailPage({ params }: PageProps<"/admin/clas
   const timetableHref = `/admin/timetable?${new URLSearchParams({ view: "week", classId, ...(timetableDate ? { date: timetableDate } : {}) })}`;
 
   const assignedIds = new Set(assigned.map((a) => a.teacherId));
-  // Lương mỗi buổi chỉ hiện với người xem được Chấm công (service trả null với người khác).
-  const showRate = can("view", "timesheet");
+  // Mức lương không đặt ở đây: xem Chấm công → Mức lương giáo viên/Nhân viên.
   const roleFields: Field[] = [
     { name: "role", label: "Vai trò", type: "select", required: true, options: toOptions(LABELS.classTeacherRole), defaultValue: "main" },
-    ...(showRate
-      ? [{ name: "ratePerSession", label: "Lương mỗi buổi (đồng)", type: "number" as const, hint: "Để trống nếu chưa có." }]
-      : []),
   ];
   const teacherFields: Field[] = [
     {
@@ -141,16 +137,11 @@ export default async function ClassDetailPage({ params }: PageProps<"/admin/clas
       <CrudSection
         title="Giáo viên phụ trách"
         addLabel="Phân công"
-        columns={showRate ? ["Họ tên", "Mã GV", "Vai trò", "Lương/buổi"] : ["Họ tên", "Mã GV", "Vai trò"]}
+        columns={["Họ tên", "Mã GV", "Vai trò"]}
         rows={assigned.map((a) => ({
           id: a.id,
-          cells: [
-            a.fullName,
-            a.code,
-            LABELS.classTeacherRole[a.role],
-            ...(showRate ? [a.ratePerSession === null ? "Chưa nhập" : formatMoney(a.ratePerSession)] : []),
-          ],
-          values: { role: a.role, ratePerSession: a.ratePerSession === null ? "" : String(a.ratePerSession) },
+          cells: [a.fullName, a.code, LABELS.classTeacherRole[a.role]],
+          values: { role: a.role },
         }))}
         fields={teacherFields}
         editFields={roleFields}

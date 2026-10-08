@@ -28,6 +28,8 @@ import {
   extraClassUpdate,
   syllabusInput,
   syllabusUpdate,
+  teacherRateInput,
+  teacherRateUpdate,
   timeSlotUpdate,
   timesheetAdjustInput,
   timesheetEntryInput,
@@ -39,6 +41,7 @@ import * as accounts from "../services/accounts";
 import * as catalog from "../services/catalog";
 import * as extraClasses from "../services/extra-classes";
 import * as syllabus from "../services/syllabus";
+import * as teacherRates from "../services/teacher-rates";
 import * as timesheet from "../services/timesheet";
 import * as tuition from "../services/tuition";
 import * as classes from "../services/classes";
@@ -91,6 +94,12 @@ export const deleteTimesheetEntryAction = async (input: unknown) =>
   runAction(idOnly, input, (a, d) => timesheet.deleteTimesheetEntry(a, d.id), ADMIN);
 export const adjustSessionTimesheetAction = async (input: unknown) =>
   runAction(timesheetAdjustInput, input, timesheet.adjustSessionTimesheet, ADMIN);
+
+export const createTeacherRateAction = async (input: unknown) => runAction(teacherRateInput, input, teacherRates.createTeacherRate, ADMIN);
+export const updateTeacherRateAction = async (input: unknown) =>
+  runAction(teacherRateUpdate, input, (a, d) => teacherRates.updateTeacherRate(a, d.id, d.data), ADMIN);
+export const deleteTeacherRateAction = async (input: unknown) =>
+  runAction(idOnly, input, (a, d) => teacherRates.deleteTeacherRate(a, d.id), ADMIN);
 
 export const createHolidayAction = async (input: unknown) => runAction(holidayInput, input, catalog.createHoliday, ADMIN);
 export const deleteHolidayAction = async (input: unknown) =>

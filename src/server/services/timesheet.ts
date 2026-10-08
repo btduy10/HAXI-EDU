@@ -1,7 +1,7 @@
 import { and, between, eq, inArray, ne, or } from "drizzle-orm";
 import type { z } from "zod";
 import { db } from "@/db";
-import { classes, courses, rooms, sessions, teachers, timeSlots, timesheetEntries, timesheetOverrides } from "@/db/schema";
+import { classes, courses, rooms, sessions, teacherRates, teachers, timeSlots, timesheetEntries, timesheetOverrides } from "@/db/schema";
 import { WEEKDAY_LABELS, isoWeekday } from "@/lib/dates";
 import { formatDate, formatTime, todayIso } from "@/lib/format";
 import { SLOT_NAME_LABELS, type timesheetAdjustInput, type timesheetEntryInput } from "@/lib/validation/entities";
@@ -41,6 +41,12 @@ export type TimesheetSummary = {
   minutes: number;
   pending: number;
   upcoming: number;
+  /** Các mức lương/buổi đang áp dụng cho các công đã dạy (mỗi lớp một mức), từ nhỏ tới lớn. */
+  rates: number[];
+  /** Thành tiền = tổng mức lương của các công đã dạy có mức lương. */
+  amount: number;
+  /** Số công đã dạy ở lớp chưa đặt mức lương (không cộng vào thành tiền). */
+  missingRate: number;
 };
 
 type LoadFilters = { from: string; to: string; teacherId?: string | null; classId?: string | null };
@@ -50,7 +56,7 @@ type LoadFilters = { from: string; to: string; teacherId?: string | null; classI
  * - buổi học chưa hủy: một dòng cho người THỰC DẠY (GV dạy thay nếu có, không thì GV của buổi) và một dòng cho trợ giảng;
  * - phần sửa của các dòng đó (`timesheet_overrides`): đổi Ngày / Ca – Khung giờ / Lớp chỉ trên bảng công;
  * - công bổ sung ghi tay (`timesheet_entries`), luôn được tính là một công.
- * Lọc khoảng ngày và lớp theo giá trị SAU khi sửa.
+ * Lọc khoảng ngày và lớp theo giá trị SAU khi sửa. Mức lương lấy theo Giáo viên + Lớp của dòng công (sau khi sửa).
  */
 async function loadRows(filters: LoadFilters, today: string) {
   const { teacherId, classId } = filters;
@@ -163,8 +169,14 @@ async function loadRows(filters: LoadFilters, today: string) {
 
   const teacherIds = [...new Set(all.map((r) => r.teacherId))];
   const classIds = [...new Set(all.map((r) => r.classId))];
-  const [teacherRows, classRows] = await Promise.all([
+  const [teacherRows, rateRows, classRows] = await Promise.all([
     teacherIds.length ? db.select({ id: teachers.id, code: teachers.code, fullName: teachers.fullName }).from(teachers).where(inArray(teachers.id, teacherIds)) : [],
+    teacherIds.length
+      ? db
+          .select({ teacherId: teacherRates.teacherId, classId: teacherRates.classId, rate: teacherRates.rate })
+          .from(teacherRates)
+          .where(and(inArray(teacherRates.teacherId, teacherIds), inArray(teacherRates.classId, classIds)))
+      : [],
     classIds.length
       ? db
           .select({ id: classes.id, code: classes.code, name: classes.name, courseName: courses.name })
@@ -175,32 +187,42 @@ async function loadRows(filters: LoadFilters, today: string) {
   ]);
   const teacherOf = new Map(teacherRows.map((t) => [t.id, t]));
   const classOf = new Map(classRows.map((c) => [c.id, c]));
+  const rateOf = new Map(rateRows.map((r) => [`${r.teacherId}|${r.classId}`, r.rate]));
   const slotLabel = (id: string | null) => {
     const slot = id ? slotOf.get(id) : undefined;
     return slot ? `${(SLOT_NAME_LABELS as Record<string, string>)[slot.name] ?? slot.name} – Khung ${slot.frame}` : "";
   };
 
   return all
-    .map((r) => ({
-      ...r,
-      teacherCode: teacherOf.get(r.teacherId)?.code ?? "",
-      teacherName: teacherOf.get(r.teacherId)?.fullName ?? "",
-      classCode: classOf.get(r.classId)?.code ?? "",
-      className: classOf.get(r.classId)?.name ?? "",
-      courseName: classOf.get(r.classId)?.courseName ?? "",
-      slotLabel: slotLabel(r.timeSlotId),
-      isSubstitute: r.role === "substitute",
-      minutes: Math.max(0, minutesOf(r.endTime) - minutesOf(r.startTime)),
-      state: (r.status === "done" ? "taught" : r.date <= today ? "pending" : "upcoming") as TimesheetState,
-    }))
+    .map((r) => {
+      const state = (r.status === "done" ? "taught" : r.date <= today ? "pending" : "upcoming") as TimesheetState;
+      const rate = rateOf.get(`${r.teacherId}|${r.classId}`) ?? null;
+      return {
+        ...r,
+        teacherCode: teacherOf.get(r.teacherId)?.code ?? "",
+        teacherName: teacherOf.get(r.teacherId)?.fullName ?? "",
+        classCode: classOf.get(r.classId)?.code ?? "",
+        className: classOf.get(r.classId)?.name ?? "",
+        courseName: classOf.get(r.classId)?.courseName ?? "",
+        slotLabel: slotLabel(r.timeSlotId),
+        isSubstitute: r.role === "substitute",
+        minutes: Math.max(0, minutesOf(r.endTime) - minutesOf(r.startTime)),
+        state,
+        /** Mức lương/buổi của giáo viên ở lớp này; null = chưa đặt. */
+        rate,
+        /** Thành tiền của dòng: chỉ công đã dạy và có mức lương mới có tiền. */
+        amount: state === "taught" ? rate : null,
+      };
+    })
     .sort((a, b) => a.teacherCode.localeCompare(b.teacherCode) || a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime));
 }
 
 export type TimesheetRow = Awaited<ReturnType<typeof loadRows>>[number];
 
 /**
- * Chấm công giáo viên: chỉ ghi nhận ngày công (không tính tiền). Mỗi buổi đã điểm danh là một công cho người thực dạy
- * và, nếu có, cho trợ giảng; buổi đã hủy không tính; công bổ sung ghi tay luôn là một công.
+ * Chấm công giáo viên: mỗi buổi đã điểm danh là một công cho người thực dạy và, nếu có, cho trợ giảng;
+ * buổi đã hủy không tính; công bổ sung ghi tay luôn là một công.
+ * Thành tiền = tổng mức lương/buổi (Mức lương giáo viên/Nhân viên, theo Giáo viên + Lớp) của các công đã dạy.
  * Phạm vi "lớp của mình": chỉ thấy công của chính mình.
  */
 export async function teacherTimesheet(actor: Actor, filters: TimesheetFilters, now: Date = new Date()) {
@@ -222,12 +244,20 @@ export async function teacherTimesheet(actor: Actor, filters: TimesheetFilters, 
       minutes: 0,
       pending: 0,
       upcoming: 0,
+      rates: [],
+      amount: 0,
+      missingRate: 0,
     };
     if (r.state === "taught") {
       if (r.role === "assistant") item.assistant += 1;
       else item.taught += 1;
       if (r.role === "substitute") item.substitute += 1;
       item.minutes += r.minutes;
+      if (r.rate === null) item.missingRate += 1;
+      else {
+        item.amount += r.rate;
+        if (!item.rates.includes(r.rate)) item.rates = [...item.rates, r.rate].sort((a, b) => a - b);
+      }
     } else {
       item[r.state] += 1;
     }
@@ -335,9 +365,20 @@ export async function adjustSessionTimesheet(actor: Actor, input: z.output<typeo
 const STATE_LABEL: Record<TimesheetState, string> = { taught: "Đã dạy", pending: "Chưa điểm danh", upcoming: "Chưa tới ngày" };
 const hoursOf = (minutes: number) => Math.round((minutes / 60) * 10) / 10;
 
-/** Ghi chú của một dòng công: Buổi bù / Bổ sung / Đã sửa, kèm ghi chú người dùng nhập. */
-export const timesheetRemark = (r: Pick<TimesheetRow, "kind" | "source" | "edited" | "note">) =>
-  [r.kind === "makeup" ? "Buổi bù" : "", r.source === "manual" ? "Bổ sung" : "", r.edited ? "Đã sửa" : "", r.note ?? ""].filter(Boolean).join(" · ");
+/** Ghi chú của một dòng công: Buổi bù / Bổ sung / Đã sửa / chưa có mức lương, kèm ghi chú người dùng nhập. */
+export const timesheetRemark = (r: Pick<TimesheetRow, "kind" | "source" | "edited" | "note" | "state" | "rate">) =>
+  [
+    r.kind === "makeup" ? "Buổi bù" : "",
+    r.source === "manual" ? "Bổ sung" : "",
+    r.edited ? "Đã sửa" : "",
+    r.state === "taught" && r.rate === null ? "Chưa có mức lương" : "",
+    r.note ?? "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
+/** Mức lương của một người trong kỳ: một mức thì là số, nhiều lớp khác mức thì liệt kê, chưa có thì để trống. */
+const ratesCell = (rates: number[]) => (rates.length === 0 ? "" : rates.length === 1 ? rates[0]! : rates.map((r) => r.toLocaleString("vi-VN")).join(" / "));
 
 /**
  * Tệp chấm công để xuất. Không chọn giáo viên: tệp tổng hợp mọi giáo viên (tổng công + chi tiết).
@@ -353,8 +394,9 @@ export async function timesheetDoc(actor: Actor, filters: TimesheetFilters, now:
       assistant: sum.assistant + s.assistant,
       minutes: sum.minutes + s.minutes,
       pending: sum.pending + s.pending,
+      amount: sum.amount + s.amount,
     }),
-    { taught: 0, substitute: 0, assistant: 0, minutes: 0, pending: 0 },
+    { taught: 0, substitute: 0, assistant: 0, minutes: 0, pending: 0, amount: 0 },
   );
   return {
     filename: `cham-cong-${single ? single.teacherCode : "tong-hop"}-${filters.from}-${filters.to}`,
@@ -372,11 +414,26 @@ export async function timesheetDoc(actor: Actor, filters: TimesheetFilters, now:
           { header: "Công trợ giảng", width: 15, align: "center" },
           { header: "Số giờ", width: 10, align: "center" },
           { header: "Chưa điểm danh", width: 16, align: "center" },
+          { header: "Mức lương (đ)", width: 20, align: "right" },
+          { header: "Thành tiền (đ)", width: 16, align: "right" },
+          { header: "Ghi chú", width: 26 },
         ],
         rows: [
-          ...summary.map((s, i) => [i + 1, s.teacherCode, s.teacherName, s.taught, s.substitute, s.assistant, hoursOf(s.minutes), s.pending]),
+          ...summary.map((s, i) => [
+            i + 1,
+            s.teacherCode,
+            s.teacherName,
+            s.taught,
+            s.substitute,
+            s.assistant,
+            hoursOf(s.minutes),
+            s.pending,
+            ratesCell(s.rates),
+            s.amount,
+            s.missingRate > 0 ? `${s.missingRate} công chưa có mức lương` : "",
+          ]),
           ...(summary.length > 1
-            ? [["", "", "Tổng cộng", total.taught, total.substitute, total.assistant, hoursOf(total.minutes), total.pending]]
+            ? [["", "", "Tổng cộng", total.taught, total.substitute, total.assistant, hoursOf(total.minutes), total.pending, "", total.amount, ""]]
             : []),
         ],
       },
@@ -395,6 +452,8 @@ export async function timesheetDoc(actor: Actor, filters: TimesheetFilters, now:
           { header: "Khóa học", width: 24 },
           { header: "Phòng", width: 16 },
           { header: "Trạng thái", width: 16 },
+          { header: "Mức lương (đ)", width: 16, align: "right" },
+          { header: "Thành tiền (đ)", width: 16, align: "right" },
           { header: "Ghi chú", width: 28 },
         ],
         rows: rows.map((r, i) => [
@@ -410,6 +469,8 @@ export async function timesheetDoc(actor: Actor, filters: TimesheetFilters, now:
           r.courseName,
           r.roomName ?? "",
           STATE_LABEL[r.state],
+          r.rate ?? "",
+          r.amount ?? "",
           timesheetRemark(r),
         ]),
       },

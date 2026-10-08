@@ -127,6 +127,13 @@
       "when": 1791499861544,
       "tag": "0017_drop_teacher_role",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1791503379574,
+      "tag": "0018_teacher_rates",
+      "breakpoints": true
     }
   ]
 }

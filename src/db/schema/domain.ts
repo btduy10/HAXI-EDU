@@ -141,8 +141,6 @@ export const classTeachers = pgTable(
       .notNull()
       .references(() => teachers.id),
     role: classTeacherRole("role").notNull().default("main"),
-    /** Lương mỗi buổi (đồng) của GV ở lớp này; null = chưa nhập. Chỉ để ghi nhận, Chấm công không tính tiền. */
-    ratePerSession: integer("rate_per_session"),
     createdAt: createdAt(),
   },
   (t) => [
@@ -493,6 +491,25 @@ export const tuitionReceipts = pgTable(
     createdAt: createdAt(),
   },
   (t) => [index("tuition_receipts_enrollment_idx").on(t.enrollmentId), check("tuition_receipts_amount_chk", sql`${t.amount} > 0`)],
+);
+
+// Mức lương mỗi buổi (công) của một giáo viên/trợ giảng ở một lớp, đặt ở Chấm công → Mức lương giáo viên/Nhân viên.
+// Không phụ thuộc phân công: đặt được cho cả người dạy thay hay có công bổ sung ở lớp đó.
+export const teacherRates = pgTable(
+  "teacher_rates",
+  {
+    id: id(),
+    teacherId: uuid("teacher_id")
+      .notNull()
+      .references(() => teachers.id, { onDelete: "cascade" }),
+    classId: uuid("class_id")
+      .notNull()
+      .references(() => classes.id, { onDelete: "cascade" }),
+    rate: integer("rate").notNull(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [uniqueIndex("teacher_rates_teacher_class_uq").on(t.teacherId, t.classId), check("teacher_rates_rate_chk", sql`${t.rate} >= 0`)],
 );
 
 // Công bổ sung: dòng công ghi tay cho giáo viên, chỉ nằm ở bảng Chấm công (không tạo buổi học, không điểm danh).

@@ -107,7 +107,7 @@ describe("chức năng chỉ dành cho Admin", () => {
       classes.enrollStudent(f.actorA, { classId: f.classA.id, studentId: f.students[4]!.id, joinedAt: "2026-01-10" }),
     ).rejects.toMatchObject(denied);
     await expect(
-      classes.assignTeacher(f.actorA, { classId: f.classB.id, teacherId: f.teacherA.id, role: "main", ratePerSession: null }),
+      classes.assignTeacher(f.actorA, { classId: f.classB.id, teacherId: f.teacherA.id, role: "main" }),
     ).rejects.toMatchObject(denied);
     await expect(classes.deleteClass(f.actorA, f.classA.id)).rejects.toMatchObject(denied);
     await expect(accounts.listAccounts(f.actorA)).rejects.toMatchObject(denied);
@@ -117,7 +117,7 @@ describe("chức năng chỉ dành cho Admin", () => {
 
   it("GV không tự phân công mình vào lớp khác được", async () => {
     await expect(
-      classes.assignTeacher(f.actorA, { classId: f.classB.id, teacherId: f.teacherA.id, role: "assistant", ratePerSession: null }),
+      classes.assignTeacher(f.actorA, { classId: f.classB.id, teacherId: f.teacherA.id, role: "assistant" }),
     ).rejects.toMatchObject({ code: "FORBIDDEN" });
     await expect(classes.getClass(f.actorA, f.classB.id)).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
