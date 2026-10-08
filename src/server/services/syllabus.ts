@@ -36,7 +36,7 @@ export async function listSyllabus(actor: Actor, filters: { classId?: string | n
     .from(syllabusLessons)
     .innerJoin(classes, eq(classes.id, syllabusLessons.classId))
     .where(conditions.length ? and(...conditions) : undefined)
-    .orderBy(asc(classes.code), asc(syllabusLessons.subjectCode), asc(syllabusLessons.period));
+    .orderBy(asc(classes.code), asc(syllabusLessons.period), asc(syllabusLessons.subjectCode));
 }
 
 /**
@@ -48,7 +48,7 @@ export async function lessonsForClass(classId: string) {
     .select({ subjectCode: syllabusLessons.subjectCode, period: syllabusLessons.period, title: syllabusLessons.title })
     .from(syllabusLessons)
     .where(eq(syllabusLessons.classId, classId))
-    .orderBy(asc(syllabusLessons.subjectCode), asc(syllabusLessons.period));
+    .orderBy(asc(syllabusLessons.period), asc(syllabusLessons.subjectCode));
 }
 
 async function assertNoDuplicate(data: z.output<typeof syllabusInput>, exceptId?: string) {

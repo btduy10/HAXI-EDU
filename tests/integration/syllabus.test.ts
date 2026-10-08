@@ -48,8 +48,8 @@ describe("syllabus", () => {
     await svc.createLesson(f.admin, lesson(f.classA.id, 2, "Bài AI", "AI"));
 
     expect((await svc.listSyllabus(f.admin, { classId: f.classA.id })).map((l) => [l.subjectCode, l.period, l.title])).toEqual([
-      ["AI", 2, "Bài AI"],
       ["ROB", 1, "Làm quen với robot"],
+      ["AI", 2, "Bài AI"],
       ["ROB", 2, "Lắp ráp khung xe"],
     ]);
 
