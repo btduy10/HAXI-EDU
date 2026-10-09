@@ -109,7 +109,7 @@ export function StarPad({
                 aria-label={`Chọn ${s.fullName}`}
                 onClick={() => toggle(s.studentId)}
                 className={cn(
-                  "flex w-full items-center gap-3 rounded-lg border p-2.5 text-left transition-colors",
+                  "flex w-full items-center gap-3 glass-solid rounded-xl border p-2.5 text-left transition-colors",
                   checked ? "border-primary bg-primary/10 ring-2 ring-primary" : "hover:bg-muted",
                 )}
               >
@@ -142,11 +142,11 @@ export function StarPad({
           Sổ ghi sao của buổi <span className="text-sm font-normal text-muted-foreground">({logs.length})</span>
         </h2>
         {logs.length === 0 ? (
-          <p className="rounded-lg border border-dashed p-4 text-center text-sm text-muted-foreground">Chưa ghi sao trong buổi này.</p>
+          <p className="rounded-2xl border border-dashed p-4 text-center text-sm text-muted-foreground">Chưa ghi sao trong buổi này.</p>
         ) : (
           <ul className="grid gap-1.5">
             {logs.map((log) => (
-              <li key={log.id} className={cn("flex items-center gap-2 rounded-lg border px-3 py-2 text-sm", log.reversed && "opacity-60")}>
+              <li key={log.id} className={cn("flex items-center gap-2 glass-solid rounded-xl border px-3 py-2 text-sm", log.reversed && "opacity-60")}>
                 <span className={cn("w-9 shrink-0 font-semibold tabular-nums", log.stars > 0 ? "text-emerald-600" : "text-red-600")}>
                   {signed(log.stars)}
                 </span>
@@ -192,7 +192,7 @@ export function StarPad({
                 disabled={pending}
                 onClick={() => award(c)}
                 className={cn(
-                  "flex min-h-12 items-center justify-between gap-3 rounded-lg border px-3 text-left text-sm font-medium transition-colors disabled:opacity-50",
+                  "flex min-h-12 items-center justify-between gap-3 glass-solid rounded-xl border px-3 text-left text-sm font-medium transition-colors disabled:opacity-50",
                   c.stars > 0 ? "border-emerald-600/30 hover:bg-emerald-500/10" : "border-red-600/30 hover:bg-red-500/10",
                 )}
               >

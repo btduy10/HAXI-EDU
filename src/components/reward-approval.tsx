@@ -43,7 +43,7 @@ export function RewardApproval({ classId, rows, canEdit = true }: { classId: str
   return (
     <div className="grid gap-3">
       {canEdit && eligible.length > 0 && (
-        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-muted/40 p-3 text-sm">
+        <div className="flex flex-wrap items-center justify-between gap-2 glass-solid rounded-xl border bg-muted/40 p-3 text-sm">
           <p>
             Hệ thống đề xuất <strong>{eligible.length}</strong> học viên đủ điều kiện nhận quà. Bỏ chọn những em không duyệt.
           </p>
@@ -64,7 +64,7 @@ export function RewardApproval({ classId, rows, canEdit = true }: { classId: str
 
       <ul className="grid gap-2">
         {rows.map((r) => (
-          <li key={r.summaryId} className="grid gap-2 rounded-lg border p-3 text-sm sm:grid-cols-[1fr_auto] sm:items-center">
+          <li key={r.summaryId} className="grid gap-2 glass-solid rounded-xl border p-3 text-sm sm:grid-cols-[1fr_auto] sm:items-center">
             <div className="min-w-0">
               <p className="font-medium break-words">
                 <span className="text-muted-foreground">#{r.rank}</span> {r.fullName} <span className="font-normal text-muted-foreground">{r.code}</span>
@@ -84,7 +84,7 @@ export function RewardApproval({ classId, rows, canEdit = true }: { classId: str
               {!r.handover && !r.proposedGift && <Badge variant="outline">Chưa đạt mốc quà</Badge>}
               {!r.handover && r.proposedGift && !canEdit && <Badge variant="outline">Chờ duyệt</Badge>}
               {!r.handover && r.proposedGift && canEdit && (
-                <label className="flex min-h-10 cursor-pointer items-center gap-2 rounded-lg border px-3 has-checked:bg-muted">
+                <label className="flex min-h-10 cursor-pointer items-center gap-2 glass-solid rounded-xl border px-3 has-checked:bg-muted">
                   <input
                     type="checkbox"
                     className="size-4"

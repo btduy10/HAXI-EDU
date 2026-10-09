@@ -18,7 +18,7 @@ type ClassItem = {
 export function ClassList({ classes, basePath }: { classes: ClassItem[]; basePath: string }) {
   if (classes.length === 0) {
     return (
-      <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
+      <p className="rounded-2xl border border-dashed p-6 text-center text-sm text-muted-foreground">
         Bạn chưa được phân công lớp nào.
       </p>
     );
@@ -27,7 +27,7 @@ export function ClassList({ classes, basePath }: { classes: ClassItem[]; basePat
     <ul className="grid gap-2 sm:grid-cols-2">
       {classes.map((c) => (
         <li key={c.id}>
-          <Link href={`${basePath}/${c.id}`} className="block rounded-lg border p-3 text-sm hover:bg-muted">
+          <Link href={`${basePath}/${c.id}`} className="block glass-solid rounded-2xl border p-3 text-sm hover:bg-muted">
             <div className="flex flex-wrap items-center gap-2">
               <span className="font-medium">
                 {c.code} – {c.name}

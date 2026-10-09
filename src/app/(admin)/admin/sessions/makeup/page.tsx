@@ -31,7 +31,7 @@ export default async function MakeupPage({ searchParams }: PageProps<"/admin/ses
         <Link href={`/admin/classes/${classId}`} className="text-sm text-muted-foreground underline-offset-2 hover:underline">
           ← {cls.code} – {cls.name}
         </Link>
-        <h1 className="text-lg font-semibold">Thêm buổi bù</h1>
+        <h1 className="text-xl font-semibold sm:text-2xl">Thêm buổi bù</h1>
         <p className="text-sm text-muted-foreground">Buổi bù chỉ gồm các học viên được chọn bên dưới.</p>
       </div>
       <MakeupForm

@@ -82,7 +82,7 @@ export function AttendanceSheet({
   const counts = STATUSES.map((s) => ({ ...s, count: rows.filter((r) => r.status === s.value).length })).filter((s) => s.count > 0);
 
   if (rows.length === 0) {
-    return <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">Buổi học không có học viên nào.</p>;
+    return <p className="rounded-2xl border border-dashed p-6 text-center text-sm text-muted-foreground">Buổi học không có học viên nào.</p>;
   }
 
   return (
@@ -98,7 +98,7 @@ export function AttendanceSheet({
 
       <ul className="grid gap-2">
         {rows.map((row) => (
-          <li key={row.studentId} className="grid gap-2 rounded-lg border p-3">
+          <li key={row.studentId} className="grid gap-2 glass-solid rounded-xl border p-3">
             <div className="flex items-center justify-between gap-2">
               <p className="min-w-0 font-medium break-words">
                 {row.fullName} <span className="text-sm font-normal text-muted-foreground">{row.code}</span>

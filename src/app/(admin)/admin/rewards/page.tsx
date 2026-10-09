@@ -42,16 +42,16 @@ export default async function RewardsPage({ searchParams }: PageProps<"/admin/re
 
   return (
     <div className="grid gap-4">
-      <h1 className="text-lg font-semibold">Quà tặng & Tổng kết</h1>
-      <nav aria-label="Mục" className="flex gap-1 overflow-x-auto rounded-lg border p-0.5 text-sm">
+      <h1 className="text-xl font-semibold sm:text-2xl">Quà tặng & Tổng kết</h1>
+      <nav aria-label="Mục" className="flex gap-1 overflow-x-auto glass-solid rounded-full border p-1 text-sm">
         {TABS.map((t) => (
           <Link
             key={t.key}
             href={`/admin/rewards?tab=${t.key}`}
             aria-current={tab === t.key ? "page" : undefined}
             className={cn(
-              "flex min-h-10 shrink-0 items-center rounded-md px-3 font-medium whitespace-nowrap",
-              tab === t.key ? "bg-primary text-primary-foreground" : "hover:bg-muted",
+              "flex min-h-10 shrink-0 items-center rounded-full px-4 font-medium whitespace-nowrap transition-colors",
+              tab === t.key ? "bg-brand-teal font-semibold text-foreground shadow-sm" : "hover:bg-muted",
             )}
           >
             {t.label}
@@ -217,7 +217,7 @@ async function ClosedClassSummary({ actor, classId, canEdit }: { actor: Actor; c
         ) : (
           <ul className="grid gap-2 sm:grid-cols-2">
             {summary.giftNeeds.map((g) => (
-              <li key={g.giftId} className="rounded-lg border p-3 text-sm">
+              <li key={g.giftId} className="glass-solid rounded-2xl border p-3 text-sm">
                 <p className="font-medium">{g.name}</p>
                 <p className="text-muted-foreground">
                   Đủ điều kiện {g.eligible} · đã duyệt {g.approved} · đã trao {g.given} · tồn kho {g.stock}

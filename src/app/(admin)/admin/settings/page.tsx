@@ -43,7 +43,7 @@ export default async function SettingsPage() {
   return (
     <div className="grid max-w-2xl gap-4">
       <div className="flex items-center justify-between gap-2">
-        <h1 className="text-lg font-semibold">Cấu hình</h1>
+        <h1 className="text-xl font-semibold sm:text-2xl">Cấu hình</h1>
         <FormDialogButton
           label="Sửa cấu hình"
           title="Sửa cấu hình"
@@ -60,7 +60,7 @@ export default async function SettingsPage() {
       </div>
       <dl className="grid gap-2">
         {items.map((item) => (
-          <div key={item.label} className="rounded-lg border p-3">
+          <div key={item.label} className="glass-solid rounded-2xl border p-3">
             <dt className="text-sm text-muted-foreground">{item.label}</dt>
             <dd className="text-lg font-semibold">{item.value}</dd>
             <dd className="text-sm text-muted-foreground">{item.hint}</dd>
@@ -85,7 +85,7 @@ export default async function SettingsPage() {
             action={updateCenterInfoAction}
           />
         </div>
-        <dl className="grid gap-1 rounded-lg border p-3 text-sm">
+        <dl className="grid gap-1 glass-solid rounded-2xl border p-3 text-sm">
           {[
             ["Tên trung tâm", center.name],
             ["Địa chỉ", center.address],

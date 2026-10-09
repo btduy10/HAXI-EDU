@@ -159,7 +159,7 @@ export default async function AccountsPage({ searchParams }: PageProps<"/admin/a
   return (
     <div className="grid gap-4">
       <div className="flex items-center justify-between gap-2">
-        <h1 className="text-lg font-semibold">
+        <h1 className="text-xl font-semibold sm:text-2xl">
           Tài khoản{" "}
           <span className="text-sm font-normal text-muted-foreground">
             ({accounts.length === all.length ? all.length : `${accounts.length}/${all.length}`})
@@ -191,13 +191,13 @@ export default async function AccountsPage({ searchParams }: PageProps<"/admin/a
       </form>
 
       {accounts.length === 0 ? (
-        <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">Không có tài khoản phù hợp.</p>
+        <p className="rounded-2xl border border-dashed p-6 text-center text-sm text-muted-foreground">Không có tài khoản phù hợp.</p>
       ) : (
         <>
           {/* Điện thoại: dạng thẻ. Màn hình rộng: dạng bảng. */}
           <ul className="grid gap-2 lg:hidden">
             {accounts.map((a, index) => (
-              <li key={a.id} className="grid gap-2 rounded-lg border p-3 text-sm">
+              <li key={a.id} className="grid gap-2 glass-solid rounded-xl border p-3 text-sm">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-muted-foreground tabular-nums">{index + 1}.</span>
                   <span className="font-medium">{a.username}</span>
@@ -213,7 +213,7 @@ export default async function AccountsPage({ searchParams }: PageProps<"/admin/a
               </li>
             ))}
           </ul>
-          <div className="hidden overflow-x-auto rounded-lg border lg:block">
+          <div className="hidden glass-solid min-w-0 overflow-x-auto rounded-2xl border lg:block">
             <Table>
               <TableHeader>
                 <TableRow>

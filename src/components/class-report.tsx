@@ -22,7 +22,7 @@ export function ExportLinks({ baseHref, label = "Xuất" }: { baseHref: string; 
           key={format}
           href={`${baseHref}${join}format=${format}`}
           download
-          className="inline-flex h-10 items-center rounded-lg border px-3 font-medium hover:bg-muted"
+          className="inline-flex h-10 items-center rounded-full border bg-white/80 px-4 font-medium hover:bg-muted"
         >
           {format === "xlsx" ? "Excel" : "PDF"}
         </a>
@@ -42,12 +42,12 @@ export function ClassReportTable({ rows, sessions }: { rows: Row[]; sessions: { 
         không kể buổi hủy.
       </p>
       {rows.length === 0 ? (
-        <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">Lớp chưa có học viên.</p>
+        <p className="rounded-2xl border border-dashed p-6 text-center text-sm text-muted-foreground">Lớp chưa có học viên.</p>
       ) : (
         <>
           <ul className="grid gap-2 md:hidden">
             {rows.map((r) => (
-              <li key={r.studentId} className="grid gap-1 rounded-lg border p-3 text-sm">
+              <li key={r.studentId} className="grid gap-1 glass-solid rounded-2xl border p-3 text-sm">
                 <div className="flex items-center justify-between gap-2">
                   <p className="min-w-0 font-medium break-words">
                     <span className="text-muted-foreground">#{r.rank}</span> {r.fullName}{" "}
@@ -66,7 +66,7 @@ export function ClassReportTable({ rows, sessions }: { rows: Row[]; sessions: { 
               </li>
             ))}
           </ul>
-          <div className="hidden rounded-lg border md:block">
+          <div className="glass-solid hidden min-w-0 overflow-hidden rounded-2xl border md:block">
             <Table>
               <TableHeader>
                 <TableRow>

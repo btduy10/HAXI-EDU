@@ -117,7 +117,7 @@ export function MakeupForm({
         ) : (
           <div className="grid gap-1 sm:grid-cols-2">
             {students.map((s) => (
-              <label key={s.id} className="flex min-h-11 cursor-pointer items-center gap-3 rounded-lg border px-3 text-sm has-checked:bg-muted">
+              <label key={s.id} className="flex min-h-11 cursor-pointer items-center gap-3 glass-solid rounded-xl border px-3 text-sm has-checked:bg-muted">
                 <input type="checkbox" className="size-4" checked={selected.has(s.id)} onChange={() => toggle(s.id)} />
                 {s.label}
               </label>

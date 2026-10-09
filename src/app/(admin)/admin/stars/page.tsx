@@ -52,16 +52,16 @@ export default async function StarsAdminPage({ searchParams }: PageProps<"/admin
 
   return (
     <div className="grid gap-4">
-      <h1 className="text-lg font-semibold">Sao, cấp bậc & avatar</h1>
-      <nav aria-label="Mục" className="flex gap-1 overflow-x-auto rounded-lg border p-0.5 text-sm">
+      <h1 className="text-xl font-semibold sm:text-2xl">Sao, cấp bậc & avatar</h1>
+      <nav aria-label="Mục" className="flex gap-1 overflow-x-auto glass-solid rounded-full border p-1 text-sm">
         {tabs.map((t) => (
           <Link
             key={t.key}
             href={`/admin/stars?tab=${t.key}`}
             aria-current={tab === t.key ? "page" : undefined}
             className={cn(
-              "flex min-h-10 shrink-0 items-center rounded-md px-3 font-medium whitespace-nowrap",
-              tab === t.key ? "bg-primary text-primary-foreground" : "hover:bg-muted",
+              "flex min-h-10 shrink-0 items-center rounded-full px-4 font-medium whitespace-nowrap transition-colors",
+              tab === t.key ? "bg-brand-teal font-semibold text-foreground shadow-sm" : "hover:bg-muted",
             )}
           >
             {t.label}
@@ -151,7 +151,7 @@ async function AvatarsTab({ actor, admin }: TabProps & { admin: boolean }) {
       </h2>
       <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
         {avatars.map((a) => (
-          <li key={a.id} className={cn("flex flex-col items-center gap-2 rounded-lg border p-3 text-center text-sm", !a.active && "bg-muted/40")}>
+          <li key={a.id} className={cn("flex flex-col items-center gap-2 glass-solid rounded-xl border p-3 text-center text-sm", !a.active && "bg-muted/40")}>
             <AvatarBadge avatar={a} frameColor={colorOf(a.requiredLevelId)} size={56} locked={!a.active} className="mt-1" />
             <span className="font-medium">{a.name}</span>
             <span className="text-xs text-muted-foreground">
@@ -188,7 +188,7 @@ async function GiftsTab({ actor }: TabProps) {
       {gifted.map((g) => {
         const recipients = given.filter((x) => x.avatarId === g.id);
         return (
-          <div key={g.id} className="grid gap-2 rounded-lg border p-3">
+          <div key={g.id} className="grid gap-2 glass-solid rounded-xl border p-3">
             <div className="flex items-center gap-3">
               <AvatarBadge avatar={g} frameColor={NEUTRAL_FRAME} size={48} />
               <div className="min-w-0 flex-1">
@@ -241,11 +241,11 @@ async function LedgerTab({ actor, canUndo }: TabProps & { canUndo: boolean }) {
         Sổ cái chỉ thêm, không sửa hay xóa. Hoàn tác tạo một bản ghi đảo dấu. Hiển thị {logs.length} bản ghi gần nhất.
       </p>
       {logs.length === 0 ? (
-        <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">Chưa có lần ghi sao nào.</p>
+        <p className="rounded-2xl border border-dashed p-6 text-center text-sm text-muted-foreground">Chưa có lần ghi sao nào.</p>
       ) : (
         <ul className="grid gap-1.5">
           {logs.map((log) => (
-            <li key={log.id} className={cn("flex items-center gap-2 rounded-lg border px-3 py-2 text-sm", log.reversed && "opacity-60")}>
+            <li key={log.id} className={cn("flex items-center gap-2 glass-solid rounded-xl border px-3 py-2 text-sm", log.reversed && "opacity-60")}>
               <span className={cn("w-9 shrink-0 font-semibold tabular-nums", log.stars > 0 ? "text-emerald-600" : "text-red-600")}>
                 {log.stars > 0 ? `+${log.stars}` : log.stars}
               </span>

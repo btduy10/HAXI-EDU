@@ -70,7 +70,7 @@ export function ExcelImportForm({ kind, note }: { kind: keyof typeof KINDS; note
   return (
     <div className="grid max-w-3xl gap-4">
       <div>
-        <h1 className="text-lg font-semibold">{config.title}</h1>
+        <h1 className="text-xl font-semibold sm:text-2xl">{config.title}</h1>
         <p className="text-sm text-muted-foreground">
           Tệp .xlsx tối đa 2 MB, 500 dòng. Dòng đầu là tiêu đề cột.{" "}
           <a href={config.endpoint} className="underline underline-offset-2">
@@ -125,7 +125,7 @@ export function ExcelImportForm({ kind, note }: { kind: keyof typeof KINDS; note
           </p>
           <ul className="grid gap-2">
             {preview.rows.map((row) => (
-              <li key={row.rowNumber} className="rounded-lg border p-3 text-sm">
+              <li key={row.rowNumber} className="glass-solid rounded-2xl border p-3 text-sm">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-muted-foreground">Dòng {row.rowNumber}</span>
                   <span className="font-medium break-words">{config.describe(row)}</span>

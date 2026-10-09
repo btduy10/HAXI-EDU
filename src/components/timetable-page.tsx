@@ -100,14 +100,14 @@ export async function TimetablePage({
   return (
     <div className="grid gap-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-lg font-semibold">{title}</h1>
-        <div className="flex rounded-lg border p-0.5 text-sm">
+        <h1 className="text-xl font-semibold sm:text-2xl">{title}</h1>
+        <div className="flex glass-solid rounded-full border p-1 text-sm">
           {(["week", "month"] as const).map((v) => (
             <Link
               key={v}
               href={href({ view: v })}
               aria-current={view === v ? "page" : undefined}
-              className={`rounded-md px-3 py-1.5 ${view === v ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
+              className={`rounded-full px-4 py-1.5 transition-colors ${view === v ? "bg-brand-teal font-semibold text-foreground shadow-sm" : "hover:bg-muted"}`}
             >
               {v === "week" ? "Tuần" : "Tháng"}
             </Link>

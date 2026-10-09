@@ -50,7 +50,7 @@ export function AvatarPicker({
               aria-label={`${a.name}${a.unlocked ? "" : `, đang khóa, cần ${a.requiredMinStars ?? "?"} sao`}`}
               onClick={() => choose(a)}
               className={cn(
-                "flex w-full flex-col items-center gap-1.5 rounded-lg border p-2 text-center text-xs transition-colors",
+                "flex w-full flex-col items-center gap-1.5 glass-solid rounded-xl border p-2 text-center text-xs transition-colors",
                 current ? "border-primary bg-primary/10 ring-2 ring-primary" : a.unlocked ? "hover:bg-muted" : "cursor-not-allowed bg-muted/40",
               )}
             >

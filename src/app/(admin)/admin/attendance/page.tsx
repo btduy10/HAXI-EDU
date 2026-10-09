@@ -17,7 +17,7 @@ export default async function AdminAttendancePage() {
   return (
     <div className="grid gap-6">
       <div>
-        <h1 className="text-lg font-semibold">Điểm danh</h1>
+        <h1 className="text-xl font-semibold sm:text-2xl">Điểm danh</h1>
         <p className="text-sm text-muted-foreground">
           Chọn một buổi để điểm danh hoặc mở khóa. Các buổi khác tìm trong Thời khóa biểu.
         </p>

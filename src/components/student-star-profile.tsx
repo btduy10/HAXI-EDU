@@ -47,7 +47,7 @@ export async function StudentStarProfile({ actor, studentId, backHref }: { actor
             { label: "Đã đổi quà", value: redemption.spent },
             { label: "Sao còn lại", value: redemption.balance },
           ].map((item) => (
-            <div key={item.label} className="rounded-lg border p-2">
+            <div key={item.label} className="glass-solid rounded-xl border p-2">
               <dt className="text-xs text-muted-foreground">{item.label}</dt>
               <dd className="text-lg font-semibold tabular-nums">{item.value}</dd>
             </div>
@@ -107,7 +107,7 @@ export async function StudentStarProfile({ actor, studentId, backHref }: { actor
         {redemption.history.length > 0 && (
           <ul className="grid gap-1.5">
             {redemption.history.map((r) => (
-              <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm">
+              <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 glass-solid rounded-xl border px-3 py-2 text-sm">
                 <span className="min-w-0">
                   {r.giftName}
                   <span className="block text-xs text-muted-foreground">
@@ -134,12 +134,12 @@ export async function StudentStarProfile({ actor, studentId, backHref }: { actor
         )}
         {profile.gifts.length === 0 ? (
           redemption.history.length === 0 && (
-            <p className="rounded-lg border border-dashed p-4 text-center text-sm text-muted-foreground">Chưa đổi quà.</p>
+            <p className="rounded-2xl border border-dashed p-4 text-center text-sm text-muted-foreground">Chưa đổi quà.</p>
           )
         ) : (
           <ul className="grid gap-1.5">
             {profile.gifts.map((g) => (
-              <li key={g.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm">
+              <li key={g.id} className="flex flex-wrap items-center justify-between gap-2 glass-solid rounded-xl border px-3 py-2 text-sm">
                 <span className="min-w-0">
                   {g.giftName} <span className="text-muted-foreground">· quà tổng kết lớp {g.classCode}</span>
                 </span>
@@ -161,11 +161,11 @@ export async function StudentStarProfile({ actor, studentId, backHref }: { actor
           </span>
         </h2>
         {profile.attendance.length === 0 ? (
-          <p className="rounded-lg border border-dashed p-4 text-center text-sm text-muted-foreground">Chưa có buổi nào được điểm danh.</p>
+          <p className="rounded-2xl border border-dashed p-4 text-center text-sm text-muted-foreground">Chưa có buổi nào được điểm danh.</p>
         ) : (
           <ul className="grid gap-1.5">
             {profile.attendance.map((a) => (
-              <li key={a.sessionId} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm">
+              <li key={a.sessionId} className="flex flex-wrap items-center justify-between gap-2 glass-solid rounded-xl border px-3 py-2 text-sm">
                 <span className="min-w-0">
                   {formatDate(a.date)} <span className="text-muted-foreground">· {a.classCode}</span>
                 </span>
@@ -202,11 +202,11 @@ export async function StudentStarProfile({ actor, studentId, backHref }: { actor
           )}
         </div>
         {profile.logs.length === 0 ? (
-          <p className="rounded-lg border border-dashed p-4 text-center text-sm text-muted-foreground">Chưa có lần ghi sao nào.</p>
+          <p className="rounded-2xl border border-dashed p-4 text-center text-sm text-muted-foreground">Chưa có lần ghi sao nào.</p>
         ) : (
           <ul className="grid gap-1.5">
             {profile.logs.map((log) => (
-              <li key={log.id} className={cn("flex items-center gap-2 rounded-lg border px-3 py-2 text-sm", log.reversed && "opacity-60")}>
+              <li key={log.id} className={cn("flex items-center gap-2 glass-solid rounded-xl border px-3 py-2 text-sm", log.reversed && "opacity-60")}>
                 <span className={cn("w-9 shrink-0 font-semibold tabular-nums", log.stars > 0 ? "text-emerald-600" : "text-red-600")}>
                   {log.stars > 0 ? `+${log.stars}` : log.stars}
                 </span>

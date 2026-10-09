@@ -34,7 +34,7 @@ export default async function FeeNoticePage({ searchParams }: PageProps<"/admin/
         {notices.length > 0 && <PrintButton label={notices.length > 1 ? `In ${notices.length} giấy báo` : "In giấy báo"} />}
       </div>
       {notices.length === 0 && (
-        <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground print:hidden">
+        <p className="rounded-2xl border border-dashed p-6 text-center text-sm text-muted-foreground print:hidden">
           Không có giấy báo học phí nào. Lớp cần được đặt học phí và có học viên đang học.
         </p>
       )}

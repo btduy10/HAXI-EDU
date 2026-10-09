@@ -43,7 +43,7 @@ export default async function TeacherClassPage({ params }: PageProps<"/teacher/c
           Học viên <span className="text-sm font-normal text-muted-foreground">({students.length})</span>
         </h2>
         {students.length === 0 ? (
-          <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
+          <p className="rounded-2xl border border-dashed p-6 text-center text-sm text-muted-foreground">
             Lớp chưa có học viên.
           </p>
         ) : (

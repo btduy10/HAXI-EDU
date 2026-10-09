@@ -10,7 +10,7 @@ export default async function TeacherClassesPage() {
   const classes = await listClasses(actor);
   return (
     <div className="grid gap-4">
-      <h1 className="text-lg font-semibold">Lớp của tôi</h1>
+      <h1 className="text-xl font-semibold sm:text-2xl">Lớp của tôi</h1>
       <ClassList classes={classes} basePath="/teacher/classes" />
     </div>
   );

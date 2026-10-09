@@ -53,7 +53,7 @@ export default async function SyllabusPage({ searchParams }: PageProps<"/admin/s
         {admin && (
           <div className="flex flex-wrap gap-2">
             {/* Tải tệp: dùng thẻ <a> thường để trình duyệt tự tải về, không qua router. */}
-            <a href="/api/import/syllabus" download className="inline-flex h-10 items-center rounded-lg border px-3 text-sm font-medium hover:bg-muted">
+            <a href="/api/import/syllabus" download className="inline-flex h-10 items-center rounded-full border bg-white/80 px-4 text-sm font-medium hover:bg-muted">
               Tải tệp mẫu
             </a>
             <LinkButton variant="outline" className="h-10" href="/admin/syllabus/import">

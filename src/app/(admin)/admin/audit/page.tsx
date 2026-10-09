@@ -37,7 +37,7 @@ export default async function AuditPage({ searchParams }: PageProps<"/admin/audi
   return (
     <div className="grid gap-4">
       <div>
-        <h1 className="text-lg font-semibold">Nhật ký</h1>
+        <h1 className="text-xl font-semibold sm:text-2xl">Nhật ký</h1>
         <p className="text-sm text-muted-foreground">
           Ghi lại đăng nhập, thay đổi tài khoản, điểm danh, sao, avatar, lịch học, xuất báo cáo và mọi thao tác tạo/sửa/xóa. {result.total} bản ghi.
         </p>
@@ -60,11 +60,11 @@ export default async function AuditPage({ searchParams }: PageProps<"/admin/audi
       </form>
 
       {result.rows.length === 0 ? (
-        <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">Không có bản ghi phù hợp.</p>
+        <p className="rounded-2xl border border-dashed p-6 text-center text-sm text-muted-foreground">Không có bản ghi phù hợp.</p>
       ) : (
         <ul className="grid gap-1.5">
           {result.rows.map((log) => (
-            <li key={log.id} className="rounded-lg border px-3 py-2 text-sm">
+            <li key={log.id} className="glass-solid rounded-xl border px-3 py-2 text-sm">
               <div className="flex flex-wrap items-baseline gap-x-2">
                 <span className="font-medium">{log.action}</span>
                 <span className="text-muted-foreground">{log.tableName}</span>

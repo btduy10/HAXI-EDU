@@ -60,7 +60,7 @@ export default async function SessionDetailPage({ params }: PageProps<"/admin/se
         </div>
       </div>
 
-      <dl className="grid gap-2 rounded-lg border p-3 text-sm">
+      <dl className="grid gap-2 glass-solid rounded-xl border p-3 text-sm">
         {facts.map(([label, value]) => (
           <div key={label} className="flex gap-2">
             <dt className="w-28 shrink-0 text-muted-foreground">{label}</dt>

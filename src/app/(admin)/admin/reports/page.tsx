@@ -40,7 +40,7 @@ const MONTH = /^\d{4}-(0[1-9]|1[0-2])$/;
 const monthOf = (value: string, today: string) => (MONTH.test(value) ? value : today.slice(0, 7));
 const monthLabel = (month: string) => `${Number(month.slice(5, 7))}/${month.slice(0, 4)}`;
 const number = (n: number) => n.toLocaleString("vi-VN");
-const empty = "rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground";
+const empty = "rounded-2xl border border-dashed p-6 text-center text-sm text-muted-foreground";
 
 export default async function ReportsPage({ searchParams }: PageProps<"/admin/reports">) {
   const { actor, role, can } = await requireMenu("reports");
@@ -49,21 +49,21 @@ export default async function ReportsPage({ searchParams }: PageProps<"/admin/re
 
   return (
     <div className="grid gap-4">
-      <h1 className="text-lg font-semibold">Báo cáo</h1>
+      <h1 className="text-xl font-semibold sm:text-2xl">Báo cáo</h1>
       {!seesAllClasses(actor) ? (
         // Số liệu tài chính là của cả trung tâm: vai trò chỉ thấy lớp của mình không xem được.
         <p className={empty}>Báo cáo doanh thu, chi, lãi là số liệu của cả trung tâm nên chỉ dành cho vai trò có phạm vi “Tất cả lớp”.</p>
       ) : (
         <>
-          <nav aria-label="Mục" className="flex gap-1 overflow-x-auto rounded-lg border p-0.5 text-sm">
+          <nav aria-label="Mục" className="flex gap-1 overflow-x-auto glass-solid rounded-full border p-1 text-sm">
             {TABS.map((t) => (
               <Link
                 key={t.key}
                 href={`/admin/reports?tab=${t.key}`}
                 aria-current={tab === t.key ? "page" : undefined}
                 className={cn(
-                  "flex min-h-10 shrink-0 items-center rounded-md px-3 font-medium whitespace-nowrap",
-                  tab === t.key ? "bg-primary text-primary-foreground" : "hover:bg-muted",
+                  "flex min-h-10 shrink-0 items-center rounded-full px-4 font-medium whitespace-nowrap transition-colors",
+                  tab === t.key ? "bg-brand-teal font-semibold text-foreground shadow-sm" : "hover:bg-muted",
                 )}
               >
                 {t.label}
@@ -82,7 +82,7 @@ export default async function ReportsPage({ searchParams }: PageProps<"/admin/re
 
 function StatTile({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
-    <div className="grid min-w-0 gap-1 rounded-xl border bg-card p-4">
+    <div className="grid min-w-0 gap-1 glass-card rounded-3xl p-5">
       <p className="text-sm text-muted-foreground">{label}</p>
       <p className="text-xl font-bold break-words tabular-nums">{value}</p>
       {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
@@ -162,7 +162,7 @@ async function RevenueTab({ actor, params }: { actor: Actor; params: Params }) {
 
       <section className="grid gap-2">
         <h2 className="font-semibold">Chi tiết theo {FINANCE_VIEW_LABEL[view].toLowerCase()}</h2>
-        <div className="overflow-x-auto rounded-lg border">
+        <div className="glass-solid min-w-0 overflow-x-auto rounded-2xl border">
           <Table>
             <TableHeader>
               <TableRow>
@@ -240,7 +240,7 @@ async function SalaryTab({ actor, params, canTimesheet }: { actor: Actor; params
         {salary.rows.length === 0 ? (
           <p className={empty}>Tháng này chưa có công nào đã dạy.</p>
         ) : (
-          <div className="overflow-x-auto rounded-lg border">
+          <div className="glass-solid min-w-0 overflow-x-auto rounded-2xl border">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -357,7 +357,7 @@ async function UnpaidTab({ actor, params }: { actor: Actor; params: Params }) {
         {rows.length === 0 ? (
           <p className={empty}>Không có học viên nào còn phải đóng học phí.</p>
         ) : (
-          <div className="overflow-x-auto rounded-lg border">
+          <div className="glass-solid min-w-0 overflow-x-auto rounded-2xl border">
             <Table>
               <TableHeader>
                 <TableRow>

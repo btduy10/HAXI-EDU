@@ -403,7 +403,7 @@ test("Báo cáo: doanh thu – chi – lãi theo tuần/tháng/năm có biểu �
   await page.goto("/admin/reports");
   await expect(page.getByRole("heading", { name: "Báo cáo", exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: "Doanh thu", exact: true })).toHaveAttribute("aria-current", "page");
-  const tile = (label: string | RegExp) => page.locator("div.rounded-xl").filter({ has: page.getByText(label, { exact: true }) });
+  const tile = (label: string | RegExp) => page.locator("div.glass-card").filter({ has: page.getByText(label, { exact: true }) });
   await expect(tile("Tổng doanh thu")).toContainText(money(revenue));
   await expect(page.getByRole("heading", { name: "Doanh thu theo tháng" })).toBeVisible();
   await expect(page.getByRole("columnheader", { name: "Lãi" })).toBeVisible();

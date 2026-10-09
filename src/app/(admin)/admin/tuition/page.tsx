@@ -101,7 +101,7 @@ export default async function TuitionPage({ searchParams }: PageProps<"/admin/tu
 
   return (
     <div className="grid gap-4">
-      <h1 className="text-lg font-semibold">Học phí</h1>
+      <h1 className="text-xl font-semibold sm:text-2xl">Học phí</h1>
 
       <form className="grid gap-2 sm:grid-cols-[1fr_1fr_1fr_auto]" role="search">
         <AutoSubmitSelect name="classId" defaultValue={cls?.id ?? ""} aria-label="Lọc theo lớp" className="h-10">
@@ -127,7 +127,7 @@ export default async function TuitionPage({ searchParams }: PageProps<"/admin/tu
       </form>
 
       {cls && (
-        <div className="flex flex-wrap items-center gap-2 rounded-lg border p-3 text-sm">
+        <div className="flex flex-wrap items-center gap-2 glass-solid rounded-xl border p-3 text-sm">
           <span>
             Học phí lớp <strong>{cls.code}</strong>:{" "}
             <strong>{cls.tuitionFee === null ? "chưa đặt" : `${formatMoney(cls.tuitionFee)} / học viên`}</strong>
@@ -172,7 +172,7 @@ export default async function TuitionPage({ searchParams }: PageProps<"/admin/tu
           ["Đã thu", total.paid],
           ["Còn phải thu", total.remaining],
         ].map(([label, value]) => (
-          <div key={label} className="rounded-lg border p-3">
+          <div key={label} className="glass-solid rounded-2xl border p-3">
             <dt className="text-sm text-muted-foreground">{label}</dt>
             <dd className="text-lg font-semibold tabular-nums">{formatMoney(value as number)}</dd>
           </div>
@@ -184,12 +184,12 @@ export default async function TuitionPage({ searchParams }: PageProps<"/admin/tu
           Học viên <span className="text-sm font-normal text-muted-foreground">({rows.length})</span>
         </h2>
         {rows.length === 0 ? (
-          <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">Không có học viên phù hợp.</p>
+          <p className="rounded-2xl border border-dashed p-6 text-center text-sm text-muted-foreground">Không có học viên phù hợp.</p>
         ) : (
           <>
             <ul className="grid gap-2 lg:hidden">
               {rows.map((r, index) => (
-                <li key={r.enrollmentId} className="grid gap-2 rounded-lg border p-3 text-sm">
+                <li key={r.enrollmentId} className="grid gap-2 glass-solid rounded-xl border p-3 text-sm">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-muted-foreground tabular-nums">{index + 1}.</span>
                     <span className="font-medium">
@@ -212,7 +212,7 @@ export default async function TuitionPage({ searchParams }: PageProps<"/admin/tu
                 </li>
               ))}
             </ul>
-            <div className="hidden rounded-lg border lg:block">
+            <div className="glass-solid hidden min-w-0 overflow-hidden rounded-2xl border lg:block">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -265,11 +265,11 @@ export default async function TuitionPage({ searchParams }: PageProps<"/admin/tu
           <span className="text-sm font-normal text-muted-foreground">({cls ? receipts.length : `${receipts.length} phiếu gần nhất`})</span>
         </h2>
         {receipts.length === 0 ? (
-          <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">Chưa có phiếu thu.</p>
+          <p className="rounded-2xl border border-dashed p-6 text-center text-sm text-muted-foreground">Chưa có phiếu thu.</p>
         ) : (
           <ul className="grid gap-2">
             {receipts.map((r) => (
-              <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3 text-sm">
+              <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 glass-solid rounded-xl border p-3 text-sm">
                 <div className={cn("min-w-0", r.status === "cancelled" && "text-muted-foreground line-through")}>
                   <p className="font-medium">
                     {r.code} · {formatDate(r.paidAt)} · <span className="tabular-nums">{formatMoney(r.amount)}</span> · {PAYMENT_METHOD_LABEL[r.method]}

@@ -18,7 +18,7 @@ export function TodaySessions({
         Buổi học hôm nay <span className="text-sm font-normal text-muted-foreground">({formatDate(today)})</span>
       </h2>
       {sessions.length === 0 ? (
-        <p className="rounded-lg border border-dashed p-4 text-center text-sm text-muted-foreground">Hôm nay không có buổi học.</p>
+        <p className="rounded-2xl border border-dashed p-4 text-center text-sm text-muted-foreground">Hôm nay không có buổi học.</p>
       ) : (
         <div className="grid gap-2 sm:grid-cols-2">
           {sessions.map((s) => (
@@ -39,12 +39,12 @@ export function OverdueSessions({ sessions, hrefOf }: { sessions: Overdue[]; hre
         Buổi quá hạn chưa điểm danh <span className="text-sm font-normal text-muted-foreground">({sessions.length})</span>
       </h2>
       {sessions.length === 0 ? (
-        <p className="rounded-lg border border-dashed p-4 text-center text-sm text-muted-foreground">Không có buổi nào quá hạn.</p>
+        <p className="rounded-2xl border border-dashed p-4 text-center text-sm text-muted-foreground">Không có buổi nào quá hạn.</p>
       ) : (
         <ul className="grid gap-2 sm:grid-cols-2">
           {sessions.map((s) => (
             <li key={s.id}>
-              <Link href={hrefOf(s.id)} className="flex items-center justify-between gap-2 rounded-lg border p-3 text-sm hover:bg-muted">
+              <Link href={hrefOf(s.id)} className="flex items-center justify-between gap-2 glass-solid rounded-xl border p-3 text-sm hover:bg-muted">
                 <span className="min-w-0">
                   <span className="font-medium">{s.classCode}</span>{" "}
                   <span className="text-muted-foreground">

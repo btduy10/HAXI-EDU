@@ -34,7 +34,7 @@ export async function StarsPage({
         <Link href={backHref} className="text-sm text-muted-foreground underline-offset-2 hover:underline">
           ← Quay lại
         </Link>
-        <h1 className="text-lg font-semibold">
+        <h1 className="text-xl font-semibold sm:text-2xl">
           Ghi sao {session.classCode} – {session.className}
         </h1>
         <p className="text-sm text-muted-foreground">
@@ -49,7 +49,7 @@ export async function StarsPage({
           <AlertDescription>{blocked}</AlertDescription>
         </Alert>
       ) : board.students.length === 0 ? (
-        <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">Buổi học không có học viên nào.</p>
+        <p className="rounded-2xl border border-dashed p-6 text-center text-sm text-muted-foreground">Buổi học không có học viên nào.</p>
       ) : !can(actor, "stars", "add") ? (
         <>
           <Alert>
@@ -57,7 +57,7 @@ export async function StarsPage({
           </Alert>
           <ul className="grid gap-1.5">
             {board.students.map((s) => (
-              <li key={s.studentId} className="flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm">
+              <li key={s.studentId} className="flex items-center justify-between gap-2 glass-solid rounded-xl border px-3 py-2 text-sm">
                 <span className="min-w-0 break-words">
                   {s.fullName} <span className="text-muted-foreground">({s.code})</span>
                 </span>

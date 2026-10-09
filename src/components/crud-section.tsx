@@ -111,7 +111,7 @@ export function CrudSection({
   const groupNo = spans.map((_, i) => spans.slice(0, i + 1).filter((n) => n > 0).length);
 
   return (
-    <section className="grid gap-3">
+    <section className="grid min-w-0 gap-3">
       <div className="flex items-center justify-between gap-2">
         <h2 className="text-lg font-semibold">
           {title} <span className="text-sm font-normal text-muted-foreground">({total ?? rows.length})</span>
@@ -124,12 +124,12 @@ export function CrudSection({
       </div>
 
       {rows.length === 0 ? (
-        <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">{emptyText}</p>
+        <p className="rounded-2xl border border-dashed p-6 text-center text-sm text-muted-foreground">{emptyText}</p>
       ) : (
         <>
           <ul className="grid gap-2 md:hidden">
             {rows.map((row, index) => (
-              <li key={row.id} className={cn("flex gap-2 rounded-lg border p-3", row.href ? "flex-col" : "items-start justify-between")}>
+              <li key={row.id} className={cn("flex gap-2 glass-solid rounded-xl border p-3", row.href ? "flex-col" : "items-start justify-between")}>
                 <div className="min-w-0">
                   <p className="font-medium break-words">
                     {numbered && <span className="mr-1 font-normal text-muted-foreground tabular-nums">{startIndex + groupNo[index]!}.</span>}
@@ -150,7 +150,7 @@ export function CrudSection({
               </li>
             ))}
           </ul>
-          <div className="hidden rounded-lg border md:block">
+          <div className="glass-solid hidden min-w-0 overflow-hidden rounded-2xl border md:block">
             <Table>
               <TableHeader>
                 <TableRow>

@@ -27,7 +27,7 @@ export default async function EnrollmentsPage({ searchParams }: PageProps<"/admi
 
   return (
     <div className="grid gap-4">
-      <h1 className="text-lg font-semibold">Ghi danh</h1>
+      <h1 className="text-xl font-semibold sm:text-2xl">Ghi danh</h1>
       <form>
         {/* Chọn lớp là hiện danh sách ngay. Màn hình rộng: ô chọn chỉ chiếm nửa chiều ngang. */}
         <label className="grid gap-1.5 text-sm font-medium sm:w-1/2">
@@ -71,13 +71,13 @@ export default async function EnrollmentsPage({ searchParams }: PageProps<"/admi
           </div>
 
           {enrollments.length === 0 ? (
-            <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
+            <p className="rounded-2xl border border-dashed p-6 text-center text-sm text-muted-foreground">
               Lớp chưa có học viên.
             </p>
           ) : (
             <ul className="grid gap-2">
               {enrollments.map((e) => (
-                <li key={e.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3 text-sm">
+                <li key={e.id} className="flex flex-wrap items-center justify-between gap-2 glass-solid rounded-xl border p-3 text-sm">
                   <div className="min-w-0">
                     <p className="font-medium break-words">
                       <span className="tabular-nums">{e.code}</span> <span className="font-normal text-muted-foreground">–</span> {e.fullName}

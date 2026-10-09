@@ -120,12 +120,12 @@ export default async function TimesheetPage({ searchParams }: PageProps<"/admin/
     if (cls) query.set("classId", cls.id);
     return `/api/export/timesheet?${query}`;
   };
-  const exportClass = "inline-flex h-9 items-center rounded-lg border px-3 text-sm font-medium hover:bg-muted";
+  const exportClass = "inline-flex h-9 items-center rounded-full border bg-white/80 px-4 text-sm font-medium hover:bg-muted";
 
   return (
     <div className="grid gap-4">
       <div>
-        <h1 className="text-lg font-semibold">Chấm công giáo viên</h1>
+        <h1 className="text-xl font-semibold sm:text-2xl">Chấm công giáo viên</h1>
         <p className="text-sm text-muted-foreground">
           Mỗi buổi đã điểm danh là một công cho người thực dạy (giáo viên dạy thay nếu có) và một công trợ giảng cho trợ giảng
           của buổi. Buổi đã hủy không tính. Chấm công bổ sung là dòng công ghi tay, không tạo buổi học. Sửa dòng công chỉ đổi
@@ -215,11 +215,11 @@ export default async function TimesheetPage({ searchParams }: PageProps<"/admin/
           )}
         </div>
         {summary.length === 0 ? (
-          <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
+          <p className="rounded-2xl border border-dashed p-6 text-center text-sm text-muted-foreground">
             Không có buổi dạy nào trong khoảng thời gian này.
           </p>
         ) : (
-          <div className="overflow-x-auto rounded-lg border">
+          <div className="glass-solid min-w-0 overflow-x-auto rounded-2xl border">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -289,7 +289,7 @@ export default async function TimesheetPage({ searchParams }: PageProps<"/admin/
           <h2 className="font-semibold">
             Chi tiết buổi dạy <span className="text-sm font-normal text-muted-foreground">({rows.length})</span>
           </h2>
-          <div className="overflow-x-auto rounded-lg border">
+          <div className="glass-solid min-w-0 overflow-x-auto rounded-2xl border">
             <Table>
               <TableHeader>
                 <TableRow>

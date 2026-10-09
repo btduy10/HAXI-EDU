@@ -34,7 +34,7 @@ export async function AttendancePage({
         <Link href={backHref} className="text-sm text-muted-foreground underline-offset-2 hover:underline">
           ← Quay lại
         </Link>
-        <h1 className="text-lg font-semibold">
+        <h1 className="text-xl font-semibold sm:text-2xl">
           Điểm danh {session.classCode} – {session.className}
         </h1>
         <p className="text-sm text-muted-foreground">

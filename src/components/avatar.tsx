@@ -103,7 +103,7 @@ export function StudentProgressCard({
       </div>
     </>
   );
-  const className = "flex items-center gap-3 rounded-lg border p-3";
+  const className = "flex items-center gap-3 glass-solid rounded-2xl border p-3";
   return href ? (
     <Link href={href} className={cn(className, "hover:bg-muted")}>
       {body}

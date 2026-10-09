@@ -33,15 +33,15 @@ export function SessionTabs({
   ].filter((t) => show[t.key]);
   if (tabs.length < 2) return null;
   return (
-    <nav aria-label="Buổi học" className="grid grid-cols-2 rounded-lg border p-0.5 text-sm">
+    <nav aria-label="Buổi học" className="grid grid-cols-2 glass-solid rounded-full border p-1 text-sm">
       {tabs.map((t) => (
         <Link
           key={t.key}
           href={t.href}
           aria-current={active === t.key ? "page" : undefined}
           className={cn(
-            "flex min-h-10 items-center justify-center rounded-md font-medium",
-            active === t.key ? "bg-primary text-primary-foreground" : "hover:bg-muted",
+            "flex min-h-10 items-center justify-center rounded-full font-medium transition-colors",
+            active === t.key ? "bg-brand-teal font-semibold text-foreground shadow-sm" : "hover:bg-muted",
           )}
         >
           {t.label}

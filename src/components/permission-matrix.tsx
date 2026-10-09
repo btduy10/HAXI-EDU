@@ -90,7 +90,7 @@ export function PermissionMatrix({
 
   return (
     <div className="grid gap-4">
-      <section className="grid gap-3 rounded-lg border p-3" aria-label={`Quyền của ${current.label}`}>
+      <section className="grid gap-3 glass-solid rounded-2xl border p-3" aria-label={`Quyền của ${current.label}`}>
         <div className="flex flex-wrap items-end gap-2">
           <label className="grid min-w-0 flex-1 gap-1.5 text-sm font-medium sm:max-w-sm">
             Vai trò

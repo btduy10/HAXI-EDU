@@ -187,7 +187,7 @@ export default async function ClassDetailPage({ params }: PageProps<"/admin/clas
           hiện tại; buổi đã điểm danh, đã ghi sao và buổi đã hủy giữ nguyên.
         </p>
         {overview.scheduled + overview.makeup > 0 ? (
-          <div className="grid gap-2 rounded-lg border p-3 text-sm">
+          <div className="grid gap-2 glass-solid rounded-xl border p-3 text-sm">
             <p>
               Đã xếp <strong>{overview.scheduled}/{overview.courseSessions}</strong> buổi theo khóa học
               {overview.first && overview.last && (
@@ -211,7 +211,7 @@ export default async function ClassDetailPage({ params }: PageProps<"/admin/clas
             )}
           </div>
         ) : (
-          <p className="rounded-lg border border-dashed p-3 text-sm text-muted-foreground">Lớp chưa có buổi học nào. Thêm lịch mẫu rồi bấm “Sinh buổi học từ lịch mẫu”.</p>
+          <p className="rounded-2xl border border-dashed p-3 text-sm text-muted-foreground">Lớp chưa có buổi học nào. Thêm lịch mẫu rồi bấm “Sinh buổi học từ lịch mẫu”.</p>
         )}
         <div className="flex flex-wrap items-start gap-2">
           {canEdit && (
@@ -245,7 +245,7 @@ export default async function ClassDetailPage({ params }: PageProps<"/admin/clas
           )}
         </div>
         {students.length === 0 ? (
-          <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
+          <p className="rounded-2xl border border-dashed p-6 text-center text-sm text-muted-foreground">
             Chưa có học viên ghi danh.
           </p>
         ) : (
