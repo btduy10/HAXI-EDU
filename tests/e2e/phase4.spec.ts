@@ -211,6 +211,18 @@ test("Admin: cấu hình, đóng lớp, chốt tổng kết, duyệt và trao qu
   await page.getByRole("button", { name: "Lưu" }).click();
   await expect(page.getByText("Đã đặt lại mật khẩu.")).toBeVisible();
   await expectNoHorizontalScroll(page);
+
+  // Gửi tài khoản qua email: chỉ tài khoản gắn giáo viên có nút; hộp thoại ghi địa chỉ nhận lấy từ menu Giáo viên.
+  // Máy chủ test không khai báo SMTP nên báo lỗi và không đổi mật khẩu (test sau vẫn đăng nhập bằng mật khẩu vừa đặt lại).
+  await expect(self.getByRole("button", { name: "Gửi tài khoản" })).toHaveCount(0);
+  await minh.getByRole("button", { name: "Gửi tài khoản" }).click();
+  await expect(page.getByRole("dialog")).toContainText("minh@haxi.example");
+  await page.locator("#f-password").fill("MatKhauGui2026");
+  await page.getByRole("dialog").getByRole("button", { name: "Gửi", exact: true }).click();
+  await expect(page.getByRole("dialog").getByText(/Chưa cấu hình gửi email/)).toBeVisible();
+  await expectNoHorizontalScroll(page);
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
   await page.screenshot({ path: "test-results/shots/accounts-edit-360.png", fullPage: true });
 
   // Nhật ký: lọc theo hành động, xem chi tiết.

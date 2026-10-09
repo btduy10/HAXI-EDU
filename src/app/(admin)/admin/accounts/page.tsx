@@ -14,6 +14,7 @@ import {
   lockAccountAction,
   resetPasswordAction,
   resetTwoFactorAction,
+  sendAccountCredentialsAction,
   updateAccountAction,
 } from "@/server/actions/admin";
 import { listAccounts } from "@/server/services/accounts";
@@ -117,6 +118,25 @@ export default async function AccountsPage({ searchParams }: PageProps<"/admin/a
           action={resetPasswordAction}
           successMessage="Đã đặt lại mật khẩu."
         />
+        {/* Gửi tên đăng nhập, mật khẩu tạm và hướng dẫn tới email của giáo viên gắn kèm (menu Giáo viên). */}
+        {!isSelf && a.teacherId && (
+          <FormDialogButton
+            label="Gửi tài khoản"
+            variant="outline"
+            className="h-9"
+            title={`Gửi tài khoản cho ${a.username}`}
+            description={
+              a.teacherEmail
+                ? `Thư gửi tới ${a.teacherEmail} gồm tên đăng nhập, mật khẩu tạm dưới đây và hướng dẫn đăng nhập. Mật khẩu cũ hết hiệu lực, tài khoản bị đăng xuất khỏi mọi thiết bị và phải đổi mật khẩu ở lần đăng nhập đầu.`
+                : `Giáo viên ${a.teacherName ?? ""} chưa có email. Nhập email ở menu Giáo viên trước khi gửi.`
+            }
+            fields={[{ name: "password", label: "Mật khẩu tạm", type: "password", required: true, hint: PASSWORD_HINT }]}
+            fixed={{ id: a.id }}
+            action={sendAccountCredentialsAction}
+            submitLabel="Gửi"
+            successMessage="Đã gửi tài khoản qua email."
+          />
+        )}
         {/* Admin khóa/mở khóa bất kỳ tài khoản nào khác; không tự khóa chính mình để khỏi mất quyền quản trị. */}
         {!isSelf && (
           <ConfirmButton

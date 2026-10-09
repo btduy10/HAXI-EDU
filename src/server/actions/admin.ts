@@ -19,6 +19,7 @@ import {
   purchaseInput,
   purchaseUpdate,
   resetPasswordInput,
+  sendCredentialsInput,
   roomInput,
   roomUpdate,
   studentInput,
@@ -135,6 +136,8 @@ export const createAccountAction = async (input: unknown) => runAction(accountIn
 export const updateAccountAction = async (input: unknown) => runAction(accountEditInput, input, accounts.updateAccount, ADMIN);
 export const resetPasswordAction = async (input: unknown) =>
   runAction(resetPasswordInput, input, (a, d) => accounts.resetAccountPassword(a, d.id, d.password, d.mustChange), ADMIN);
+export const sendAccountCredentialsAction = async (input: unknown) =>
+  runAction(sendCredentialsInput, input, (a, d) => accounts.sendAccountCredentials(a, d.id, d.password), ADMIN);
 export const lockAccountAction = async (input: unknown) =>
   runAction(lockInput, input, (a, d) => accounts.setAccountLocked(a, d.id, d.locked), ADMIN);
 export const deleteAccountAction = async (input: unknown) =>

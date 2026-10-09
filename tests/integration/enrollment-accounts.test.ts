@@ -1,17 +1,30 @@
 import { eq } from "drizzle-orm";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "@/db";
-import { account, attendances, auditLogs, classes as classesTable, levels, session, sessions, starLogs, students, user } from "@/db/schema";
+import { account, attendances, auditLogs, classes as classesTable, levels, session, sessions, starLogs, students, teachers, user } from "@/db/schema";
+import type { MailMessage } from "@/server/mailer";
 import { verifyPassword } from "@/server/password";
 import * as accounts from "@/server/services/accounts";
 import * as catalog from "@/server/services/catalog";
 import * as classes from "@/server/services/classes";
 import { type Fixture, resetDb, seedFixture } from "./helpers";
 
+// Không gửi thư thật: giả lập máy chủ thư, ghi lại thư đã gửi.
+const mail = vi.hoisted(() => ({ sent: [] as MailMessage[], fail: false }));
+vi.mock("@/server/mailer", () => ({
+  assertMailConfigured: () => {},
+  sendMail: async (message: MailMessage) => {
+    if (mail.fail) throw new Error("SMTP lỗi");
+    mail.sent.push(message);
+  },
+}));
+
 let f: Fixture;
 beforeEach(async () => {
   await resetDb();
   f = await seedFixture();
+  mail.sent = [];
+  mail.fail = false;
 });
 
 describe("ghi danh", () => {
@@ -210,6 +223,55 @@ describe("tài khoản", () => {
     // Xóa tài khoản GV: hồ sơ giáo viên còn nguyên, tạo lại tài khoản cho giáo viên đó được.
     await accounts.deleteAccount(f.admin, f.actorA.userId);
     await expect(accounts.createAccount(f.admin, { ...input, teacherId: f.teacherA.id })).resolves.toBeDefined();
+  });
+
+  it("gửi tài khoản qua email: đặt mật khẩu tạm, bắt đổi, thu hồi phiên, thư tới email của giáo viên, nhật ký không chứa mật khẩu", async () => {
+    vi.stubEnv("BETTER_AUTH_URL", "https://haxi.example");
+    const { id } = await accounts.createAccount(f.admin, { ...input, teacherId: null });
+    await db.update(user).set({ mustChangePassword: false, lockedUntil: new Date(Date.now() + 60_000) }).where(eq(user.id, id));
+    await db.insert(session).values({ id: "s-send", token: "t-send", userId: id, expiresAt: new Date(Date.now() + 3600_000) });
+    const hashOf = async () => (await db.select().from(account).where(eq(account.userId, id)))[0]!.password!;
+    const before = await hashOf();
+
+    // Chưa gắn giáo viên, hoặc giáo viên chưa có email: báo lỗi, không đổi mật khẩu, không gửi thư.
+    await expect(accounts.sendAccountCredentials(f.admin, id, "MatKhauGui2026")).rejects.toMatchObject({ code: "CONFLICT" });
+    await db.update(user).set({ teacherId: null }).where(eq(user.id, f.actorA.userId));
+    await db.update(user).set({ teacherId: f.teacherA.id }).where(eq(user.id, id));
+    await expect(accounts.sendAccountCredentials(f.admin, id, "MatKhauGui2026")).rejects.toMatchObject({
+      code: "CONFLICT",
+      message: expect.stringContaining("menu Giáo viên"),
+    });
+    // Người không phải Admin không gửi được; tài khoản không tồn tại báo không tìm thấy.
+    await db.update(teachers).set({ email: "gv.moi@truong.example" }).where(eq(teachers.id, f.teacherA.id));
+    await expect(accounts.sendAccountCredentials(f.actorB, id, "MatKhauGui2026")).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(accounts.sendAccountCredentials(f.admin, "khong-ton-tai", "MatKhauGui2026")).rejects.toMatchObject({ code: "NOT_FOUND" });
+
+    // Máy chủ thư lỗi: hoàn tác, mật khẩu cũ và phiên còn nguyên.
+    mail.fail = true;
+    await expect(accounts.sendAccountCredentials(f.admin, id, "MatKhauGui2026")).rejects.toThrow();
+    mail.fail = false;
+    expect(await hashOf()).toBe(before);
+    expect(await db.select().from(session).where(eq(session.userId, id))).toHaveLength(1);
+    expect(mail.sent).toEqual([]);
+    expect(await db.select().from(auditLogs).where(eq(auditLogs.action, "account_credentials_sent"))).toEqual([]);
+
+    await accounts.sendAccountCredentials(f.admin, id, "MatKhauGui2026");
+    expect(mail.sent).toHaveLength(1);
+    expect(mail.sent[0]!.to).toBe("gv.moi@truong.example");
+    for (const body of [mail.sent[0]!.text, mail.sent[0]!.html]) {
+      expect(body).toContain("gv.moi");
+      expect(body).toContain("MatKhauGui2026");
+      expect(body).toContain("https://haxi.example/login");
+    }
+    expect(await verifyPassword({ hash: await hashOf(), password: "MatKhauGui2026" })).toBe(true);
+    const [u] = await db.select().from(user).where(eq(user.id, id));
+    expect(u).toMatchObject({ mustChangePassword: true, lockedUntil: null, failedAttempts: 0 });
+    expect(await db.select().from(session).where(eq(session.userId, id))).toEqual([]);
+    const [log] = await db.select().from(auditLogs).where(eq(auditLogs.action, "account_credentials_sent"));
+    expect(log).toMatchObject({ userId: f.admin.userId, recordId: id });
+    expect(JSON.stringify(log)).not.toContain("MatKhauGui2026");
+    expect(JSON.stringify(log)).not.toContain("truong.example");
+    vi.unstubAllEnvs();
   });
 
   it("đặt lại mật khẩu buộc đổi lại và thu hồi phiên", async () => {

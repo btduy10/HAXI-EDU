@@ -108,6 +108,7 @@ Nguyên tắc: mọi hàm trong `server/services` nhận `actor` lấy từ phi�
   - Giấy in chỉ có tên và mã học viên, không lấy ngày sinh, điện thoại, phụ huynh từ hồ sơ; "Người nộp" là ô nhập tay khi thu.
 - Ghi danh: chặn vượt sĩ số, giữ lịch sử rời lớp.
 - Tài khoản: tạo, đặt lại mật khẩu, khóa/mở, đặt lại 2FA.
+- **Gửi tài khoản qua email:** tài khoản gắn với giáo viên có nút **Gửi tài khoản**. Admin nhập một mật khẩu tạm; hệ thống đặt lại mật khẩu của tài khoản thành mật khẩu đó (mật khẩu cũ hết hiệu lực, tài khoản bị đăng xuất khỏi mọi thiết bị, bắt đổi ở lần đăng nhập đầu) rồi gửi thư tới email của giáo viên ở menu Giáo viên, gồm tên đăng nhập, mật khẩu tạm, đường dẫn và hướng dẫn đăng nhập. Gửi thư lỗi thì mật khẩu cũ giữ nguyên. Mật khẩu đang lưu đã băm một chiều nên không gửi lại được mật khẩu hiện tại. Cần cấu hình SMTP, xem mục [Gửi email](#gửi-email).
 
 ### Thời khóa biểu và điểm danh
 
@@ -167,6 +168,26 @@ Kiểu "cửa sổ kính" trên nền thiên nhiên mờ; mọi trang dùng chun
 - **Bố cục:** từ 1280px thanh điều hướng đầy đủ; 768–1279px thu thành dải icon; dưới 768px là menu trượt. Bề rộng thanh điều hướng nằm trong biến `--sidebar-w`.
 - **Hiệu ứng** (CSS thuần, không thêm thư viện): thẻ Tổng quan hiện lần lượt (`stagger`), số KPI đếm tăng (`src/components/count-up.tsx`), biểu đồ vẽ dần (`chart-grow-*`, `chart-draw`), thẻ nổi khi rê chuột (`card-lift`), pill teal trượt giữa các mục menu, nội dung hiện dần khi chuyển trang. Tất cả tắt khi máy bật "giảm chuyển động".
 - **Ảnh so sánh giao diện:** `SHOTS=<tên bộ ảnh> npm run test:e2e` chụp các trang chính ở 360/768/1280/1920px vào `ui-shots/<tên bộ ảnh>/` (không commit).
+
+## Gửi email
+
+Nút **Gửi tài khoản** gửi thư qua SMTP bằng `nodemailer`. Chưa khai báo thì nút báo "Chưa cấu hình gửi email", các chức năng khác không ảnh hưởng.
+
+| Biến | Giá trị |
+|---|---|
+| `SMTP_USER` | Địa chỉ hộp thư dùng để gửi (vd. Gmail của trung tâm) |
+| `SMTP_PASS` | Mật khẩu ứng dụng của hộp thư đó (không phải mật khẩu đăng nhập Gmail) |
+| `SMTP_HOST` | Tùy chọn, mặc định `smtp.gmail.com` |
+| `SMTP_PORT` | Tùy chọn, mặc định `465` (TLS ngay từ đầu); cổng khác như `587` dùng STARTTLS |
+| `MAIL_FROM` | Tùy chọn, mặc định `HAXI STEM <SMTP_USER>` |
+
+Với Gmail:
+
+1. Đăng nhập tài khoản Google của trung tâm, vào **Bảo mật** và bật **Xác minh 2 bước**.
+2. Mở <https://myaccount.google.com/apppasswords>, tạo một mật khẩu ứng dụng (đặt tên vd. "HAXI STEM"). Google hiện 16 ký tự; đó là giá trị của `SMTP_PASS`.
+3. Trên Vercel: **Settings → Environment Variables**, thêm `SMTP_USER` và `SMTP_PASS` cho môi trường Production, rồi **Redeploy**. Chạy trên máy thì thêm vào tệp `.env`.
+
+Thư chứa mật khẩu tạm ở dạng chữ thường và một bản sao nằm trong hộp **Đã gửi** của hộp thư gửi đi, nên người nhận luôn bị bắt đổi mật khẩu ở lần đăng nhập đầu. Phần gửi qua máy chủ thư thật **chưa được chạy thử** (test dùng máy chủ thư giả lập); sau khi khai báo hãy gửi thử cho một tài khoản.
 
 ## Triển khai trên Vercel
 
@@ -242,6 +263,7 @@ Khác biệt khi chạy trên Netlify:
 - **Header:** CSP với nonce theo từng request (`script-src` không có `unsafe-inline`), HSTS, `X-Frame-Options: DENY`, `nosniff`, `Referrer-Policy`, `Permissions-Policy`.
 - **HTTPS:** bản production tự chuyển hướng HTTP → HTTPS. Triển khai sau reverse proxy có TLS và truyền `X-Forwarded-Proto`. Chỉ đặt `FORCE_HTTPS=false` khi thử `npm run build && npm start` trên máy.
 - **Dữ liệu vào:** mọi input qua Zod; chỉ truy vấn tham số hóa qua Drizzle; nội dung do người dùng nhập luôn hiển thị dạng văn bản; tệp Excel được kiểm tra đuôi, chữ ký tệp, dung lượng (2 MB) và số dòng (500).
+- **Email tài khoản:** chỉ Admin gửi được; nhật ký ghi hành động `account_credentials_sent` nhưng không ghi mật khẩu hay địa chỉ email; log ứng dụng không ghi địa chỉ nhận và nội dung thư.
 - **Nhật ký `audit_logs`:** đăng nhập, thay đổi tài khoản, điểm danh, sao, avatar, lịch học, đóng lớp, trao quà, cấu hình, xuất báo cáo và mọi thao tác tạo/sửa/xóa.
 - **Dữ liệu trẻ em:** GV không nhận số điện thoại, tên phụ huynh, ghi chú của học viên. Log ứng dụng không ghi dữ liệu cá nhân. Tệp sao lưu và tệp xuất có dữ liệu cá nhân: lưu và chia sẻ cẩn thận.
 

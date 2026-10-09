@@ -7,6 +7,7 @@ import { eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import * as schema from "@/db/schema";
 import { audit } from "./audit";
+import { resolveBaseUrl } from "./base-url";
 import { hashPassword, verifyPassword } from "./password";
 
 const MAX_FAILED = Number(process.env.LOGIN_MAX_FAILED_ATTEMPTS ?? 5);
@@ -29,16 +30,6 @@ async function findLoginUser(name: string | null) {
     .where(eq(schema.user.username, name))
     .limit(1);
   return row ?? null;
-}
-
-/**
- * Địa chỉ chính của trang. Ưu tiên BETTER_AUTH_URL; nếu chưa đặt thì lấy địa chỉ production
- * do nền tảng cung cấp (Vercel: VERCEL_PROJECT_PRODUCTION_URL không kèm giao thức; Netlify: URL).
- */
-function resolveBaseUrl(): string | undefined {
-  if (process.env.BETTER_AUTH_URL) return process.env.BETTER_AUTH_URL;
-  if (process.env.VERCEL_PROJECT_PRODUCTION_URL) return `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`;
-  return process.env.URL;
 }
 
 export const auth = betterAuth({

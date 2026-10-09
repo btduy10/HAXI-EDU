@@ -32,6 +32,9 @@ export default defineConfig({
       BETTER_AUTH_URL: `http://localhost:${PORT}`,
       AUTH_RATE_LIMIT: "off",
       LOGIN_MAX_FAILED_ATTEMPTS: "5",
+      // E2E không bao giờ gửi thư thật, kể cả khi máy có khai báo SMTP trong .env.
+      SMTP_USER: "",
+      SMTP_PASS: "",
     },
   },
 });

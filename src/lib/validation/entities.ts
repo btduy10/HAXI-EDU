@@ -204,6 +204,8 @@ export const resetPasswordInput = z.object({
     .default(true)
     .transform((v) => v === true || v === "true"),
 });
+/** Gửi tài khoản qua email: mật khẩu tạm do Admin nhập, luôn bắt đổi ở lần đăng nhập đầu. */
+export const sendCredentialsInput = z.object({ id: z.string().min(1).max(64), password });
 export const userIdInput = z.object({ id: z.string().min(1).max(64) });
 export const lockInput = z.object({ id: z.string().min(1).max(64), locked: z.boolean() });
 

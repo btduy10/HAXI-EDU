@@ -1,12 +1,15 @@
 import { randomUUID } from "node:crypto";
 import { and, asc, count, eq, ne } from "drizzle-orm";
-import type { z } from "zod";
+import { z } from "zod";
 import { db, type DbOrTx } from "@/db";
 import { account, session, teachers, twoFactor, user } from "@/db/schema";
+import { accountEmail } from "@/domain/account-email";
 import type { accountEditInput, accountInput } from "@/lib/validation/entities";
 import { audit } from "../audit";
+import { resolveBaseUrl } from "../base-url";
 import { AppError, notFound, translateDbError } from "../errors";
 import { type Actor, assertAdmin } from "../guard";
+import { assertMailConfigured, sendMail } from "../mailer";
 import { hashPassword } from "../password";
 import { assertKnownRole } from "../settings";
 
@@ -22,6 +25,7 @@ export async function listAccounts(actor: Actor) {
       role: user.role,
       teacherId: user.teacherId,
       teacherName: teachers.fullName,
+      teacherEmail: teachers.email,
       mustChangePassword: user.mustChangePassword,
       twoFactorEnabled: user.twoFactorEnabled,
       lockedUntil: user.lockedUntil,
@@ -144,18 +148,7 @@ export async function resetAccountPassword(actor: Actor, userId: string, newPass
   assertAdmin(actor);
   const passwordHash = await hashPassword(newPassword);
   await db.transaction(async (tx) => {
-    const updated = await tx
-      .update(account)
-      .set({ password: passwordHash, updatedAt: new Date() })
-      .where(and(eq(account.userId, userId), eq(account.providerId, "credential")))
-      .returning({ id: account.id });
-    if (updated.length === 0) throw notFound("tài khoản");
-    await tx
-      .update(user)
-      .set({ mustChangePassword: mustChange, failedAttempts: 0, lockedUntil: null, updatedAt: new Date() })
-      .where(eq(user.id, userId));
-    // Admin tự đặt lại mật khẩu của mình thì giữ phiên hiện tại; tài khoản khác bị đăng xuất khỏi mọi thiết bị.
-    if (userId !== actor.userId) await tx.delete(session).where(eq(session.userId, userId));
+    await applyPasswordReset(tx, actor, userId, passwordHash, mustChange);
     await audit(tx, {
       userId: actor.userId,
       action: "account_password_reset",
@@ -163,6 +156,69 @@ export async function resetAccountPassword(actor: Actor, userId: string, newPass
       recordId: userId,
       newValue: { mustChange },
     });
+  });
+}
+
+/** Ghi mật khẩu mới (đã băm), gỡ khóa và thu hồi phiên của tài khoản. */
+async function applyPasswordReset(tx: DbOrTx, actor: Actor, userId: string, passwordHash: string, mustChange: boolean) {
+  const updated = await tx
+    .update(account)
+    .set({ password: passwordHash, updatedAt: new Date() })
+    .where(and(eq(account.userId, userId), eq(account.providerId, "credential")))
+    .returning({ id: account.id });
+  if (updated.length === 0) throw notFound("tài khoản");
+  await tx
+    .update(user)
+    .set({ mustChangePassword: mustChange, failedAttempts: 0, lockedUntil: null, updatedAt: new Date() })
+    .where(eq(user.id, userId));
+  // Admin tự đặt lại mật khẩu của mình thì giữ phiên hiện tại; tài khoản khác bị đăng xuất khỏi mọi thiết bị.
+  if (userId !== actor.userId) await tx.delete(session).where(eq(session.userId, userId));
+}
+
+/**
+ * Admin gửi thông tin đăng nhập qua email của giáo viên gắn với tài khoản (menu Giáo viên): tên đăng nhập,
+ * mật khẩu tạm Admin vừa nhập và hướng dẫn đăng nhập. Mật khẩu đang lưu đã băm một chiều nên không đọc lại được:
+ * gửi tức là đặt lại thành mật khẩu tạm này, thu hồi phiên và bắt đổi ở lần đăng nhập đầu.
+ * Thư gửi trong giao dịch: gửi lỗi thì mật khẩu cũ giữ nguyên.
+ */
+export async function sendAccountCredentials(actor: Actor, userId: string, password: string) {
+  assertAdmin(actor);
+  const [target] = await db
+    .select({ username: user.username, teacherId: user.teacherId, teacherName: teachers.fullName, teacherEmail: teachers.email })
+    .from(user)
+    .leftJoin(teachers, eq(teachers.id, user.teacherId))
+    .where(eq(user.id, userId))
+    .limit(1);
+  if (!target?.username) throw notFound("tài khoản");
+  if (!target.teacherId) {
+    throw new AppError("CONFLICT", "Tài khoản chưa gắn với giáo viên nên chưa có email. Gắn giáo viên ở nút Sửa rồi thử lại.");
+  }
+  const to = z.email().safeParse(target.teacherEmail?.trim());
+  if (!to.success) {
+    throw new AppError("CONFLICT", `Giáo viên ${target.teacherName} chưa có email hợp lệ. Nhập email ở menu Giáo viên rồi thử lại.`);
+  }
+  const baseUrl = resolveBaseUrl();
+  if (!baseUrl) throw new AppError("CONFLICT", "Chưa đặt địa chỉ trang (BETTER_AUTH_URL) nên chưa tạo được đường dẫn đăng nhập.");
+  assertMailConfigured();
+
+  const passwordHash = await hashPassword(password);
+  const message = accountEmail({
+    name: target.teacherName ?? target.username,
+    username: target.username,
+    password,
+    loginUrl: new URL("/login", baseUrl).toString(),
+  });
+  await db.transaction(async (tx) => {
+    await applyPasswordReset(tx, actor, userId, passwordHash, true);
+    // Nhật ký không chứa mật khẩu và không chứa địa chỉ email.
+    await audit(tx, {
+      userId: actor.userId,
+      action: "account_credentials_sent",
+      tableName: "user",
+      recordId: userId,
+      newValue: { teacherId: target.teacherId },
+    });
+    await sendMail({ to: to.data, ...message });
   });
 }
 
