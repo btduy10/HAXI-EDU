@@ -44,6 +44,8 @@ export const WEEKDAY_LABELS: Record<number, string> = {
   6: "Thứ Bảy",
   7: "Chủ nhật",
 };
+/** Tên thứ không có chữ "Thứ" (cho cột Thứ của bảng). */
+export const WEEKDAY_NAMES: Record<number, string> = { 1: "Hai", 2: "Ba", 3: "Tư", 4: "Năm", 5: "Sáu", 6: "Bảy", 7: "Chủ nhật" };
 export const WEEKDAY_SHORT: Record<number, string> = { 1: "T2", 2: "T3", 3: "T4", 4: "T5", 5: "T6", 6: "T7", 7: "CN" };
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;

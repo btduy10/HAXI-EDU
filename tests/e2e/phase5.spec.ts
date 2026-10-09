@@ -60,6 +60,20 @@ test("Phân công GV chính + trợ giảng, lịch mẫu tự sinh buổi; tr�
   await page.getByRole("button", { name: "Lưu" }).click();
   await expect(page.getByText(/Đã tự thêm \d+ buổi vào Thời khóa biểu\./)).toBeVisible();
 
+  // Tên viết tắt: nhập ở menu Giáo viên (Mã GV đứng trước Họ tên), Thời khóa biểu hiện tên viết tắt thay họ tên.
+  await page.goto("/admin/teachers");
+  await expect(page.locator("ul:visible > li").first()).toContainText("Họ tên:");
+  await page.getByRole("button", { name: "Sửa Trần Văn Minh" }).click();
+  await page.locator("#f-shortName").fill("T.Minh");
+  await page.getByRole("button", { name: "Lưu" }).click();
+  await expect(page.getByText("Đã lưu.")).toBeVisible();
+  await expect(page.locator("ul:visible > li").filter({ hasText: "Trần Văn Minh" })).toContainText(/Tên viết tắt:\s*T\.Minh/);
+  await expectNoHorizontalScroll(page);
+  await page.goto(`/admin/timetable?view=week&date=${today()}&classId=${classId}`);
+  // GV02 có tên viết tắt; trợ giảng GV01 chưa đặt nên vẫn hiện họ tên.
+  await expect(page.locator("a:visible").filter({ hasText: /GV: T\.Minh · Trợ giảng: Nguyễn Thị Lan/ }).first()).toBeVisible();
+  await expectNoHorizontalScroll(page);
+
   const db = sql();
   const [session] = await db`select id from sessions where class_id = ${classId} and date = ${today()}`;
   expect(session, "buổi hôm nay phải được tự sinh").toBeTruthy();
@@ -293,7 +307,11 @@ test("Chấm công: đặt mức lương giáo viên theo lớp, thành tiền; 
 
   await page.goto(`/admin/timesheet?classId=${classId}`);
   await expect(page.getByRole("heading", { name: "Chấm công giáo viên" })).toBeVisible();
-  await expect(page.getByRole("columnheader", { name: "Số công" })).toBeVisible();
+  // Tổng công dùng tiêu đề ngắn; Chi tiết không còn cột Ca, Phòng và hiện tên lớp.
+  for (const name of ["Số buổi", "Dạy thay", "Trợ giảng"]) await expect(page.getByRole("columnheader", { name, exact: true })).toBeVisible();
+  for (const name of ["Số công", "Ca", "Phòng"]) await expect(page.getByRole("columnheader", { name, exact: true })).toHaveCount(0);
+  await expect(page.getByRole("row").filter({ hasText: "07:00–07:45" })).toContainText("Lớp có trợ giảng");
+  await expect(page.getByRole("row").filter({ hasText: "07:00–07:45" })).not.toContainText("Thứ");
   const lanSummary = page.getByRole("row").filter({ has: page.getByRole("link", { name: /Xuất Excel của/ }) }).filter({ hasText: "GV01" });
   await expect(lanSummary).toContainText("công chưa có mức lương");
 

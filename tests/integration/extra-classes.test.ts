@@ -100,7 +100,9 @@ describe("lớp học thêm", () => {
     ]);
     expect((await svc.extraClassesForRange(f.admin, { ...week, to: "2026-02-15" })).filter((e) => e.name === "Toán thêm")).toHaveLength(2);
     expect((await svc.extraClassesForRange(f.admin, { ...week, roomId: lab2.id })).map((e) => e.name)).toEqual(["Lý thêm"]);
-    expect((await svc.extraClassesForRange(f.admin, { ...week, teacherId: f.teacherA.id })).map((e) => e.name)).toEqual(["Toán thêm"]);
+    expect((await svc.extraClassesForRange(f.admin, { ...week, teacherId: f.teacherA.id })).map((e) => [e.name, e.teacherName, e.teacherShortName])).toEqual([
+      ["Toán thêm", "Giáo viên A", null],
+    ]);
     expect((await svc.extraClassesForRange(f.actorB, { ...week, personal: true })).map((e) => e.name)).toEqual(["Lý thêm"]);
 
     // Tệp xuất Lớp học thêm: một dòng cho mỗi lần học trong khoảng ngày.

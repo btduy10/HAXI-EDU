@@ -37,7 +37,8 @@ export async function listClasses(actor: Actor) {
     .innerJoin(courses, eq(courses.id, classes.courseId))
     .leftJoin(rooms, eq(rooms.id, classes.defaultRoomId))
     .where(allowed ? inArray(classes.id, allowed) : undefined)
-    .orderBy(desc(classes.startDate), asc(classes.code));
+    // Khóa bắt đầu trước xếp trước; cùng ngày thì theo mã lớp.
+    .orderBy(asc(classes.startDate), asc(classes.code));
 }
 
 export async function getClass(actor: Actor, classId: string) {

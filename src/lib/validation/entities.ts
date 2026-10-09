@@ -27,6 +27,8 @@ const freeCode = reqText(30).transform((v) => v.replace(/\s+/g, " "));
 export const teacherInput = z.object({
   code: freeCode,
   fullName: reqText(100),
+  /** Tên viết tắt hiển thị trên Thời khóa biểu; để trống thì dùng họ tên. */
+  shortName: optText(20),
   phone: optPhone,
   email: optEmail,
   status: z.enum(["active", "inactive"]).default("active"),

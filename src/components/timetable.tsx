@@ -18,6 +18,10 @@ export type TimetableSession = {
   teacherName: string | null;
   substituteName: string | null;
   assistantName: string | null;
+  /** Tên viết tắt của giáo viên (menu Giáo viên); có thì Thời khóa biểu hiện tên này thay họ tên cho gọn. */
+  teacherShortName?: string | null;
+  substituteShortName?: string | null;
+  assistantShortName?: string | null;
   kind: "regular" | "makeup";
   status: "planned" | "done" | "cancelled";
   attendanceCount: number;
@@ -28,6 +32,11 @@ export type TimetableSession = {
 type HrefOf = (session: TimetableSession) => string;
 
 const STATUS_LABEL = { planned: "Chưa điểm danh", done: "Đã điểm danh", cancelled: "Đã hủy" } as const;
+
+// Tên giáo viên hiển thị trên Thời khóa biểu: tên viết tắt nếu có, không thì họ tên.
+const teacherOf = (s: TimetableSession) => s.teacherShortName || s.teacherName;
+const substituteOf = (s: TimetableSession) => s.substituteShortName || s.substituteName;
+const assistantOf = (s: TimetableSession) => s.assistantShortName || s.assistantName;
 
 export function SessionBadges({ session, today }: { session: TimetableSession; today: string }) {
   if (session.extra) return <Badge variant="outline">Học thêm</Badge>;
@@ -59,7 +68,7 @@ export function SessionCard({ session, href, today }: { session: TimetableSessio
           {session.className}
           {session.roomName && ` · ${session.roomName}`}
         </p>
-        {session.teacherName && <p className="text-muted-foreground">GV: {session.teacherName}</p>}
+        {session.teacherName && <p className="text-muted-foreground">GV: {teacherOf(session)}</p>}
       </div>
     );
   }
@@ -80,8 +89,8 @@ export function SessionCard({ session, href, today }: { session: TimetableSessio
         {session.roomName && ` · ${session.roomName}`}
       </p>
       <p className="text-muted-foreground">
-        GV: {session.substituteName ? `${session.substituteName} (thay ${session.teacherName ?? "?"})` : (session.teacherName ?? "Chưa phân công")}
-        {session.assistantName && ` · Trợ giảng: ${session.assistantName}`}
+        GV: {session.substituteName ? `${substituteOf(session)} (thay ${teacherOf(session) ?? "?"})` : (teacherOf(session) ?? "Chưa phân công")}
+        {session.assistantName && ` · Trợ giảng: ${assistantOf(session)}`}
       </p>
     </Link>
   );
@@ -98,7 +107,7 @@ function SessionChip({ session, href }: { session: TimetableSession; href: strin
           <span className="font-medium tabular-nums">{formatTime(session.startTime)}</span> {session.classCode}
         </span>
         <span className="block truncate text-muted-foreground">
-          Học thêm{session.teacherName && ` · ${session.teacherName}`}
+          Học thêm{session.teacherName && ` · ${teacherOf(session)}`}
           {session.roomName && ` · ${session.roomName}`}
         </span>
       </div>
@@ -119,8 +128,8 @@ function SessionChip({ session, href }: { session: TimetableSession; href: strin
         <span className="font-medium tabular-nums">{formatTime(session.startTime)}</span> {session.classCode}
       </span>
       <span className="block truncate text-muted-foreground">
-        {session.substituteName ?? session.teacherName ?? "—"}
-        {session.assistantName && ` + ${session.assistantName}`}
+        {substituteOf(session) ?? teacherOf(session) ?? "—"}
+        {session.assistantName && ` + ${assistantOf(session)}`}
         {session.roomName && ` · ${session.roomName}`}
       </span>
     </Link>

@@ -198,7 +198,7 @@ export default async function TuitionPage({ searchParams }: PageProps<"/admin/tu
                     <Badge variant={STATUS_VARIANT[r.status]}>{TUITION_STATUS_LABEL[r.status]}</Badge>
                   </div>
                   <p className="text-muted-foreground">
-                    {r.classCode} – {r.className}
+                    {r.className}
                     {r.enrollmentStatus === "left" && " · đã rời lớp"}
                   </p>
                   {r.status !== "unset" && (
@@ -236,7 +236,7 @@ export default async function TuitionPage({ searchParams }: PageProps<"/admin/tu
                       <TableCell>{r.studentCode}</TableCell>
                       <TableCell className="font-medium whitespace-normal">{r.studentName}</TableCell>
                       <TableCell className="whitespace-normal">
-                        {r.classCode}
+                        {r.className}
                         {r.enrollmentStatus === "left" && <span className="block text-xs text-muted-foreground">đã rời lớp</span>}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">{r.fee === null ? "—" : formatMoney(r.fee)}</TableCell>
@@ -275,7 +275,7 @@ export default async function TuitionPage({ searchParams }: PageProps<"/admin/tu
                     {r.code} · {formatDate(r.paidAt)} · <span className="tabular-nums">{formatMoney(r.amount)}</span> · {PAYMENT_METHOD_LABEL[r.method]}
                   </p>
                   <p className="text-muted-foreground">
-                    {r.studentCode} – {r.studentName} · {r.classCode}
+                    {r.studentCode} – {r.studentName} · {r.className}
                     {r.collectorName && ` · người thu: ${r.collectorName}`}
                   </p>
                 </div>

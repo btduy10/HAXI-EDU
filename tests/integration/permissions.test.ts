@@ -136,7 +136,7 @@ describe("bảng phân quyền", () => {
 });
 
 describe("vai trò chỉ gán ở Tài khoản", () => {
-  const teacherB = { code: "GVB", fullName: "Giáo viên B", phone: null, email: null, status: "active" as const };
+  const teacherB = { code: "GVB", fullName: "Giáo viên B", shortName: null, phone: null, email: null, status: "active" as const };
   const roleOf = async (userId: string) => (await db.select({ role: userTable.role }).from(userTable).where(eq(userTable.id, userId)))[0]!.role;
 
   it("tài khoản gắn giáo viên giữ đúng vai trò Admin chọn khi tạo và khi sửa; sửa hồ sơ giáo viên không đổi vai trò", async () => {

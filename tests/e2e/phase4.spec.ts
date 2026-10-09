@@ -138,7 +138,7 @@ test("Admin: cấu hình, đóng lớp, chốt tổng kết, duyệt và trao qu
   await page.getByLabel("Lớp (tính theo khóa)").selectOption({ label: "RB-NC01 – Robotics Nâng cao 01" });
   await expect(page).toHaveURL(/classId=/);
   await expect(page.getByRole("link", { name: "Cả khóa của lớp RB-NC01" })).toBeVisible();
-  await expect(page.getByRole("columnheader", { name: "Số công" })).toBeVisible();
+  await expect(page.getByRole("columnheader", { name: "Số buổi" })).toBeVisible();
   await expect(page.getByRole("columnheader", { name: "Thành tiền" }).first()).toBeVisible();
   await expect(page.getByRole("heading", { name: /Chi tiết buổi dạy/ })).toBeVisible();
   await page.getByLabel("Giáo viên").selectOption({ label: "GV01 – Nguyễn Thị Lan" });
@@ -279,7 +279,7 @@ test("Phân quyền: Admin mở menu Học viên cho Giáo viên trực; Giáo v
 
   // Menu Giáo viên không còn cột Vai trò: vai trò chỉ gán ở Tài khoản.
   await page.goto("/admin/teachers");
-  await expect(page.locator("ul:visible > li").first()).toContainText("Mã GV:");
+  await expect(page.locator("ul:visible > li").first()).toContainText("Họ tên:");
   await expect(page.getByText("Vai trò", { exact: false })).toHaveCount(0);
   await page.getByRole("button", { name: "Sửa Trần Văn Minh" }).click();
   await expect(page.locator("#f-role")).toHaveCount(0);

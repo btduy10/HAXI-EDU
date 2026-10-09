@@ -29,7 +29,7 @@ export default async function StudentsPage({ searchParams }: PageProps<"/admin/s
   // Ngoài Admin: không hiện và không nhập thông tin riêng tư của học viên.
   const PRIVATE = ["birthDate", "gender", "guardianName", "phone", "note"];
   const formFields = admin ? fields : fields.filter((f) => !PRIVATE.includes(f.name));
-  const columns = ["Họ tên", "Mã HV", ...(admin ? ["Ngày sinh"] : []), "Khối", ...(admin ? ["Phụ huynh", "Điện thoại"] : []), "Trạng thái"];
+  const columns = ["Mã HV", "Họ tên", ...(admin ? ["Ngày sinh"] : []), "Khối", ...(admin ? ["Phụ huynh", "Điện thoại"] : []), "Trạng thái"];
   const raw = (await searchParams).q;
   const q = (Array.isArray(raw) ? raw[0] : raw)?.slice(0, 100) ?? "";
   const rawPage = (await searchParams).page;
@@ -106,9 +106,10 @@ export default async function StudentsPage({ searchParams }: PageProps<"/admin/s
         rows={students.map((s) => ({
           id: s.id,
           href: `/admin/students/${s.id}`,
+          label: s.fullName,
           cells: [
-            s.fullName,
             s.code,
+            s.fullName,
             ...(admin ? [formatDate(s.birthDate)] : []),
             s.schoolGrade ? String(s.schoolGrade) : "",
             ...(admin ? [s.guardianName ?? "", s.phone ?? ""] : []),

@@ -66,12 +66,12 @@ export default async function SyllabusPage({ searchParams }: PageProps<"/admin/s
         title="Syllabus"
         numbered
         centered={["Tiết"]}
-        columns={["Lớp", "Mã môn", "Tiết", "Tên bài"]}
+        columns={["Mã môn", "Lớp", "Tiết", "Tên bài"]}
         emptyText="Chưa có bài học nào. Thêm từng bài hoặc nhập từ Excel."
         rows={lessons.map((l) => ({
           id: l.id,
           label: `${l.classCode} · ${l.subjectCode} · Tiết ${l.period}`,
-          cells: [l.classCode, l.subjectCode, String(l.period), l.title],
+          cells: [l.subjectCode, l.classCode, String(l.period), l.title],
           values: { classId: l.classId, subjectCode: l.subjectCode, period: String(l.period), title: l.title },
         }))}
         fields={fields}

@@ -71,6 +71,7 @@ const selection = {
   endTime: timeSlots.defaultEnd,
   teacherId: extraClasses.teacherId,
   teacherName: teachers.fullName,
+  teacherShortName: teachers.shortName,
 };
 const base = (tx: DbOrTx = db) =>
   tx

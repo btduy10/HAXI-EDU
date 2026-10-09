@@ -2,7 +2,7 @@ import { and, between, eq, inArray, ne, or } from "drizzle-orm";
 import type { z } from "zod";
 import { db } from "@/db";
 import { classes, courses, rooms, sessions, teacherRates, teachers, timeSlots, timesheetEntries, timesheetOverrides } from "@/db/schema";
-import { WEEKDAY_LABELS, isoWeekday } from "@/lib/dates";
+import { WEEKDAY_NAMES, isoWeekday } from "@/lib/dates";
 import { formatDate, formatTime, todayIso } from "@/lib/format";
 import { SLOT_NAME_LABELS, type timesheetAdjustInput, type timesheetEntryInput } from "@/lib/validation/entities";
 import { audit } from "../audit";
@@ -214,7 +214,8 @@ async function loadRows(filters: LoadFilters, today: string) {
         amount: state === "taught" ? rate : null,
       };
     })
-    .sort((a, b) => a.teacherCode.localeCompare(b.teacherCode) || a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime));
+    // Chi tiết buổi dạy: tăng dần theo ngày, cùng ngày thì giờ dạy trước ở trên.
+    .sort((a, b) => a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime) || a.teacherCode.localeCompare(b.teacherCode));
 }
 
 export type TimesheetRow = Awaited<ReturnType<typeof loadRows>>[number];
@@ -276,7 +277,8 @@ function summarize(rows: TimesheetRow[]): TimesheetSummary[] {
     }
     byTeacher.set(r.teacherId, item);
   }
-  return [...byTeacher.values()];
+  // Tổng công xếp theo mã giáo viên (dòng công thì xếp theo ngày).
+  return [...byTeacher.values()].sort((a, b) => a.teacherCode.localeCompare(b.teacherCode));
 }
 
 /** Phạm vi "lớp của mình": chỉ thao tác trên công của chính mình. NOT_FOUND để không lộ công của người khác. */
@@ -422,9 +424,9 @@ export async function timesheetDoc(actor: Actor, filters: TimesheetFilters, now:
           { header: "STT", width: 6, align: "center" },
           { header: "Mã GV", width: 14 },
           { header: "Giáo viên", width: 26 },
-          { header: "Số công", width: 10, align: "center" },
-          { header: "Trong đó dạy thay", width: 18, align: "center" },
-          { header: "Công trợ giảng", width: 15, align: "center" },
+          { header: "Số buổi", width: 10, align: "center" },
+          { header: "Dạy thay", width: 10, align: "center" },
+          { header: "Trợ giảng", width: 10, align: "center" },
           { header: "Số giờ", width: 10, align: "center" },
           { header: "Chưa điểm danh", width: 16, align: "center" },
           { header: "Mức lương (đ)", width: 20, align: "right" },
@@ -456,14 +458,12 @@ export async function timesheetDoc(actor: Actor, filters: TimesheetFilters, now:
           { header: "STT", width: 6, align: "center" },
           { header: "Thứ", width: 10 },
           { header: "Ngày", width: 12 },
-          { header: "Ca", width: 18 },
           { header: "Giờ", width: 13 },
           { header: "Mã GV", width: 14 },
           { header: "Giáo viên", width: 24 },
           { header: "Vai trò", width: 12 },
-          { header: "Lớp", width: 16 },
+          { header: "Lớp", width: 26 },
           { header: "Khóa học", width: 24 },
-          { header: "Phòng", width: 16 },
           { header: "Trạng thái", width: 16 },
           { header: "Mức lương (đ)", width: 16, align: "right" },
           { header: "Thành tiền (đ)", width: 16, align: "right" },
@@ -471,16 +471,14 @@ export async function timesheetDoc(actor: Actor, filters: TimesheetFilters, now:
         ],
         rows: rows.map((r, i) => [
           i + 1,
-          WEEKDAY_LABELS[isoWeekday(r.date)] ?? "",
+          WEEKDAY_NAMES[isoWeekday(r.date)] ?? "",
           formatDate(r.date),
-          r.slotLabel,
           `${formatTime(r.startTime)}–${formatTime(r.endTime)}`,
           r.teacherCode,
           r.teacherName,
           TIMESHEET_ROLE_LABEL[r.role],
-          r.classCode,
+          r.className,
           r.courseName,
-          r.roomName ?? "",
           STATE_LABEL[r.state],
           r.rate ?? "",
           r.amount ?? "",

@@ -70,6 +70,18 @@ describe("chấm công giáo viên", () => {
       ["2026-01-20", "pending", "Sáng – Khung 1"],
       ["2026-01-27", "upcoming", "Sáng – Khung 1"],
     ]);
+    // Dòng công xếp tăng dần theo ngày (không gom theo giáo viên); Tổng công vẫn theo mã giáo viên.
+    expect(rows.map((r) => [r.date, r.teacherCode, r.className])).toEqual([
+      ["2026-01-06", "GVA", "Lớp A"],
+      ["2026-01-07", "GVB", "Lớp B"],
+      ["2026-01-13", "GVB", "Lớp A"],
+      ["2026-01-20", "GVA", "Lớp A"],
+      ["2026-01-27", "GVA", "Lớp A"],
+    ]);
+    // Cùng ngày thì giờ dạy trước ở trên.
+    await db.insert(sessions).values({ classId: f.classB.id, teacherId: f.teacherB.id, date: "2026-01-20", startTime: "07:00", endTime: "07:45", status: "done" });
+    const sameDay = (await teacherTimesheet(f.admin, january, now)).rows.filter((r) => r.date === "2026-01-20");
+    expect(sameDay.map((r) => [r.startTime.slice(0, 5), r.teacherCode])).toEqual([["07:00", "GVB"], ["08:00", "GVA"]]);
   });
 
   it("lọc theo giáo viên và theo lớp (tính theo khóa)", async () => {
@@ -293,7 +305,7 @@ describe("xuất chấm công", () => {
     expect(all.filename).toBe("cham-cong-tong-hop-2026-01-01-2026-01-31");
     const [summary, detail] = all.sections;
     expect(summary!.columns.map((c) => c.header)).toEqual([
-      "STT", "Mã GV", "Giáo viên", "Số công", "Trong đó dạy thay", "Công trợ giảng", "Số giờ", "Chưa điểm danh", "Mức lương (đ)", "Thành tiền (đ)", "Ghi chú",
+      "STT", "Mã GV", "Giáo viên", "Số buổi", "Dạy thay", "Trợ giảng", "Số giờ", "Chưa điểm danh", "Mức lương (đ)", "Thành tiền (đ)", "Ghi chú",
     ]);
     // GV A: 2 công (lớp A 300.000 + bổ sung lớp B 200.000); GV B: lớp B 250.000 + dạy thay lớp A chưa có mức lương; dòng cuối là tổng cộng.
     expect(summary!.rows.map((r) => [r[1], r[3], r[4], r[8], r[9], r[10]])).toEqual([
@@ -301,20 +313,29 @@ describe("xuất chấm công", () => {
       [f.teacherB.code, 2, 1, 250_000, 250_000, "1 công chưa có mức lương"],
       ["", 4, 1, "", 750_000, ""],
     ]);
-    const headers = detail!.columns.map((c) => c.header);
-    expect(headers.slice(0, 5)).toEqual(["STT", "Thứ", "Ngày", "Ca", "Giờ"]);
-    expect(headers.slice(-3)).toEqual(["Mức lương (đ)", "Thành tiền (đ)", "Ghi chú"]);
-    expect(detail!.rows[0]!.slice(1, 5)).toEqual(["Thứ Ba", "06/01/2026", "Sáng – Khung 1", "08:00–09:30"]);
+    // Chi tiết: không còn cột Ca, Phòng; cột Thứ không có chữ "Thứ"; cột Lớp là tên lớp; xếp theo ngày rồi giờ.
+    expect(detail!.columns.map((c) => c.header)).toEqual([
+      "STT", "Thứ", "Ngày", "Giờ", "Mã GV", "Giáo viên", "Vai trò", "Lớp", "Khóa học", "Trạng thái", "Mức lương (đ)", "Thành tiền (đ)", "Ghi chú",
+    ]);
+    expect(detail!.rows.map((r) => [r[1], r[2], r[4], r[7]])).toEqual([
+      ["Ba", "06/01/2026", "GVA", "Lớp A"],
+      ["Tư", "07/01/2026", "GVB", "Lớp B"],
+      ["Bảy", "10/01/2026", "GVA", "Lớp B"],
+      ["Ba", "13/01/2026", "GVB", "Lớp A"],
+      ["Ba", "20/01/2026", "GVA", "Lớp A"],
+      ["Ba", "27/01/2026", "GVA", "Lớp A"],
+    ]);
+    expect(detail!.rows[0]!.slice(1, 4)).toEqual(["Ba", "06/01/2026", "08:00–09:30"]);
     expect(detail!.rows[0]!.slice(-3)).toEqual([300_000, 300_000, ""]);
-    expect(detail!.rows[1]!.slice(-3)).toEqual([200_000, 200_000, "Bổ sung · Dạy bù"]);
+    expect(detail!.rows[2]!.slice(-3)).toEqual([200_000, 200_000, "Bổ sung · Dạy bù"]);
     // Buổi chưa điểm danh: có mức lương nhưng chưa có thành tiền.
-    expect(detail!.rows[2]!.slice(-3)).toEqual([300_000, "", ""]);
-    expect(detail!.rows.find((r) => r[5] === f.teacherB.code && r[8] === "A")!.slice(-3)).toEqual(["", "", "Chưa có mức lương"]);
+    expect(detail!.rows[4]!.slice(-3)).toEqual([300_000, "", ""]);
+    expect(detail!.rows[3]!.slice(-3)).toEqual(["", "", "Chưa có mức lương"]);
 
     const own = await timesheetDoc(f.admin, { ...january, teacherId: f.teacherB.id }, now);
     expect(own.filename).toBe(`cham-cong-${f.teacherB.code}-2026-01-01-2026-01-31`);
     expect(own.sections[0]!.rows).toHaveLength(1);
-    expect(new Set(own.sections[1]!.rows.map((r) => r[5]))).toEqual(new Set([f.teacherB.code]));
+    expect(new Set(own.sections[1]!.rows.map((r) => r[4]))).toEqual(new Set([f.teacherB.code]));
     // Vai trò Giáo viên mặc định không có menu Chấm công.
     await expect(timesheetDoc(f.actorA, january, now)).rejects.toMatchObject({ code: "FORBIDDEN" });
   });

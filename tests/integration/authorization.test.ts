@@ -6,7 +6,7 @@ import * as catalog from "@/server/services/catalog";
 import * as classes from "@/server/services/classes";
 import * as students from "@/server/services/students";
 import { db } from "@/db";
-import { sessions, teachers as teachersTable } from "@/db/schema";
+import { classes as classesTable, sessions, teachers as teachersTable } from "@/db/schema";
 import { type Fixture, resetDb, seedFixture } from "./helpers";
 
 let f: Fixture;
@@ -20,6 +20,18 @@ describe("phân quyền theo lớp (chống IDOR)", () => {
     const list = await classes.listClasses(f.actorA);
     expect(list.map((c) => c.code)).toEqual(["A"]);
     expect((await classes.listClasses(f.admin)).length).toBe(2);
+  });
+
+  it("danh sách lớp xếp tăng dần theo ngày bắt đầu, cùng ngày thì theo mã lớp", async () => {
+    const extra = (code: string, startDate: string) => ({ code, name: `Lớp ${code}`, courseId: f.course.id, startDate, endDate: "2026-12-31", maxSize: 5 });
+    await db.insert(classesTable).values([extra("Z-SOM", "2025-09-01"), extra("C-MUON", "2026-06-01"), extra("0-CUNG-NGAY", "2026-01-06")]);
+    expect((await classes.listClasses(f.admin)).map((c) => [c.code, c.startDate])).toEqual([
+      ["Z-SOM", "2025-09-01"],
+      ["0-CUNG-NGAY", "2026-01-06"],
+      ["A", "2026-01-06"],
+      ["B", "2026-01-06"],
+      ["C-MUON", "2026-06-01"],
+    ]);
   });
 
   it("GV A không đọc được lớp của GV B dù biết id", async () => {
@@ -96,7 +108,7 @@ describe("chức năng chỉ dành cho Admin", () => {
     await db.update(teachersTable).set({ phone: "0911111111", email: "a@haxi.example" });
     expect((await catalog.listTeachers(f.actorA)).every((t) => t.phone === null && t.email === null)).toBe(true);
     expect((await catalog.listTeachers(f.admin)).every((t) => t.phone === "0911111111")).toBe(true);
-    await expect(catalog.updateTeacher(f.actorA, f.teacherA.id, { code: "GVA", fullName: "Tự sửa", phone: null, email: null, status: "active" })).rejects.toMatchObject(denied);
+    await expect(catalog.updateTeacher(f.actorA, f.teacherA.id, { code: "GVA", fullName: "Tự sửa", shortName: null, phone: null, email: null, status: "active" })).rejects.toMatchObject(denied);
     await expect(catalog.createRoom(f.actorA, { name: "Phòng lậu", capacity: 5 })).rejects.toMatchObject(denied);
     await expect(catalog.deleteCourse(f.actorA, f.course.id)).rejects.toMatchObject(denied);
     await expect(students.listStudents(f.actorA)).rejects.toMatchObject(denied);

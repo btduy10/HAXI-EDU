@@ -6,6 +6,8 @@ export const teachers = pgTable("teachers", {
   id: uuid("id").primaryKey().defaultRandom(),
   code: text("code").notNull().unique(),
   fullName: text("full_name").notNull(),
+  // Tên viết tắt hiển thị trên Thời khóa biểu cho gọn; null = dùng họ tên.
+  shortName: text("short_name"),
   phone: text("phone"),
   email: text("email"),
   status: teacherStatus("status").notNull().default("active"),

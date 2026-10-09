@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { WEEKDAY_LABELS, addMonths, endOfMonth, isoWeekday, parseIsoDate, startOfMonth } from "@/lib/dates";
+import { WEEKDAY_NAMES, addMonths, endOfMonth, isoWeekday, parseIsoDate, startOfMonth } from "@/lib/dates";
 import { orderSlotFrames } from "@/domain/time-slots";
 import { formatDate, formatMoney, formatTime, todayIso } from "@/lib/format";
 import { SLOT_NAME_LABELS, TIMESHEET_ROLES } from "@/lib/validation/entities";
@@ -226,9 +226,9 @@ export default async function TimesheetPage({ searchParams }: PageProps<"/admin/
                   <TableHead className="w-14 text-center">STT</TableHead>
                   <TableHead>Mã GV</TableHead>
                   <TableHead>Giáo viên</TableHead>
-                  <TableHead className="text-center">Số công</TableHead>
-                  <TableHead className="text-center">Trong đó dạy thay</TableHead>
-                  <TableHead className="text-center">Công trợ giảng</TableHead>
+                  <TableHead className="text-center">Số buổi</TableHead>
+                  <TableHead className="text-center">Dạy thay</TableHead>
+                  <TableHead className="text-center">Trợ giảng</TableHead>
                   <TableHead className="text-center">Số giờ</TableHead>
                   <TableHead className="text-center">Chưa điểm danh</TableHead>
                   <TableHead className="text-right">Mức lương</TableHead>
@@ -296,13 +296,11 @@ export default async function TimesheetPage({ searchParams }: PageProps<"/admin/
                   <TableHead className="w-14 text-center">STT</TableHead>
                   <TableHead>Thứ</TableHead>
                   <TableHead>Ngày</TableHead>
-                  <TableHead>Ca</TableHead>
                   <TableHead>Giờ</TableHead>
                   <TableHead>Giáo viên</TableHead>
                   <TableHead>Vai trò</TableHead>
                   <TableHead>Lớp</TableHead>
                   <TableHead>Khóa học</TableHead>
-                  <TableHead>Phòng</TableHead>
                   <TableHead>Trạng thái</TableHead>
                   <TableHead className="text-right">Mức lương</TableHead>
                   <TableHead className="text-right">Thành tiền</TableHead>
@@ -314,16 +312,15 @@ export default async function TimesheetPage({ searchParams }: PageProps<"/admin/
                 {rows.map((r, index) => (
                   <TableRow key={r.key}>
                     <TableCell className="text-center text-muted-foreground tabular-nums">{index + 1}</TableCell>
-                    <TableCell>{WEEKDAY_LABELS[isoWeekday(r.date)]}</TableCell>
+                    <TableCell>{WEEKDAY_NAMES[isoWeekday(r.date)]}</TableCell>
                     <TableCell>{formatDate(r.date)}</TableCell>
-                    <TableCell>{r.slotLabel}</TableCell>
                     <TableCell className="tabular-nums">
                       {formatTime(r.startTime)}–{formatTime(r.endTime)}
                     </TableCell>
                     <TableCell>{r.teacherName}</TableCell>
                     <TableCell>{TIMESHEET_ROLE_LABEL[r.role]}</TableCell>
                     <TableCell>
-                      {r.classCode}
+                      {r.className}
                       {r.kind === "makeup" && (
                         <Badge variant="outline" className="ml-1">
                           Buổi bù
@@ -341,7 +338,6 @@ export default async function TimesheetPage({ searchParams }: PageProps<"/admin/
                       )}
                     </TableCell>
                     <TableCell>{r.courseName}</TableCell>
-                    <TableCell>{r.roomName ?? ""}</TableCell>
                     <TableCell>
                       <Badge variant={r.state === "taught" ? "default" : r.state === "pending" ? "destructive" : "secondary"}>
                         {STATE_LABEL[r.state]}

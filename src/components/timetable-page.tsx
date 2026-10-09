@@ -76,6 +76,7 @@ export async function TimetablePage({
       timeSlotId: e.timeSlotId,
       roomName: e.roomName,
       teacherName: e.teacherName,
+      teacherShortName: e.teacherShortName,
       substituteName: null,
       assistantName: null,
       kind: "regular" as const,

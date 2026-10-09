@@ -27,6 +27,12 @@ describe("xác thực dữ liệu vào", () => {
     expect(classInput.parse({ ...base, ...dates, code: "Lớp sáng T7" }).code).toBe("Lớp sáng T7");
     expect(classInput.safeParse({ ...base, ...dates, code: "   " }).success).toBe(false);
     expect(teacherInput.parse({ code: " GV - Lan ", fullName: "Lan", phone: "", email: "" }).code).toBe("GV - Lan");
+    // Tên viết tắt: không bắt buộc, bỏ trống thành null, tối đa 20 ký tự.
+    const teacher = { code: "GV01", fullName: "Nguyễn Thị Lan", phone: "", email: "" };
+    expect(teacherInput.parse(teacher).shortName).toBeNull();
+    expect(teacherInput.parse({ ...teacher, shortName: "  " }).shortName).toBeNull();
+    expect(teacherInput.parse({ ...teacher, shortName: " Cô Lan " }).shortName).toBe("Cô Lan");
+    expect(teacherInput.safeParse({ ...teacher, shortName: "x".repeat(21) }).success).toBe(false);
   });
 
   it("mật khẩu và tài khoản", () => {

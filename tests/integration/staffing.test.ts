@@ -133,6 +133,13 @@ describe("trợ giảng và phân công", () => {
     await expect(assertSessionAccess(actorC, first!.id)).resolves.toBeUndefined();
     const mine = await svc.listSessions(actorC, { from: "2026-02-01", to: "2026-02-08", personal: true });
     expect(mine.map((s) => [s.date, s.classCode, s.assistantName])).toEqual([["2026-02-03", "B", "Trợ giảng C"]]);
+
+    // Tên viết tắt của giáo viên đi kèm buổi học để Thời khóa biểu hiển thị cho gọn; chưa đặt thì null.
+    expect(mine.map((s) => [s.teacherShortName, s.assistantShortName])).toEqual([[null, null]]);
+    await db.update(teachers).set({ shortName: "C." }).where(eq(teachers.id, teacherC.id));
+    await db.update(teachers).set({ shortName: "Cô B" }).where(eq(teachers.id, f.teacherB.id));
+    const [again] = await svc.listSessions(actorC, { from: "2026-02-01", to: "2026-02-08", personal: true });
+    expect(again).toMatchObject({ teacherName: "Giáo viên B", teacherShortName: "Cô B", assistantName: "Trợ giảng C", assistantShortName: "C.", substituteShortName: null });
   });
 
   it("sửa vai trò của phân công; phân công không còn mang lương (đặt ở Chấm công → Mức lương)", async () => {
