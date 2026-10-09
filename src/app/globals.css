@@ -70,7 +70,7 @@
   --secondary: oklch(0.95 0.035 165);
   --secondary-foreground: oklch(0.33 0.07 162);
   --muted: oklch(0.96 0.014 85);
-  /* Xám navy cho chữ phụ: đạt AA cả trên cửa sổ kính đặt trên vùng tối nhất của ảnh nền. */
+  /* Xám navy cho chữ phụ: đạt AA cả trên cửa sổ kính đặt trên vùng đậm nhất của nền. */
   --muted-foreground: oklch(0.46 0.04 255);
   --accent: oklch(0.95 0.035 165);
   --accent-foreground: oklch(0.33 0.07 162);
@@ -180,17 +180,13 @@
 }
 
 /*
- * Nền toàn trang (src/components/app-background.tsx): gradient mesh xanh lá – xanh trời – vàng nhạt,
- * dùng tạm cho tới khi có ảnh phong cảnh thật ở public/bg/.
+ * Nền toàn trang (src/components/app-background.tsx): xanh ngọc chuyển dọc, sáng ở trên, ngả xanh lam và đậm dần
+ * xuống dưới, có một quầng sáng nhẹ ở góc trên trái. Đổi màu nền thì tính lại tương phản chữ trên `glass-window`.
  */
 @utility app-bg {
   background:
-    radial-gradient(58% 48% at 10% 6%, oklch(0.86 0.085 220 / 0.9), transparent 72%),
-    radial-gradient(52% 44% at 90% 10%, oklch(0.9 0.07 190 / 0.85), transparent 72%),
-    radial-gradient(60% 52% at 82% 92%, oklch(0.91 0.1 95 / 0.85), transparent 72%),
-    radial-gradient(66% 58% at 12% 94%, oklch(0.78 0.115 152 / 0.9), transparent 72%),
-    radial-gradient(48% 42% at 52% 48%, oklch(0.86 0.09 158 / 0.55), transparent 76%),
-    var(--background);
+    radial-gradient(70% 55% at 12% 0%, rgb(143 203 193 / 0.9), transparent 72%),
+    linear-gradient(180deg, #84c2b9 0%, #76b6b0 50%, #679ca2 100%);
 }
 
 /*
@@ -207,8 +203,8 @@
       inset 0 1px 0 rgb(255 255 255 / 0.75),
       0 30px 60px -36px color-mix(in oklab, var(--foreground) 40%, transparent);
     @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-      /* 74% trắng + lớp phủ 30% của ảnh nền: chữ phụ đạt 4,77:1 trên điểm tối nhất của ảnh. */
-      background-color: rgb(255 255 255 / 0.74);
+      /* 66% trắng: chữ phụ đạt 5,06:1 trên điểm đậm nhất của nền (đáy, #679ca2). */
+      background-color: rgb(255 255 255 / 0.66);
       -webkit-backdrop-filter: blur(22px) saturate(1.25);
       backdrop-filter: blur(22px) saturate(1.25);
     }
