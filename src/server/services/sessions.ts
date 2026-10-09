@@ -51,6 +51,7 @@ const sessionColumns = {
   classCode: classes.code,
   className: classes.name,
   classStatus: classes.status,
+  timetableOnly: classes.timetableOnly,
   date: sessions.date,
   originalDate: sessions.originalDate,
   startTime: sessions.startTime,
@@ -104,11 +105,14 @@ export type SessionFilters = {
   roomId?: string | null;
   /** Chỉ các buổi GV này đứng lớp hoặc dạy thay (TKB cá nhân). */
   personal?: boolean;
+  /** Lấy cả buổi của lớp "chỉ hiển thị trên Thời khóa biểu". Chỉ trang Thời khóa biểu bật; nơi khác (điểm danh, tệp xuất…) bỏ qua các buổi này. */
+  includeTimetableOnly?: boolean;
 };
 
 /** Admin và phạm vi "Tất cả lớp" xem mọi buổi; phạm vi "lớp của mình" chỉ thấy buổi của lớp mình và buổi mình dạy/dạy thay. */
 export async function listSessions(actor: Actor, filters: SessionFilters): Promise<SessionRow[]> {
   const conditions = [between(sessions.date, filters.from, filters.to)];
+  if (!filters.includeTimetableOnly) conditions.push(eq(classes.timetableOnly, false));
   if (filters.classId) conditions.push(eq(sessions.classId, filters.classId));
   if (filters.roomId) conditions.push(eq(sessions.roomId, filters.roomId));
   if (filters.teacherId) {

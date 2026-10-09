@@ -4,7 +4,7 @@ import { db } from "@/db";
 import { classes, teacherRates, teachers } from "@/db/schema";
 import type { teacherRateInput } from "@/lib/validation/entities";
 import { AppError, forbidden } from "../errors";
-import { type Actor, assertCan, seesAllClasses } from "../guard";
+import { type Actor, assertCan, assertNotTimetableOnly, seesAllClasses } from "../guard";
 import { createRow, deleteRow, updateRow } from "./crud";
 
 // Mức lương mỗi buổi (công) của giáo viên/trợ giảng theo từng lớp; Chấm công dùng để tính thành tiền.
@@ -48,6 +48,7 @@ async function assertNoDuplicate(data: z.output<typeof teacherRateInput>, except
 export async function createTeacherRate(actor: Actor, data: z.output<typeof teacherRateInput>) {
   assertCan(actor, "timesheet", "edit");
   assertAllScope(actor);
+  await assertNotTimetableOnly(data.classId);
   await assertNoDuplicate(data);
   return createRow(actor, teacherRates, "teacher_rates", data, "timesheet", "edit");
 }
@@ -55,6 +56,7 @@ export async function createTeacherRate(actor: Actor, data: z.output<typeof teac
 export async function updateTeacherRate(actor: Actor, id: string, data: z.output<typeof teacherRateInput>) {
   assertCan(actor, "timesheet", "edit");
   assertAllScope(actor);
+  await assertNotTimetableOnly(data.classId);
   await assertNoDuplicate(data, id);
   return updateRow(actor, teacherRates, "teacher_rates", id, data, "timesheet");
 }

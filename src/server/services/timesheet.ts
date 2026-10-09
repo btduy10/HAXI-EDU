@@ -8,7 +8,7 @@ import { SLOT_NAME_LABELS, type timesheetAdjustInput, type timesheetEntryInput }
 import { audit } from "../audit";
 import { AppError, notFound, translateDbError } from "../errors";
 import type { ExportDoc } from "../export";
-import { type Actor, assertCan, seesAllClasses } from "../guard";
+import { type Actor, assertCan, assertNotTimetableOnly, seesAllClasses } from "../guard";
 import { createRow, deleteRow, updateRow } from "./crud";
 
 export type TimesheetFilters = {
@@ -70,7 +70,8 @@ async function loadRows(filters: LoadFilters, today: string) {
   const movedIds = [...new Set(movedIn.map((o) => o.sessionId))];
   const moved = movedIds.length ? inArray(sessions.id, movedIds) : undefined;
 
-  const conditions = [ne(sessions.status, "cancelled"), or(between(sessions.date, filters.from, filters.to), moved)!];
+  // Buổi của lớp chỉ hiển thị trên Thời khóa biểu không tính công.
+  const conditions = [ne(sessions.status, "cancelled"), eq(classes.timetableOnly, false), or(between(sessions.date, filters.from, filters.to), moved)!];
   if (classId) conditions.push(or(eq(sessions.classId, classId), moved)!);
   if (teacherId) {
     conditions.push(
@@ -98,6 +99,7 @@ async function loadRows(filters: LoadFilters, today: string) {
         roomName: rooms.name,
       })
       .from(sessions)
+      .innerJoin(classes, eq(classes.id, sessions.classId))
       .leftJoin(rooms, eq(rooms.id, sessions.roomId))
       .where(and(...conditions)),
     db.select().from(timesheetEntries).where(and(...entryConditions)),
@@ -301,6 +303,7 @@ async function assertSlotFree(teacherId: string, date: string, timeSlotId: strin
 export async function createTimesheetEntry(actor: Actor, data: z.output<typeof timesheetEntryInput>) {
   assertCan(actor, "timesheet", "add");
   assertOwnRow(actor, data.teacherId);
+  await assertNotTimetableOnly(data.classId);
   await assertSlotFree(data.teacherId, data.date, data.timeSlotId);
   return createRow(actor, timesheetEntries, "timesheet_entries", { ...data, createdBy: actor.userId }, "timesheet");
 }
@@ -311,6 +314,7 @@ export async function updateTimesheetEntry(actor: Actor, id: string, data: z.out
   if (!current) throw notFound("dòng công");
   assertOwnRow(actor, current.teacherId);
   assertOwnRow(actor, data.teacherId);
+  await assertNotTimetableOnly(data.classId);
   await assertSlotFree(data.teacherId, data.date, data.timeSlotId, `manual|${id}`);
   return updateRow(actor, timesheetEntries, "timesheet_entries", id, data, "timesheet");
 }

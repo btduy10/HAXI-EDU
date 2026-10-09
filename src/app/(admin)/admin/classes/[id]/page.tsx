@@ -25,10 +25,12 @@ export default async function ClassDetailPage({ params }: PageProps<"/admin/clas
   const canEdit = can("edit");
   const classId = uuidParam((await params).id);
   const cls = await orNotFound(getClass(actor, classId));
+  // Lớp chỉ hiển thị trên Thời khóa biểu (vd. cho mượn phòng) không có học viên: trang chỉ còn giáo viên, lịch mẫu, buổi học.
+  const tracksStudents = !cls.timetableOnly;
   const [assigned, teachers, students, templates, slots, rooms] = await Promise.all([
     listClassTeachers(actor, classId),
     listTeachers(actor),
-    listClassProgress(actor, classId),
+    tracksStudents ? listClassProgress(actor, classId) : [],
     listTemplates(actor, classId),
     listTimeSlots(actor),
     listRooms(actor),
@@ -107,7 +109,13 @@ export default async function ClassDetailPage({ params }: PageProps<"/admin/clas
             {cls.code} – {cls.name}
           </h1>
           <Badge variant={cls.status === "open" ? "secondary" : "outline"}>{LABELS.classStatus[cls.status]}</Badge>
+          {!tracksStudents && <Badge variant="outline">Chỉ hiển thị trên Thời khóa biểu</Badge>}
         </div>
+        {!tracksStudents && (
+          <p className="text-sm text-muted-foreground">
+            Lớp này chỉ để giữ lịch trên Thời khóa biểu và kiểm tra trùng phòng; không có ghi danh, điểm danh, sao, học phí hay chấm công.
+          </p>
+        )}
         <dl className="grid gap-x-6 gap-y-1 text-sm sm:grid-cols-2">
           <div className="flex gap-2">
             <dt className="text-muted-foreground">Khóa học:</dt>
@@ -123,12 +131,14 @@ export default async function ClassDetailPage({ params }: PageProps<"/admin/clas
               {formatDate(cls.startDate)} – {formatDate(cls.endDate)}
             </dd>
           </div>
-          <div className="flex gap-2">
-            <dt className="text-muted-foreground">Sĩ số:</dt>
-            <dd>
-              {students.length}/{cls.maxSize}
-            </dd>
-          </div>
+          {tracksStudents && (
+            <div className="flex gap-2">
+              <dt className="text-muted-foreground">Sĩ số:</dt>
+              <dd>
+                {students.length}/{cls.maxSize}
+              </dd>
+            </div>
+          )}
         </dl>
       </div>
 
@@ -198,10 +208,10 @@ export default async function ClassDetailPage({ params }: PageProps<"/admin/clas
               {overview.makeup > 0 && ` · ${overview.makeup} buổi bù`}
               {overview.cancelled > 0 && ` · ${overview.cancelled} buổi đã hủy`}.
             </p>
-            {overview.scheduled < overview.courseSessions && (
+            {tracksStudents && overview.scheduled < overview.courseSessions && (
               <p className="text-destructive">Còn thiếu {overview.courseSessions - overview.scheduled} buổi so với khóa học. Bấm “Sinh buổi học từ lịch mẫu” để xếp đủ.</p>
             )}
-            {overview.missingTeacher > 0 && (
+            {tracksStudents && overview.missingTeacher > 0 && (
               <p className="text-destructive">
                 {overview.missingTeacher} buổi chưa có giáo viên. Hãy phân công GV chính cho lớp hoặc chọn GV trong lịch mẫu, rồi bấm “Sinh buổi học từ
                 lịch mẫu”.
@@ -231,31 +241,33 @@ export default async function ClassDetailPage({ params }: PageProps<"/admin/clas
         </div>
       </section>
 
-      <section className="grid gap-3">
-        <div className="flex items-center justify-between gap-2">
-          <h2 className="text-lg font-semibold">
-            Học viên đang học <span className="text-sm font-normal text-muted-foreground">({students.length})</span>
-          </h2>
-          {can("view", "enrollments") && (
-            <LinkButton variant="outline" className="h-10" href={`/admin/enrollments?classId=${classId}`}>
-              Quản lý ghi danh
-            </LinkButton>
+      {tracksStudents && (
+        <section className="grid gap-3">
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="text-lg font-semibold">
+              Học viên đang học <span className="text-sm font-normal text-muted-foreground">({students.length})</span>
+            </h2>
+            {can("view", "enrollments") && (
+              <LinkButton variant="outline" className="h-10" href={`/admin/enrollments?classId=${classId}`}>
+                Quản lý ghi danh
+              </LinkButton>
+            )}
+          </div>
+          {students.length === 0 ? (
+            <p className="rounded-2xl border border-dashed p-6 text-center text-sm text-muted-foreground">
+              Chưa có học viên ghi danh.
+            </p>
+          ) : (
+            <ul className="grid gap-2 sm:grid-cols-2">
+              {students.map((s) => (
+                <li key={s.id}>
+                  <StudentProgressCard fullName={s.fullName} code={s.code} progress={s.progress} href={can("view", "students") ? `/admin/students/${s.id}` : undefined} />
+                </li>
+              ))}
+            </ul>
           )}
-        </div>
-        {students.length === 0 ? (
-          <p className="rounded-2xl border border-dashed p-6 text-center text-sm text-muted-foreground">
-            Chưa có học viên ghi danh.
-          </p>
-        ) : (
-          <ul className="grid gap-2 sm:grid-cols-2">
-            {students.map((s) => (
-              <li key={s.id}>
-                <StudentProgressCard fullName={s.fullName} code={s.code} progress={s.progress} href={can("view", "students") ? `/admin/students/${s.id}` : undefined} />
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+        </section>
+      )}
     </div>
   );
 }

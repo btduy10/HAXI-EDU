@@ -189,6 +189,7 @@ test("Admin: TKB có bộ lọc, sửa giờ riêng một buổi, trùng lịch 
   await page.screenshot({ path: "test-results/shots/admin-rooms-1280.png", fullPage: true });
   // Ghi danh: ô chọn lớp chỉ rộng khoảng nửa vùng nội dung trên màn hình rộng.
   await page.goto("/admin/enrollments");
+  await expect(page.getByLabel("Lớp học")).toBeVisible();
   const selectBox = (await page.getByLabel("Lớp học").boundingBox())!;
   expect(selectBox.width).toBeLessThan(560);
   await page.screenshot({ path: "test-results/shots/admin-enrollments-1280.png" });

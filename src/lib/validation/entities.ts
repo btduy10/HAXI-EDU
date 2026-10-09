@@ -122,6 +122,11 @@ export const classInput = z
     startDate: isoDate,
     endDate: isoDate,
     maxSize: intIn(1, 200),
+    /** true = lớp chỉ hiển thị trên Thời khóa biểu (vd. cho mượn phòng). Form gửi "true"/"false". */
+    timetableOnly: z
+      .union([z.boolean(), z.enum(["true", "false"])])
+      .default(false)
+      .transform((v) => v === true || v === "true"),
   })
   .refine((v) => v.startDate <= v.endDate, { path: ["endDate"], message: "Ngày kết thúc phải sau ngày bắt đầu" });
 

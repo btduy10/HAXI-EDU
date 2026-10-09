@@ -23,7 +23,7 @@ import { todayIso } from "@/lib/format";
 import type { awardInput, criteriaInput, levelInput } from "@/lib/validation/stars";
 import { audit } from "../audit";
 import { AppError, notFound } from "../errors";
-import { type Actor, allowedClassIds, assertAdmin, assertCan, assertClassOpen, assertSessionAccess, isAdmin, seesAllClasses } from "../guard";
+import { type Actor, allowedClassIds, assertAdmin, assertCan, assertClassOpen, assertNotTimetableOnly, assertSessionAccess, isAdmin, isTimetableOnly, seesAllClasses } from "../guard";
 import { getSettings } from "../settings";
 import { sessionRoster } from "./attendance";
 import { createRow, deleteRow, updateRow } from "./crud";
@@ -351,6 +351,7 @@ export async function awardStars(actor: Actor, input: z.output<typeof awardInput
     if (session.status === "cancelled") throw new AppError("CONFLICT", "Buổi đã hủy nên không ghi sao được.");
     if (session.date > todayIso(now)) throw new AppError("CONFLICT", "Chưa đến ngày học.");
     await assertClassOpen(session.classId, tx);
+    await assertNotTimetableOnly(session.classId, tx);
 
     const [criteria] = await tx.select().from(starCriteria).where(eq(starCriteria.id, input.criteriaId)).limit(1);
     if (!criteria || !criteria.active) throw new AppError("VALIDATION", "Tiêu chí không tồn tại hoặc đã ngừng dùng.");
@@ -513,7 +514,8 @@ export async function getSessionStarBoard(actor: Actor, sessionId: string) {
   assertCan(actor, "stars", "view");
   await assertSessionAccess(actor, sessionId);
   const [session] = await db.select().from(sessions).where(eq(sessions.id, sessionId)).limit(1);
-  if (!session) throw notFound("buổi học");
+  // Buổi của lớp chỉ hiển thị trên Thời khóa biểu không có bảng ghi sao.
+  if (!session || (await isTimetableOnly(session.classId))) throw notFound("buổi học");
   const roster = await sessionRoster(db, session);
   const ids = roster.map((r) => r.studentId);
   const [progress, logs, criteria, settings] = await Promise.all([

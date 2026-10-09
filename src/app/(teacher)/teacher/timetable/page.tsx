@@ -12,7 +12,8 @@ export default async function TeacherTimetablePage({ searchParams }: PageProps<"
       params={await searchParams}
       basePath="/teacher/timetable"
       title="TKB của tôi"
-      sessionHref={(s) => `/teacher/sessions/${s.id}/attendance?tkb=${s.date}`}
+      // Buổi của lớp chỉ xem lịch không có điểm danh nên không bấm vào được.
+      sessionHref={(s) => (s.timetableOnly ? undefined : `/teacher/sessions/${s.id}/attendance?tkb=${s.date}`)}
     />
   );
 }

@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
-import { NEW_PASSWORD, expectNoHorizontalScroll, loadAdminSecret, login, sql, totp } from "./helpers";
+import ExcelJS from "exceljs";
+import { NEW_PASSWORD, expectNoHorizontalScroll, expectNotFound, loadAdminSecret, login, sql, totp } from "./helpers";
 
 // Chạy sau phase1–4: admin đã bật 2FA, gv.lan đã đổi mật khẩu. Dùng lớp mới RB-TG01 để không ảnh hưởng lớp khác.
 test.describe.configure({ mode: "serial" });
@@ -139,6 +140,111 @@ test("Lớp học thêm đã gỡ: trang Lớp học và Thời khóa biểu kh�
   expect(download.suggestedFilename()).toMatch(/^thoi-khoa-bieu-.*\.xlsx$/);
   const ignored = await page.request.get(`/api/export/timetable?format=xlsx&kind=extra&from=${day}&to=${day}`);
   expect(ignored.headers()["content-disposition"]).toContain("thoi-khoa-bieu-");
+});
+
+test("Lớp chỉ hiển thị trên Thời khóa biểu: tạo ở Lớp học, ô xám và chú giải trên Thời khóa biểu; không có ở Điểm danh, Ghi danh, Học phí, Chấm công, tệp xuất; không điểm danh hay ghi sao được", async ({ page }) => {
+  await login(page, "admin", NEW_PASSWORD);
+  await page.getByLabel("Mã xác thực").fill(totp(loadAdminSecret()));
+  await page.getByRole("button", { name: "Xác nhận" }).click();
+  await expect(page).toHaveURL(/\/admin\/dashboard$/);
+
+  const day = today();
+  const db = sql();
+  // Phòng khác với phòng của các lớp mẫu để không trùng lịch với buổi sẵn có.
+  const [room] = await db`select name, capacity from rooms where id <> (select default_room_id from classes where code = 'RB-CB01') order by name limit 1`;
+
+  // Tạo lớp ở trang Lớp học với lựa chọn Hiển thị = Chỉ trên Thời khóa biểu.
+  await page.goto("/admin/classes");
+  await page.getByRole("button", { name: "Thêm", exact: true }).click();
+  await page.locator("#f-code").fill("MP-E2E");
+  await page.locator("#f-name").fill("Mượn phòng E2E");
+  await page.locator("#f-courseId").selectOption({ index: 1 });
+  await page.locator("#f-defaultRoomId").selectOption({ label: `${room!.name} (${room!.capacity} chỗ)` });
+  await page.locator("#f-startDate").fill(shift(day, -7));
+  await page.locator("#f-endDate").fill(shift(day, 30));
+  await page.locator("#f-maxSize").fill("1");
+  await expect(page.locator("#f-timetableOnly")).toHaveValue("false");
+  await page.locator("#f-timetableOnly").selectOption({ label: "Chỉ trên Thời khóa biểu" });
+  await page.getByRole("button", { name: "Lưu" }).click();
+  await expect(page.getByText("Đã lưu.")).toBeVisible();
+  await expect(page.locator("li:visible").filter({ hasText: "MP-E2E" })).toContainText("Chỉ Thời khóa biểu");
+  await expectNoHorizontalScroll(page);
+  const [cls] = await db`select id, timetable_only from classes where code = 'MP-E2E'`;
+  expect(cls!.timetable_only).toBe(true);
+  const lendId = cls!.id as string;
+
+  // Trang chi tiết rút gọn: không có Sĩ số, phần Học viên, nút Quản lý ghi danh. Thêm lịch mẫu thứ hôm nay → buổi tự có.
+  await page.goto(`/admin/classes/${lendId}`);
+  await expect(page.getByText("Chỉ hiển thị trên Thời khóa biểu", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Học viên đang học/ })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Quản lý ghi danh" })).toHaveCount(0);
+  await expect(page.getByText("Sĩ số:")).toHaveCount(0);
+  const section = (heading: RegExp) => page.locator("section").filter({ has: page.getByRole("heading", { name: heading }) });
+  await section(/Lịch mẫu hằng tuần/).getByRole("button", { name: "Thêm" }).click();
+  await page.locator("#f-weekday").selectOption(String(isoWeekday(day)));
+  await page.locator("#f-timeSlotId").selectOption({ label: "Ca E2E (05:00–05:45)" });
+  await page.getByRole("button", { name: "Lưu" }).click();
+  await expect(page.getByText(/Đã tự thêm \d+ buổi vào Thời khóa biểu\./)).toBeVisible();
+  // Xếp lại toàn bộ theo lịch mẫu để có cả buổi của tuần trước (đã qua ngày, không ai điểm danh).
+  page.once("dialog", (dialog) => void dialog.accept());
+  await page.getByRole("button", { name: "Sinh buổi học từ lịch mẫu" }).click();
+  await expect(page.getByText(/Lớp có \d+\/\d+ buổi theo khóa học/)).toBeVisible();
+  await expect(page.getByText(/buổi chưa có giáo viên/)).toHaveCount(0);
+  await expectNoHorizontalScroll(page);
+  const held = await db`select id, date::text as date from sessions where class_id = ${lendId} order by date`;
+  await db.end();
+  const todaySession = held.find((x) => x.date === day);
+  expect(todaySession, "buổi hôm nay của lớp mượn phòng phải được tự sinh").toBeTruthy();
+  expect(held.some((x) => x.date < day), "phải có buổi đã qua để thử nhãn Quá hạn").toBe(true);
+
+  // Thời khóa biểu: ô xám riêng, nhãn và chú giải "Chỉ xem lịch"; buổi đã qua không bị gắn "Quá hạn".
+  for (const date of [day, shift(day, -7)]) {
+    await page.goto(`/admin/timetable?view=week&date=${date}&classId=${lendId}`);
+    const tile = page.locator("[data-timetable-only]:visible").first();
+    await expect(tile).toContainText("MP-E2E");
+    await expect(tile).toContainText("Chỉ xem lịch");
+    await expect(tile.getByText("Quá hạn")).toHaveCount(0);
+    expect(await tile.evaluate((el) => (el as HTMLElement).style.getPropertyValue("--glass-bg"))).toBe("oklch(0.87 0.008 255)");
+    await expect(page.locator('[data-legend="timetable-only"]')).toHaveText("Chỉ xem lịch");
+    await expectNoHorizontalScroll(page);
+  }
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto(`/admin/timetable?view=week&date=${day}`);
+  await expect(page.locator("tbody a[data-timetable-only]").filter({ hasText: "MP-E2E" })).toBeVisible();
+  await page.goto(`/admin/timetable?view=month&date=${day}`);
+  await expect(page.locator("[data-timetable-only]:visible").first()).toContainText("MP-E2E");
+  await page.setViewportSize({ width: 360, height: 740 });
+
+  // Trang buổi học: sửa/dời/hủy được nhưng không có Điểm danh, Ghi sao; gọi thẳng địa chỉ cũng không vào được.
+  await page.goto(`/admin/sessions/${todaySession!.id}`);
+  await expect(page.getByRole("heading", { name: /Buổi học MP-E2E/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Sửa buổi này" })).toBeVisible();
+  await expect(page.getByRole("link", { name: /điểm danh/i })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Ghi sao" })).toHaveCount(0);
+  await expectNotFound(page, `/admin/attendance/${todaySession!.id}`);
+  await expectNotFound(page, `/admin/sessions/${todaySession!.id}/stars`);
+
+  // Không hiện ở nơi nào khác.
+  for (const url of ["/admin/attendance", "/admin/enrollments", "/admin/tuition", "/admin/timesheet", "/admin/timesheet/rates", "/admin/rewards", "/admin/syllabus", "/admin/reports"]) {
+    await page.goto(url);
+    await expect(page.getByRole("heading").first()).toBeVisible();
+    await expect(page.getByText(/MP-E2E/)).toHaveCount(0);
+    await expect(page.locator("option").filter({ hasText: "MP-E2E" })).toHaveCount(0);
+  }
+  // Bộ lọc lớp của Thời khóa biểu và ngày nghỉ theo lớp thì có.
+  await page.goto(`/admin/timetable?date=${day}`);
+  await expect(page.getByLabel("Lọc theo lớp").locator("option").filter({ hasText: "MP-E2E" })).toHaveCount(1);
+
+  // Tệp xuất Thời khóa biểu không gồm lớp này, kể cả khi lọc đúng lớp đó.
+  for (const query of [`from=${day}&to=${day}`, `from=${day}&to=${day}&classId=${lendId}`]) {
+    const file = await page.request.get(`/api/export/timetable?format=xlsx&${query}`);
+    expect(file.ok()).toBe(true);
+    const book = new ExcelJS.Workbook();
+    await book.xlsx.load((await file.body()) as unknown as ArrayBuffer);
+    const cells: string[] = [];
+    book.eachSheet((sheet) => sheet.eachRow((row) => row.eachCell((cell) => cells.push(String(cell.value ?? "")))));
+    expect(cells.join("|")).not.toContain("MP-E2E");
+  }
 });
 
 test("Học phí: đặt học phí lớp, thu hai lần, theo dõi trạng thái, mở phiếu thu và giấy báo", async ({ page }) => {

@@ -7,7 +7,7 @@ import { todayIso } from "@/lib/format";
 import type { attendanceInput } from "@/lib/validation/schedule";
 import { audit } from "../audit";
 import { AppError, notFound } from "../errors";
-import { type Actor, assertAdmin, assertCan, assertClassOpen, assertSessionAccess, can, seesAllClasses } from "../guard";
+import { type Actor, assertAdmin, assertCan, assertClassOpen, assertNotTimetableOnly, assertSessionAccess, can, isTimetableOnly, seesAllClasses } from "../guard";
 import { getSettings } from "../settings";
 import { lessonsForClass } from "./syllabus";
 
@@ -65,7 +65,8 @@ export async function getAttendanceSheet(actor: Actor, sessionId: string, now: D
   assertCan(actor, "attendance", "view");
   await assertSessionAccess(actor, sessionId);
   const [session] = await db.select().from(sessions).where(eq(sessions.id, sessionId)).limit(1);
-  if (!session) throw notFound("buổi học");
+  // Buổi của lớp chỉ hiển thị trên Thời khóa biểu không có bảng điểm danh.
+  if (!session || (await isTimetableOnly(session.classId))) throw notFound("buổi học");
   const [roster, existing, settings, lessons] = await Promise.all([
     sessionRoster(db, session),
     db.select().from(attendances).where(eq(attendances.sessionId, sessionId)),
@@ -98,6 +99,7 @@ export async function saveAttendance(actor: Actor, input: z.output<typeof attend
   return db.transaction(async (tx) => {
     const [session] = await tx.select().from(sessions).where(eq(sessions.id, input.sessionId)).for("update").limit(1);
     if (!session) throw notFound("buổi học");
+    await assertNotTimetableOnly(session.classId, tx);
     const settings = await getSettings(tx);
     const reason = blockedReason(session, settings.attendance_lock_days, now);
     if (reason) throw new AppError("CONFLICT", reason);
@@ -186,7 +188,7 @@ export async function unlockAttendance(actor: Actor, sessionId: string, now: Dat
  * Admin và phạm vi "Tất cả lớp": toàn trung tâm.
  */
 export async function listOverdueSessions(actor: Actor, now: Date = new Date()) {
-  const conditions = [lt(sessions.date, todayIso(now)), eq(sessions.status, "planned")];
+  const conditions = [lt(sessions.date, todayIso(now)), eq(sessions.status, "planned"), eq(classes.timetableOnly, false)];
   if (!seesAllClasses(actor)) {
     if (!actor.teacherId) return [];
     conditions.push(

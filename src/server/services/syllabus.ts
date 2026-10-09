@@ -7,7 +7,7 @@ import { SYLLABUS_COLUMNS, type SyllabusKey, type SyllabusRowResult, validateSyl
 import type { syllabusInput } from "@/lib/validation/entities";
 import { audit } from "../audit";
 import { AppError, notFound, translateDbError } from "../errors";
-import { type Actor, allowedClassIds, assertAdmin, assertCan, assertClassAccess } from "../guard";
+import { type Actor, allowedClassIds, assertAdmin, assertCan, assertClassAccess, assertNotTimetableOnly } from "../guard";
 import { deleteRow } from "./crud";
 import { type ImportUpload, assertXlsxUpload, parseWorkbook } from "./import";
 
@@ -63,6 +63,7 @@ async function assertNoDuplicate(data: z.output<typeof syllabusInput>, exceptId?
 export async function createLesson(actor: Actor, data: z.output<typeof syllabusInput>) {
   assertCan(actor, "syllabus", "add");
   await assertClassAccess(actor, data.classId);
+  await assertNotTimetableOnly(data.classId);
   await assertNoDuplicate(data);
   try {
     return await db.transaction(async (tx) => {
@@ -82,6 +83,7 @@ export async function updateLesson(actor: Actor, id: string, data: z.output<type
   // Phải vào được cả lớp cũ lẫn lớp mới (khi chuyển bài sang lớp khác).
   await assertClassAccess(actor, before.classId);
   await assertClassAccess(actor, data.classId);
+  await assertNotTimetableOnly(data.classId);
   await assertNoDuplicate(data, id);
   try {
     return await db.transaction(async (tx) => {

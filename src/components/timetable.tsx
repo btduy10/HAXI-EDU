@@ -1,6 +1,6 @@
 import { CheckIcon } from "lucide-react";
 import Link from "next/link";
-import type { CSSProperties } from "react";
+import type { ComponentProps, CSSProperties } from "react";
 import { AddSessionButton } from "@/components/manual-scheduler";
 import { Badge } from "@/components/ui/badge";
 import { type ShiftTone, shiftTone } from "@/domain/time-slots";
@@ -31,9 +31,12 @@ export type TimetableSession = {
   kind: "regular" | "makeup";
   status: "planned" | "done" | "cancelled";
   attendanceCount: number;
+  /** Buổi của lớp chỉ hiển thị trên Thời khóa biểu (vd. cho mượn phòng): không điểm danh, không tính quá hạn. */
+  timetableOnly?: boolean;
 };
 
-type HrefOf = (session: TimetableSession) => string;
+/** Không trả địa chỉ thì ô chỉ để xem, không bấm vào được. */
+type HrefOf = (session: TimetableSession) => string | undefined;
 /** Màu nền của một buổi (theo giáo viên thực dạy). Không có thì ô giữ nền trắng. */
 type ShadeOf = (session: TimetableSession) => string | undefined;
 
@@ -54,6 +57,13 @@ function DoneTick({ className }: { className?: string }) {
   );
 }
 
+export const TIMETABLE_ONLY_LABEL = "Chỉ xem lịch";
+
+/** Ô buổi học: là liên kết khi có địa chỉ, không thì chỉ để xem. */
+function Tile({ href, ...rest }: { href?: string } & Omit<ComponentProps<"a">, "href">) {
+  return href ? <Link href={href} {...rest} /> : <div {...(rest as ComponentProps<"div">)} />;
+}
+
 /** Chú giải màu: mỗi giáo viên một màu. */
 export function TeacherLegend({ entries }: { entries: { id: string; name: string; shade: string }[] }) {
   if (entries.length === 0) return null;
@@ -71,6 +81,7 @@ export function TeacherLegend({ entries }: { entries: { id: string; name: string
 }
 
 const STATUS_LABEL = { planned: "Chưa điểm danh", done: "Đã điểm danh", cancelled: "Đã hủy" } as const;
+const statusLabel = (s: TimetableSession) => (s.timetableOnly && s.status !== "cancelled" ? TIMETABLE_ONLY_LABEL : STATUS_LABEL[s.status]);
 
 // Tên giáo viên hiển thị trên Thời khóa biểu: tên viết tắt nếu có, không thì họ tên.
 const teacherOf = (s: TimetableSession) => s.teacherShortName || s.teacherName;
@@ -83,12 +94,13 @@ const TONE_ROW = ["bg-shift-1", "bg-shift-2", "bg-shift-3"] as const;
 export function SessionBadges({ session, today }: { session: TimetableSession; today: string }) {
   return (
     <>
+      {session.timetableOnly && <Badge variant="outline">{TIMETABLE_ONLY_LABEL}</Badge>}
       {session.kind === "makeup" && <Badge variant="outline">Học bù</Badge>}
       {session.substituteName && <Badge variant="outline">Dạy thay</Badge>}
       {session.originalDate && <Badge variant="outline">Dời từ {formatDate(session.originalDate).slice(0, 5)}</Badge>}
       {session.status === "cancelled" && <Badge variant="destructive">Đã hủy</Badge>}
       {session.status === "done" && <Badge variant="secondary">Đã điểm danh</Badge>}
-      {session.status === "planned" && session.date < today && <Badge variant="destructive">Quá hạn</Badge>}
+      {session.status === "planned" && session.date < today && !session.timetableOnly && <Badge variant="destructive">Quá hạn</Badge>}
     </>
   );
 }
@@ -102,7 +114,7 @@ export function SessionCard({
   shade,
 }: {
   session: TimetableSession;
-  href: string;
+  href?: string;
   today: string;
   /** Bậc theo ca của buổi (Thời khóa biểu theo ngày), ghi vào data-tone. */
   tone?: ShiftTone;
@@ -110,10 +122,11 @@ export function SessionCard({
   shade?: string;
 }) {
   return (
-    <Link
+    <Tile
       href={href}
       data-tone={tone}
       data-teacher={leadTeacherId(session) ?? undefined}
+      data-timetable-only={session.timetableOnly || undefined}
       // Buổi đã hủy để phẳng, không màu, không bóng, cho lùi về sau.
       style={session.status === "cancelled" ? undefined : shadeStyle(shade, 0.3)}
       className={cn(
@@ -137,16 +150,17 @@ export function SessionCard({
         GV: {session.substituteName ? `${substituteOf(session)} (thay ${teacherOf(session) ?? "?"})` : (teacherOf(session) ?? "Chưa phân công")}
         {session.assistantName && ` · Trợ giảng: ${assistantOf(session)}`}
       </p>
-    </Link>
+    </Tile>
   );
 }
 
-function SessionChip({ session, href, shade }: { session: TimetableSession; href: string; shade?: string }) {
+function SessionChip({ session, href, shade }: { session: TimetableSession; href?: string; shade?: string }) {
   return (
-    <Link
+    <Tile
       href={href}
-      title={`${session.className} · ${STATUS_LABEL[session.status]}`}
+      title={`${session.className} · ${statusLabel(session)}`}
       data-teacher={leadTeacherId(session) ?? undefined}
+      data-timetable-only={session.timetableOnly || undefined}
       style={session.status === "cancelled" ? undefined : shadeStyle(shade, 0.3)}
       className={cn(
         "relative block min-w-0 overflow-hidden rounded-md border px-1.5 py-1 text-xs leading-tight",
@@ -163,7 +177,7 @@ function SessionChip({ session, href, shade }: { session: TimetableSession; href
         {session.assistantName && ` + ${assistantOf(session)}`}
         {session.roomName && ` · ${session.roomName}`}
       </span>
-    </Link>
+    </Tile>
   );
 }
 
@@ -329,6 +343,7 @@ export function MonthView({
                   return (
                     <span
                       key={s.id}
+                      data-timetable-only={s.timetableOnly || undefined}
                       style={shadeStyle(shade, 0.3)}
                       className="glass-chip flex min-w-0 items-center gap-1 overflow-hidden rounded border px-1"
                     >

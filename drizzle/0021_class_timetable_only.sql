@@ -1,0 +1,1 @@
+ALTER TABLE "classes" ADD COLUMN "timetable_only" boolean DEFAULT false NOT NULL;

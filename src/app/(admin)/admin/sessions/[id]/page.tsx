@@ -32,6 +32,8 @@ export default async function SessionDetailPage({ params }: PageProps<"/admin/se
   const start = formatTime(session.startTime);
   const end = formatTime(session.endTime);
   const cancelled = session.status === "cancelled";
+  // Lớp chỉ hiển thị trên Thời khóa biểu: không điểm danh, không ghi sao.
+  const tracksStudents = !session.timetableOnly;
 
   const facts: [string, string][] = [
     ["Ngày", `${WEEKDAY_LABELS[isoWeekday(session.date)]}, ${formatDate(session.date)}`],
@@ -68,12 +70,12 @@ export default async function SessionDetailPage({ params }: PageProps<"/admin/se
       </dl>
 
       <div className="flex flex-wrap gap-2">
-        {!cancelled && can("view", "attendance") && (
+        {!cancelled && tracksStudents && can("view", "attendance") && (
           <LinkButton className="h-10" href={`/admin/attendance/${id}`}>
             {session.attendanceCount > 0 ? "Xem / sửa điểm danh" : "Điểm danh"}
           </LinkButton>
         )}
-        {!cancelled && can("view", "stars") && (
+        {!cancelled && tracksStudents && can("view", "stars") && (
           <LinkButton variant="outline" className="h-10" href={`/admin/sessions/${id}/stars`}>
             Ghi sao
           </LinkButton>

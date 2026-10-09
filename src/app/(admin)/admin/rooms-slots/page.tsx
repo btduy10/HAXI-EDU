@@ -60,7 +60,7 @@ export default async function RoomsSlotsPage() {
     listRooms(actor),
     listTimeSlots(actor),
     listHolidays(actor),
-    listClasses(actor),
+    listClasses(actor, { includeTimetableOnly: true }),
   ]);
 
   const holidayFields: Field[] = [

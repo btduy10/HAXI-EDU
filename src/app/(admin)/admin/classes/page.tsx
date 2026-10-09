@@ -11,7 +11,7 @@ export const metadata: Metadata = { title: "Lớp học" };
 
 export default async function ClassesPage() {
   const { actor, role, can } = await requireMenu("classes");
-  const [classes, courses, rooms] = await Promise.all([listClasses(actor), listCourses(actor), listRooms(actor)]);
+  const [classes, courses, rooms] = await Promise.all([listClasses(actor, { includeTimetableOnly: true }), listCourses(actor), listRooms(actor)]);
 
   const fields: Field[] = [
     { name: "code", label: "Mã lớp", required: true },
@@ -32,6 +32,18 @@ export default async function ClassesPage() {
     { name: "startDate", label: "Ngày bắt đầu", type: "date", required: true },
     { name: "endDate", label: "Ngày kết thúc", type: "date", required: true },
     { name: "maxSize", label: "Sĩ số tối đa", type: "number", required: true },
+    {
+      name: "timetableOnly",
+      label: "Hiển thị",
+      type: "select",
+      required: true,
+      defaultValue: "false",
+      options: [
+        { value: "false", label: "Đầy đủ (điểm danh, sao, học phí…)" },
+        { value: "true", label: "Chỉ trên Thời khóa biểu" },
+      ],
+      hint: "Chỉ trên Thời khóa biểu: dùng để giữ lịch phòng (vd. cho mượn phòng). Lớp vẫn được kiểm tra trùng phòng nhưng không hiện ở Điểm danh, Sao, Ghi danh, Học phí, Chấm công, Báo cáo.",
+    },
   ];
 
   return (
@@ -48,8 +60,8 @@ export default async function ClassesPage() {
             c.courseName,
             c.roomName ?? "",
             `${formatDate(c.startDate)} – ${formatDate(c.endDate)}`,
-            `${c.studentCount}/${c.maxSize}`,
-            LABELS.classStatus[c.status],
+            c.timetableOnly ? "" : `${c.studentCount}/${c.maxSize}`,
+            c.timetableOnly ? `${LABELS.classStatus[c.status]} · Chỉ Thời khóa biểu` : LABELS.classStatus[c.status],
           ],
           values: {
             code: c.code,
@@ -59,6 +71,7 @@ export default async function ClassesPage() {
             startDate: c.startDate,
             endDate: c.endDate,
             maxSize: String(c.maxSize),
+            timetableOnly: String(c.timetableOnly),
           },
         }))}
         fields={fields}

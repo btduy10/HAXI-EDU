@@ -7,7 +7,7 @@ import type { centerInfoInput } from "@/lib/validation/rewards";
 import type { cancelReceiptInput, classFeeInput, discountInput, receiptInput } from "@/lib/validation/tuition";
 import { audit } from "../audit";
 import { AppError, notFound } from "../errors";
-import { type Actor, allowedClassIds, assertAdmin, assertCan, assertClassAccess } from "../guard";
+import { type Actor, allowedClassIds, assertAdmin, assertCan, assertClassAccess, assertNotTimetableOnly } from "../guard";
 import { CENTER_INFO_KEY, getCenterInfo } from "../settings";
 
 // Học phí: mức theo lớp, giảm riêng theo lượt ghi danh, mỗi lần thu là một phiếu thu.
@@ -86,13 +86,14 @@ export async function listClassFees(actor: Actor) {
   return db
     .select({ id: classes.id, code: classes.code, name: classes.name, status: classes.status, tuitionFee: classes.tuitionFee })
     .from(classes)
-    .where(allowed ? inArray(classes.id, allowed) : undefined)
+    .where(and(eq(classes.timetableOnly, false), allowed ? inArray(classes.id, allowed) : undefined))
     .orderBy(desc(classes.startDate), asc(classes.code));
 }
 
 export async function setClassFee(actor: Actor, data: z.output<typeof classFeeInput>) {
   assertCan(actor, "tuition", "edit");
   await assertClassAccess(actor, data.classId);
+  await assertNotTimetableOnly(data.classId);
   await db.transaction(async (tx) => {
     const [before] = await tx.select({ tuitionFee: classes.tuitionFee }).from(classes).where(eq(classes.id, data.classId)).for("update").limit(1);
     if (!before) throw notFound("lớp học");

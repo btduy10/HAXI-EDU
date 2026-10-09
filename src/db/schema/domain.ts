@@ -110,6 +110,9 @@ export const classes = pgTable(
     maxSize: integer("max_size").notNull(),
     // Học phí của lớp (đồng/học viên cho cả khóa); null = chưa đặt học phí.
     tuitionFee: integer("tuition_fee"),
+    // true = lớp chỉ để giữ chỗ trên Thời khóa biểu (vd. cho mượn phòng): vẫn kiểm tra trùng phòng/giáo viên,
+    // nhưng không có học viên nên không điểm danh, ghi sao, ghi danh, học phí, chấm công, báo cáo.
+    timetableOnly: boolean("timetable_only").notNull().default(false),
     status: classStatus("status").notNull().default("open"),
     createdAt: createdAt(),
     updatedAt: updatedAt(),

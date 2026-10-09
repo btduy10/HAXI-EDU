@@ -26,7 +26,8 @@ export async function AttendancePage({
   area: "admin" | "teacher";
 }) {
   const session = await orNotFound(getSession(actor, sessionId));
-  const sheet = await getAttendanceSheet(actor, sessionId);
+  // Buổi của lớp chỉ hiển thị trên Thời khóa biểu không có bảng điểm danh: trả 404.
+  const sheet = await orNotFound(getAttendanceSheet(actor, sessionId));
 
   return (
     <div className="mx-auto grid max-w-3xl gap-4">

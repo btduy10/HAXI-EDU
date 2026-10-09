@@ -11,7 +11,7 @@ export async function adminOverview(actor: Actor) {
   const [[s], [t], [c]] = await Promise.all([
     db.select({ n: count() }).from(students).where(eq(students.status, "active")),
     db.select({ n: count() }).from(teachers).where(eq(teachers.status, "active")),
-    db.select({ n: count() }).from(classes).where(eq(classes.status, "open")),
+    db.select({ n: count() }).from(classes).where(and(eq(classes.status, "open"), eq(classes.timetableOnly, false))),
   ]);
   return { activeStudents: s?.n ?? 0, activeTeachers: t?.n ?? 0, openClasses: c?.n ?? 0 };
 }

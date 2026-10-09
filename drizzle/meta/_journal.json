@@ -148,6 +148,13 @@
       "when": 1791538845885,
       "tag": "0020_teacher_short_name",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1791588418941,
+      "tag": "0021_class_timetable_only",
+      "breakpoints": true
     }
   ]
 }

@@ -24,7 +24,8 @@ export async function StarsPage({
   area: "admin" | "teacher";
 }) {
   const session = await orNotFound(getSession(actor, sessionId));
-  const board = await getSessionStarBoard(actor, sessionId);
+  // Buổi của lớp chỉ hiển thị trên Thời khóa biểu không có bảng ghi sao: trả 404.
+  const board = await orNotFound(getSessionStarBoard(actor, sessionId));
   const blocked =
     session.status === "cancelled" ? "Buổi đã hủy nên không ghi sao được." : session.date > todayIso() ? "Chưa đến ngày học." : null;
 

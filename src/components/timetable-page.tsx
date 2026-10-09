@@ -3,10 +3,10 @@ import Link from "next/link";
 import { ExportLinks } from "@/components/class-report";
 import { selectClass } from "@/components/form-dialog";
 import { ManualScheduler } from "@/components/manual-scheduler";
-import { MonthView, TeacherLegend, type TimetableSession, WeekView, leadTeacherId } from "@/components/timetable";
+import { MonthView, TIMETABLE_ONLY_LABEL, TeacherLegend, type TimetableSession, WeekView, leadTeacherId } from "@/components/timetable";
 import { Button } from "@/components/ui/button";
 import { LinkButton } from "@/components/link-button";
-import { teacherShade } from "@/domain/timetable-colors";
+import { TIMETABLE_ONLY_SHADE, teacherShade } from "@/domain/timetable-colors";
 import { addDays, addMonths, endOfMonth, parseIsoDate, startOfMonth, startOfWeek } from "@/lib/dates";
 import { formatDate, todayIso } from "@/lib/format";
 import type { Actor } from "@/server/guard";
@@ -40,7 +40,7 @@ export async function TimetablePage({
   params: Params;
   basePath: string;
   title: string;
-  sessionHref: (session: TimetableSession) => string;
+  sessionHref: (session: TimetableSession) => string | undefined;
 }) {
   const admin = manage;
   const today = todayIso();
@@ -56,20 +56,26 @@ export async function TimetablePage({
       : { from: startOfWeek(startOfMonth(date)), to: addDays(startOfWeek(endOfMonth(date)), 6) };
 
   const [sessions, slots, teacherList, options] = await Promise.all([
-    listSessions(actor, { ...range, ...filters, personal: !admin }),
+    // Thời khóa biểu là nơi duy nhất hiện lớp "chỉ hiển thị trên Thời khóa biểu" (vd. cho mượn phòng).
+    listSessions(actor, { ...range, ...filters, personal: !admin, includeTimetableOnly: true }),
     listTimeSlotsForGrid(),
     listTeachers(actor),
-    admin ? Promise.all([listClasses(actor), listRooms(actor)]) : null,
+    admin ? Promise.all([listClasses(actor, { includeTimetableOnly: true }), listRooms(actor)]) : null,
   ]);
 
   // Màu theo giáo viên: giáo viên đang dạy xếp theo mã, mỗi người một màu (ba tông thương hiệu, quay vòng thì đậm dần).
   const activeTeachers = teacherList.filter((t) => t.status === "active");
   const shadeByTeacher = new Map(activeTeachers.map((t, index) => [t.id, teacherShade(index, activeTeachers.length)]));
-  const shadeOf = (s: TimetableSession) => shadeByTeacher.get(leadTeacherId(s) ?? "");
-  const shownTeachers = new Set(sessions.filter((s) => s.status !== "cancelled").map(leadTeacherId));
-  const legend = activeTeachers
-    .filter((t) => shownTeachers.has(t.id))
-    .map((t) => ({ id: t.id, name: t.shortName || t.fullName, shade: shadeByTeacher.get(t.id)! }));
+  // Lớp chỉ xem lịch có màu xám riêng, không dùng màu của giáo viên.
+  const shadeOf = (s: TimetableSession) => (s.timetableOnly ? TIMETABLE_ONLY_SHADE : shadeByTeacher.get(leadTeacherId(s) ?? ""));
+  const shown = sessions.filter((s) => s.status !== "cancelled");
+  const shownTeachers = new Set(shown.filter((s) => !s.timetableOnly).map(leadTeacherId));
+  const legend = [
+    ...activeTeachers
+      .filter((t) => shownTeachers.has(t.id))
+      .map((t) => ({ id: t.id, name: t.shortName || t.fullName, shade: shadeByTeacher.get(t.id)! })),
+    ...(shown.some((s) => s.timetableOnly) ? [{ id: "timetable-only", name: TIMETABLE_ONLY_LABEL, shade: TIMETABLE_ONLY_SHADE }] : []),
+  ];
   const href = (next: { view?: string; date?: string }) => {
     const query = new URLSearchParams({ view: next.view ?? view, date: next.date ?? date });
     for (const [key, value] of Object.entries(filters)) if (value) query.set(key, value);

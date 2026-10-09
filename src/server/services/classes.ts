@@ -1,11 +1,26 @@
 import { and, asc, count, desc, eq, gte, inArray, lt, sql } from "drizzle-orm";
 import type { z } from "zod";
 import { db } from "@/db";
-import { attendances, classTeachers, classes, courses, enrollments, rooms, sessions, students, teachers, tuitionReceipts } from "@/db/schema";
+import {
+  attendances,
+  classTeachers,
+  classes,
+  courses,
+  enrollments,
+  rooms,
+  sessions,
+  starLogs,
+  students,
+  syllabusLessons,
+  teacherRates,
+  teachers,
+  timesheetEntries,
+  tuitionReceipts,
+} from "@/db/schema";
 import type { classInput, classTeacherInput, classTeacherUpdate, enrollInput, leaveInput } from "@/lib/validation/entities";
 import { audit } from "../audit";
 import { AppError, notFound, translateDbError } from "../errors";
-import { type Actor, allowedClassIds, assertAdmin, assertCan, assertCanAny, assertClassAccess } from "../guard";
+import { type Actor, allowedClassIds, assertAdmin, assertCan, assertCanAny, assertClassAccess, assertNotTimetableOnly } from "../guard";
 import { createRow, deleteRow, updateRow } from "./crud";
 import { purgeStudentStarLogs } from "./stars";
 
@@ -14,8 +29,11 @@ const activeCount = sql<number>`(
   where ${enrollments.classId} = ${classes.id} and ${enrollments.status} = 'active'
 )`;
 
-/** Chỉ các lớp trong phạm vi của người dùng (Admin và phạm vi "Tất cả lớp": mọi lớp). */
-export async function listClasses(actor: Actor) {
+/**
+ * Chỉ các lớp trong phạm vi của người dùng (Admin và phạm vi "Tất cả lớp": mọi lớp).
+ * Lớp "chỉ hiển thị trên Thời khóa biểu" mặc định bị bỏ qua; chỉ trang Lớp học, Thời khóa biểu và ngày nghỉ bật `includeTimetableOnly`.
+ */
+export async function listClasses(actor: Actor, { includeTimetableOnly = false }: { includeTimetableOnly?: boolean } = {}) {
   const allowed = await allowedClassIds(actor);
   if (allowed && allowed.length === 0) return [];
   return db
@@ -31,12 +49,13 @@ export async function listClasses(actor: Actor) {
       endDate: classes.endDate,
       maxSize: classes.maxSize,
       status: classes.status,
+      timetableOnly: classes.timetableOnly,
       studentCount: activeCount,
     })
     .from(classes)
     .innerJoin(courses, eq(courses.id, classes.courseId))
     .leftJoin(rooms, eq(rooms.id, classes.defaultRoomId))
-    .where(allowed ? inArray(classes.id, allowed) : undefined)
+    .where(and(allowed ? inArray(classes.id, allowed) : undefined, includeTimetableOnly ? undefined : eq(classes.timetableOnly, false)))
     // Khóa bắt đầu trước xếp trước; cùng ngày thì theo mã lớp.
     .orderBy(asc(classes.startDate), asc(classes.code));
 }
@@ -56,6 +75,7 @@ export async function getClass(actor: Actor, classId: string) {
       endDate: classes.endDate,
       maxSize: classes.maxSize,
       status: classes.status,
+      timetableOnly: classes.timetableOnly,
     })
     .from(classes)
     .innerJoin(courses, eq(courses.id, classes.courseId))
@@ -71,7 +91,39 @@ export const createClass = (actor: Actor, data: z.output<typeof classInput>) =>
 export async function updateClass(actor: Actor, id: string, data: z.output<typeof classInput>) {
   assertCan(actor, "classes", "edit");
   await assertClassAccess(actor, id);
+  if (data.timetableOnly) await assertCanBeTimetableOnly(id);
   return updateRow(actor, classes, "classes", id, data, "classes");
+}
+
+/**
+ * Chỉ chuyển lớp sang "chỉ hiển thị trên Thời khóa biểu" khi lớp chưa có dữ liệu của học viên hay chấm công,
+ * vì các dữ liệu đó sẽ bị ẩn khỏi mọi trang.
+ */
+async function assertCanBeTimetableOnly(classId: string) {
+  const [current] = await db.select({ timetableOnly: classes.timetableOnly }).from(classes).where(eq(classes.id, classId)).limit(1);
+  if (!current || current.timetableOnly) return;
+  const n = async (query: Promise<{ n: number }[]>) => (await query)[0]?.n ?? 0;
+  const ofClass = eq(sessions.classId, classId);
+  const [enrolled, attended, stars, rates, entries, lessons] = await Promise.all([
+    n(db.select({ n: count() }).from(enrollments).where(eq(enrollments.classId, classId))),
+    n(db.select({ n: count() }).from(sessions).where(and(ofClass, eq(sessions.status, "done")))),
+    n(db.select({ n: count() }).from(starLogs).innerJoin(sessions, eq(sessions.id, starLogs.sessionId)).where(ofClass)),
+    n(db.select({ n: count() }).from(teacherRates).where(eq(teacherRates.classId, classId))),
+    n(db.select({ n: count() }).from(timesheetEntries).where(eq(timesheetEntries.classId, classId))),
+    n(db.select({ n: count() }).from(syllabusLessons).where(eq(syllabusLessons.classId, classId))),
+  ]);
+  const blockers = [
+    enrolled && `${enrolled} lượt ghi danh`,
+    attended && `${attended} buổi đã điểm danh`,
+    stars && `${stars} lần ghi sao`,
+    rates && `${rates} mức lương giáo viên`,
+    entries && `${entries} công bổ sung`,
+    lessons && `${lessons} bài học Syllabus`,
+  ].filter(Boolean);
+  if (blockers.length > 0) {
+    const message = `Lớp đã có ${blockers.join(", ")} nên chưa chuyển sang "Chỉ trên Thời khóa biểu" được. Hãy xóa các dữ liệu đó trước, hoặc tạo một lớp mới.`;
+    throw new AppError("CONFLICT", message, { timetableOnly: "Lớp đã có dữ liệu" });
+  }
 }
 
 export async function deleteClass(actor: Actor, id: string) {
@@ -159,6 +211,7 @@ export async function enrollStudent(actor: Actor, data: z.output<typeof enrollIn
       const [cls] = await tx.select().from(classes).where(eq(classes.id, data.classId)).for("update").limit(1);
       if (!cls) throw notFound("lớp học");
       if (cls.status !== "open") throw new AppError("CONFLICT", "Lớp đã đóng, không thể ghi danh.");
+      await assertNotTimetableOnly(cls.id, tx);
       const [student] = await tx.select().from(students).where(eq(students.id, data.studentId)).limit(1);
       if (!student) throw notFound("học viên");
       if (student.status === "left") throw new AppError("CONFLICT", "Học viên đã nghỉ hẳn, không thể ghi danh.");

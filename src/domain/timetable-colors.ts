@@ -15,6 +15,9 @@ export const TEACHER_TONES = TONES.length;
 export const TEACHER_LIGHTEST = 0.9;
 export const TEACHER_DARKEST = 0.76;
 
+/** Màu của lớp chỉ hiển thị trên Thời khóa biểu (vd. cho mượn phòng): xám trung tính, không lẫn với màu của giáo viên. */
+export const TIMETABLE_ONLY_SHADE = "oklch(0.87 0.008 255)";
+
 const clampIndex = (index: number, count: number) => Math.min(Math.max(index, 0), Math.max(count - 1, 0));
 
 /** Độ sáng của giáo viên thứ `index` (từ 0) trong `count` giáo viên. Chỉ một vòng thì lấy mức giữa. */

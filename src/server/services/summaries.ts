@@ -21,7 +21,7 @@ import { todayIso } from "@/lib/format";
 import type { giftInput, tierInput } from "@/lib/validation/rewards";
 import { audit } from "../audit";
 import { AppError, notFound } from "../errors";
-import { type Actor, assertCan, assertClassAccess } from "../guard";
+import { type Actor, TIMETABLE_ONLY_MESSAGE, assertCan, assertClassAccess, isTimetableOnly } from "../guard";
 import { createRow, deleteRow, updateRow } from "./crud";
 
 // ---------- Số liệu lớp: tổng sao theo lớp, chuyên cần, xếp hạng ----------
@@ -98,6 +98,7 @@ export async function computeClassStats(tx: DbOrTx, classId: string): Promise<Cl
 /** Báo cáo lớp: Admin xem mọi lớp, GV chỉ xem lớp mình. */
 export async function getClassReport(actor: Actor, classId: string) {
   await assertClassAccess(actor, classId);
+  if (await isTimetableOnly(classId)) throw notFound("lớp học");
   const [cls] = await db
     .select({ id: classes.id, code: classes.code, name: classes.name, status: classes.status, courseName: courses.name })
     .from(classes)
@@ -132,6 +133,7 @@ export async function closeClass(actor: Actor, classId: string, now: Date = new 
     const [cls] = await tx.select().from(classes).where(eq(classes.id, classId)).for("update").limit(1);
     if (!cls) throw notFound("lớp học");
     if (cls.status !== "open") throw new AppError("CONFLICT", "Lớp này đã đóng.");
+    if (cls.timetableOnly) throw new AppError("CONFLICT", TIMETABLE_ONLY_MESSAGE);
     const today = todayIso(now);
 
     const [pending] = await tx
@@ -230,6 +232,7 @@ export type GiftNeed = { giftId: string; name: string; eligible: number; approve
 export async function getClassSummary(actor: Actor, classId: string) {
   assertCan(actor, "rewards", "view");
   await assertClassAccess(actor, classId);
+  if (await isTimetableOnly(classId)) throw notFound("lớp học");
   const [cls] = await db
     .select({ id: classes.id, code: classes.code, name: classes.name, status: classes.status, courseId: classes.courseId, courseName: courses.name })
     .from(classes)

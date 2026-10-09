@@ -26,6 +26,11 @@ describe("xác thực dữ liệu vào", () => {
     expect(classInput.parse({ ...base, ...dates, code: "  RB -  S7 " }).code).toBe("RB - S7");
     expect(classInput.parse({ ...base, ...dates, code: "Lớp sáng T7" }).code).toBe("Lớp sáng T7");
     expect(classInput.safeParse({ ...base, ...dates, code: "   " }).success).toBe(false);
+    // "Chỉ trên Thời khóa biểu": form gửi "true"/"false"; không gửi thì là lớp thường.
+    expect(classInput.parse({ ...base, ...dates }).timetableOnly).toBe(false);
+    expect(classInput.parse({ ...base, ...dates, timetableOnly: "true" }).timetableOnly).toBe(true);
+    expect(classInput.parse({ ...base, ...dates, timetableOnly: "false" }).timetableOnly).toBe(false);
+    expect(classInput.safeParse({ ...base, ...dates, timetableOnly: "co" }).success).toBe(false);
     expect(teacherInput.parse({ code: " GV - Lan ", fullName: "Lan", phone: "", email: "" }).code).toBe("GV - Lan");
     // Tên viết tắt: không bắt buộc, bỏ trống thành null, tối đa 20 ký tự.
     const teacher = { code: "GV01", fullName: "Nguyễn Thị Lan", phone: "", email: "" };
