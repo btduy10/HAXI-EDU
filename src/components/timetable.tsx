@@ -54,7 +54,7 @@ function DoneTick({ className }: { className?: string }) {
   );
 }
 
-/** Chú giải màu: mỗi giáo viên một độ đậm. */
+/** Chú giải màu: mỗi giáo viên một màu. */
 export function TeacherLegend({ entries }: { entries: { id: string; name: string; shade: string }[] }) {
   if (entries.length === 0) return null;
   const swatch = "size-3.5 shrink-0 rounded-full border border-foreground/25";
@@ -119,7 +119,7 @@ export function SessionCard({
       className={cn(
         "block rounded-lg border p-3 text-sm",
         session.status === "cancelled" ? "opacity-60 hover:bg-muted" : "glass-chip glass-lift",
-        shade && session.status !== "cancelled" && "[&_p]:text-foreground/75",
+        shade && session.status !== "cancelled" && "[&_p]:text-foreground/80",
       )}
     >
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
@@ -158,7 +158,7 @@ function SessionChip({ session, href, shade }: { session: TimetableSession; href
       <span className={cn("block truncate", session.status === "done" && "pr-4")}>
         <span className="font-medium tabular-nums">{formatTime(session.startTime)}</span> {session.classCode}
       </span>
-      <span className={cn("block truncate", shade && session.status !== "cancelled" ? "text-foreground/75" : "text-muted-foreground")}>
+      <span className={cn("block truncate", shade && session.status !== "cancelled" ? "text-foreground/80" : "text-muted-foreground")}>
         {substituteOf(session) ?? teacherOf(session) ?? "—"}
         {session.assistantName && ` + ${assistantOf(session)}`}
         {session.roomName && ` · ${session.roomName}`}

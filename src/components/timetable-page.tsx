@@ -62,7 +62,7 @@ export async function TimetablePage({
     admin ? Promise.all([listClasses(actor), listRooms(actor)]) : null,
   ]);
 
-  // Màu theo giáo viên: giáo viên đang dạy xếp theo mã, mỗi người một độ đậm.
+  // Màu theo giáo viên: giáo viên đang dạy xếp theo mã, mỗi người một màu (ba tông thương hiệu, quay vòng thì đậm dần).
   const activeTeachers = teacherList.filter((t) => t.status === "active");
   const shadeByTeacher = new Map(activeTeachers.map((t, index) => [t.id, teacherShade(index, activeTeachers.length)]));
   const shadeOf = (s: TimetableSession) => shadeByTeacher.get(leadTeacherId(s) ?? "");
