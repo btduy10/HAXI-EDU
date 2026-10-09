@@ -3,7 +3,7 @@ import { todayIso } from "@/lib/format";
 import { AppError } from "@/server/errors";
 import { handleExport } from "@/server/export-route";
 import { can } from "@/server/guard";
-import { extraTimetableDoc, timetableDoc } from "@/server/services/reports";
+import { timetableDoc } from "@/server/services/reports";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -20,8 +20,6 @@ export async function GET(request: Request) {
       return value && UUID.test(value) ? value : null;
     };
     const personal = !can(actor, "timetable", "view");
-    // kind=extra: xuất Lớp học thêm thay cho buổi học của các lớp Robotics.
-    if (params.get("kind") === "extra") return extraTimetableDoc(actor, { from, to, teacherId: uuid("teacherId"), roomId: uuid("roomId"), personal });
     return timetableDoc(actor, {
       from,
       to,

@@ -5,7 +5,6 @@ import { auditLogs, extraClasses, rooms, timeSlots } from "@/db/schema";
 import { DEFAULT_PERMISSIONS, type Menu, type MenuPermission } from "@/lib/permissions";
 import type { Actor } from "@/server/guard";
 import * as svc from "@/server/services/extra-classes";
-import { extraTimetableDoc } from "@/server/services/reports";
 import * as sessionSvc from "@/server/services/sessions";
 import { type Fixture, resetDb, seedFixture } from "./helpers";
 
@@ -123,13 +122,5 @@ describe("lớp học thêm", () => {
       ["Toán thêm", "Giáo viên A", null],
     ]);
     expect((await svc.extraClassesForRange(f.actorB, { ...week, personal: true })).map((e) => e.name)).toEqual(["Lý thêm"]);
-
-    // Tệp xuất Lớp học thêm: một dòng cho mỗi lần học trong khoảng ngày.
-    const doc = await extraTimetableDoc(f.admin, week);
-    expect(doc.filename).toBe("lop-hoc-them-2026-02-02-2026-02-08");
-    expect(doc.sections[0]!.rows).toEqual([
-      ["04/02/2026", "Thứ Tư", "Ca chiều", "Khung 1 (13:30–15:00)", "Toán thêm", "Robotics", "Lab", "Giáo viên A"],
-      ["06/02/2026", "Thứ Sáu", "Ca chiều", "Khung 1 (13:30–15:00)", "Lý thêm", "Robotics", "Lab 2", "Giáo viên B"],
-    ]);
   });
 });

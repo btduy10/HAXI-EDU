@@ -11,7 +11,6 @@ import type { ExportDoc } from "../export";
 import { type Actor, assertAdmin } from "../guard";
 import { ADMIN_LABEL, type PermissionConfig, normalizePermissions } from "@/lib/permissions";
 import { PERMISSIONS_KEY, SETTING_DEFAULTS, type SettingKey, getPermissionConfig, getSettings } from "../settings";
-import { extraClassesForRange } from "./extra-classes";
 import { type SessionFilters, listSessions } from "./sessions";
 import { getClassSummary } from "./summaries";
 
@@ -51,41 +50,6 @@ export async function timetableDoc(actor: Actor, filters: SessionFilters): Promi
           s.assistantName ?? "",
           s.kind === "makeup" ? "Học bù" : "Thường",
           SESSION_STATUS[s.status],
-        ]),
-      },
-    ],
-  };
-}
-
-/** Tệp xuất Lớp học thêm trong khoảng ngày (mỗi tuần một dòng cho mỗi lớp, theo Thứ + Ca + Khung giờ). */
-export async function extraTimetableDoc(actor: Actor, filters: Parameters<typeof extraClassesForRange>[1]): Promise<ExportDoc> {
-  const rows = (await extraClassesForRange(actor, filters)).sort((a, b) => a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime));
-  return {
-    filename: `lop-hoc-them-${filters.from}-${filters.to}`,
-    title: "Thời khóa biểu – Lớp học thêm",
-    subtitle: `Từ ${formatDate(filters.from)} đến ${formatDate(filters.to)}`,
-    sections: [
-      {
-        title: "Lớp học thêm",
-        columns: [
-          { header: "Ngày", width: 12 },
-          { header: "Thứ", width: 10 },
-          { header: "Ca", width: 10 },
-          { header: "Khung giờ", width: 22 },
-          { header: "Lớp", width: 26 },
-          { header: "Khóa học", width: 24 },
-          { header: "Phòng", width: 14 },
-          { header: "Giáo viên", width: 22 },
-        ],
-        rows: rows.map((r) => [
-          formatDate(r.date),
-          WEEKDAY_LABELS[isoWeekday(r.date)] ?? "",
-          r.slotName,
-          `Khung ${r.frame} (${formatTime(r.startTime)}–${formatTime(r.endTime)})`,
-          r.name,
-          r.courseName,
-          r.roomName,
-          r.teacherName ?? "",
         ]),
       },
     ],

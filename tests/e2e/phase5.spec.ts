@@ -146,10 +146,12 @@ test("Lớp học thêm: Admin thêm ở trang Thời khóa biểu (trang Lớp 
   await expect(page.locator('[data-legend="extra"]')).toBeVisible();
   await expectNoHorizontalScroll(page);
 
-  // Xuất: chọn Lớp học thêm rồi tải Excel.
-  await page.getByLabel("Loại lớp cần xuất").selectOption({ label: "Lớp học thêm" });
+  // Không còn ô chọn loại lớp khi xuất: nút Excel luôn xuất Thời khóa biểu của lớp Robotics, không có tệp riêng cho lớp học thêm.
+  await expect(page.getByLabel("Loại lớp cần xuất")).toHaveCount(0);
   const [download] = await Promise.all([page.waitForEvent("download"), page.getByRole("link", { name: "Excel" }).click()]);
-  expect(download.suggestedFilename()).toMatch(/^lop-hoc-them-.*\.xlsx$/);
+  expect(download.suggestedFilename()).toMatch(/^thoi-khoa-bieu-.*\.xlsx$/);
+  const ignored = await page.request.get(`/api/export/timetable?format=xlsx&kind=extra&from=${day}&to=${day}`);
+  expect(ignored.headers()["content-disposition"]).toContain("thoi-khoa-bieu-");
 });
 
 test("Học phí: đặt học phí lớp, thu hai lần, theo dõi trạng thái, mở phiếu thu và giấy báo", async ({ page }) => {
