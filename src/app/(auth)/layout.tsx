@@ -2,15 +2,15 @@ import { BrandLogo } from "@/components/brand-logo";
 
 export default function AuthLayout({ children }: LayoutProps<"/">) {
   return (
-    <main className="relative flex min-h-dvh flex-col items-center justify-center overflow-hidden bg-background px-4 py-8">
-      {/* Mảng màu trang trí: xanh ngọc và vàng đồng của thương hiệu. */}
-      <div aria-hidden className="pointer-events-none absolute -top-24 -left-24 size-72 rounded-full bg-secondary" />
-      <div aria-hidden className="pointer-events-none absolute -right-20 -bottom-28 size-80 rounded-full bg-brand-gold/15" />
-      <div className="relative mb-5 flex flex-col items-center gap-2 text-center">
-        <BrandLogo height={112} />
-        <p className="text-sm font-semibold text-muted-foreground">Hệ thống quản lý trung tâm Robotics</p>
+    <main className="relative flex min-h-dvh flex-col items-center justify-center overflow-hidden px-4 py-8">
+      {/* Form nằm trên một tấm kính gần đặc đặt trên nền chung của ứng dụng. */}
+      <div className="page-enter relative mb-5 flex flex-col items-center gap-2 text-center">
+        <span className="rounded-3xl bg-white/85 px-5 py-3 shadow-[0_10px_30px_-18px_var(--foreground)]">
+          <BrandLogo height={112} />
+        </span>
+        <p className="text-sm font-semibold text-foreground/80">Hệ thống quản lý trung tâm Robotics</p>
       </div>
-      <div className="relative w-full max-w-sm">{children}</div>
+      <div className="page-enter relative w-full max-w-sm [&_[data-slot=card]]:bg-white/88 [&_[data-slot=card]]:glass-blur">{children}</div>
     </main>
   );
 }

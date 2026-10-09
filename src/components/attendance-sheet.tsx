@@ -213,7 +213,7 @@ export function AttendanceSheet({
         />
       </div>
 
-      <div className="fixed inset-x-0 bottom-0 z-20 border-t bg-background p-3 md:left-60">
+      <div className="fixed inset-x-0 bottom-0 z-20 border-t bg-background/95 p-3 md:left-(--sidebar-w)">
         <div className="mx-auto flex max-w-3xl items-center justify-between gap-3">
           <p className="min-w-0 text-xs text-muted-foreground">
             {counts.map((c) => `${c.label}: ${c.count}`).join(" · ")}
