@@ -22,7 +22,7 @@ const OTHER = "__other__";
 const STATUSES: { value: Status; short: string; label: string; active: string }[] = [
   { value: "present", short: "Có", label: "Có mặt", active: "bg-emerald-600 text-white border-emerald-600" },
   { value: "late", short: "Trễ", label: "Đi trễ", active: "bg-amber-500 text-white border-amber-500" },
-  { value: "left_early", short: "Về sớm", label: "Về sớm", active: "bg-amber-500 text-white border-amber-500" },
+  { value: "left_early", short: "Về sớm", label: "Về sớm", active: "bg-violet-600 text-white border-violet-600" },
   { value: "excused", short: "Phép", label: "Vắng có phép", active: "bg-sky-600 text-white border-sky-600" },
   { value: "absent", short: "Vắng", label: "Vắng không phép", active: "bg-red-600 text-white border-red-600" },
 ];
