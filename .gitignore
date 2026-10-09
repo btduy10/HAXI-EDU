@@ -50,3 +50,6 @@ next-env.d.ts
 # netlify
 .netlify
 
+
+# ảnh chụp giao diện trước/sau (tests/e2e/zz-shots.spec.ts)
+/ui-shots/
