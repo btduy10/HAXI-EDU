@@ -100,6 +100,18 @@ test("Admin: TKB có bộ lọc, sửa giờ riêng một buổi, trùng lịch 
   await expect(page.getByRole("heading", { name: "Thời khóa biểu" })).toBeVisible();
   await expect(visibleText(page, "RB-NC01")).toBeVisible();
   await expectNoHorizontalScroll(page);
+  // Thẻ buổi học mang bậc nền theo ca (seed: 08:00 Ca sáng, 14:00 Ca chiều, 18:00 Ca tối).
+  const cardTones = await page
+    .locator("a[data-tone]")
+    .filter({ visible: true })
+    .evaluateAll((cards) => cards.map((card) => [card.textContent!.slice(0, 5), card.getAttribute("data-tone")] as const));
+  expect(cardTones.some(([start, tone]) => start === "18:00" && tone === "2")).toBe(true);
+  expect(cardTones.some(([start, tone]) => start === "08:00" && tone === "0")).toBe(true);
+  for (const [start, tone] of cardTones) {
+    const expected = ({ "08:00": "0", "14:00": "1", "18:00": "2" } as Record<string, string>)[start];
+    if (expected) expect(tone).toBe(expected);
+  }
+  await page.screenshot({ path: "test-results/shots/admin-week-360.png", fullPage: true });
   await page.getByLabel("Lọc theo lớp").selectOption({ label: "RB-CB01 – Robotics Cơ bản 01" });
   await page.getByRole("button", { name: "Lọc" }).click();
   await expect(visibleText(page, "RB-CB01")).toBeVisible();
@@ -113,6 +125,16 @@ test("Admin: TKB có bộ lọc, sửa giờ riêng một buổi, trùng lịch 
   await page.goto("/admin/timetable");
   await expect(page.getByRole("columnheader", { name: "Ca" })).toBeVisible();
   await page.screenshot({ path: "test-results/shots/admin-week-1280.png", fullPage: true });
+  // Nền hàng theo ca: Sáng, Chiều, Tối là ba bậc khác nhau; mọi ô của một hàng (kể cả cột hôm nay) cùng một màu nền.
+  const rowTones = await page.locator("tbody tr").evaluateAll((rows) =>
+    rows.map((row) => ({
+      tone: row.querySelector("th")!.getAttribute("data-tone"),
+      colors: [...new Set([...row.children].map((cell) => getComputedStyle(cell).backgroundColor))],
+    })),
+  );
+  expect(rowTones.slice(0, 3).map((row) => row.tone)).toEqual(["0", "1", "2"]);
+  for (const row of rowTones) expect(row.colors).toHaveLength(1);
+  expect(new Set(rowTones.slice(0, 3).map((row) => row.colors[0])).size).toBe(3);
 
   // Xếp tay: bấm dấu + ở ô Chủ nhật × Ca chiều, chọn lớp, lưu → buổi hiện ngay trong ô.
   const sundayAfternoon = page.getByRole("button", { name: /^Xếp buổi học CN .*, Ca chiều$/ });

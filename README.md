@@ -124,6 +124,7 @@ Nguyên tắc: mọi hàm trong `server/services` nhận `actor` lấy từ phi�
   - **Sửa chấm công** (quyền Sửa): sửa Ngày, Ca – Khung giờ, Lớp của mọi dòng công. Với dòng sinh từ buổi học, phần sửa chỉ áp dụng trên bảng công (dòng có nhãn "Đã sửa"); Thời khóa biểu và điểm danh giữ nguyên; sửa về đúng giá trị của buổi thì bỏ nhãn.
   - Một giáo viên không có hai dòng công cùng Ngày + Ca + Khung giờ.
 - **Thời khóa biểu:** lưới tuần thứ × ca và lịch tháng; Admin lọc theo GV/lớp/phòng; xuất Excel/PDF.
+- **Nền theo ca trên Thời khóa biểu:** các khung cùng ca cùng một độ sáng; Ca sáng giữ nền trang, Ca chiều đậm hơn một bậc, Ca tối đậm nhất (biến `--shift-1..3` trong `globals.css`, cùng tông kem, chỉ đổi độ sáng; bậc lấy từ `shiftTone` ở `src/domain/time-slots.ts`). Trên điện thoại, thẻ buổi học mang nền của ca. Ô và thẻ buổi học dùng kiểu Liquid (mặt kính bán trong suốt, viền sáng, bóng mềm; các utility `glass-*`), chỉ bằng CSS, không dùng blur và không tải thêm ảnh.
 - **Điểm danh trên điện thoại:** danh sách chỉ gồm học viên đang ghi danh tại ngày học, mặc định "Có mặt", lưu cả lớp một lần.
 - **Khóa sửa điểm danh** sau N ngày (mặc định 7, sửa ở trang Cấu hình). Chỉ Admin mở khóa, mỗi lần 24 giờ.
 

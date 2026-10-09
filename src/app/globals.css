@@ -19,6 +19,9 @@
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar: var(--sidebar);
   --color-brand-gold: var(--brand-gold);
+  --color-shift-1: var(--shift-1);
+  --color-shift-2: var(--shift-2);
+  --color-shift-3: var(--shift-3);
   --color-chart-5: var(--chart-5);
   --color-chart-4: var(--chart-4);
   --color-chart-3: var(--chart-3);
@@ -87,6 +90,67 @@
   --sidebar-ring: oklch(0.78 0.12 182);
   /* Vàng đồng của logo, dùng cho điểm nhấn. */
   --brand-gold: oklch(0.67 0.12 75);
+  /* Thời khóa biểu: nền theo ca, cùng tông kem của nền trang, chỉ đậm dần (Sáng → Chiều → Tối). */
+  --shift-1: oklch(0.985 0.012 85);
+  --shift-2: oklch(0.953 0.02 85);
+  --shift-3: oklch(0.92 0.028 85);
+}
+
+/*
+ * Kiểu Liquid của Thời khóa biểu: mặt kính bán trong suốt, viền sáng phía trên, bóng mềm.
+ * Không dùng backdrop-filter (blur) để cuộn vẫn nhẹ trên điện thoại.
+ */
+@utility glass-chip {
+  background-color: var(--glass-bg, rgb(255 255 255 / 0.85));
+  background-image: linear-gradient(180deg, rgb(255 255 255 / 0.7), rgb(255 255 255 / 0) 60%);
+  border-color: var(--glass-border, color-mix(in oklab, var(--foreground) 16%, transparent));
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.95),
+    0 1px 1px color-mix(in oklab, var(--foreground) 8%, transparent),
+    0 3px 8px -3px color-mix(in oklab, var(--foreground) 24%, transparent);
+}
+/* Buổi đã điểm danh (xanh lá) và lớp học thêm (vàng): giữ màu cũ, chỉ đặt lên mặt kính. */
+@utility glass-done {
+  --glass-bg: color-mix(in oklab, var(--color-emerald-500) 14%, rgb(255 255 255 / 0.85));
+  --glass-border: color-mix(in oklab, var(--color-emerald-600) 34%, transparent);
+}
+@utility glass-extra {
+  --glass-bg: color-mix(in oklab, var(--color-amber-500) 14%, rgb(255 255 255 / 0.85));
+  --glass-border: color-mix(in oklab, var(--color-amber-600) 45%, transparent);
+}
+/* Rê chuột hoặc chọn bằng bàn phím: nhấc lên 1px, bóng đậm hơn. */
+@utility glass-lift {
+  transition:
+    transform 150ms ease,
+    box-shadow 150ms ease;
+  &:focus-visible {
+    transform: translateY(-1px);
+  }
+  @media (hover: hover) {
+    &:hover {
+      transform: translateY(-1px);
+      box-shadow:
+        inset 0 1px 0 rgb(255 255 255 / 0.95),
+        0 2px 3px color-mix(in oklab, var(--foreground) 10%, transparent),
+        0 8px 16px -6px color-mix(in oklab, var(--foreground) 30%, transparent);
+    }
+  }
+  &:active {
+    transform: none;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+    &:hover,
+    &:focus-visible {
+      transform: none;
+    }
+  }
+}
+@utility glass-panel {
+  border-color: color-mix(in oklab, var(--foreground) 14%, transparent);
+  box-shadow:
+    0 1px 2px color-mix(in oklab, var(--foreground) 6%, transparent),
+    0 12px 28px -16px color-mix(in oklab, var(--foreground) 30%, transparent);
 }
 
 @layer base {

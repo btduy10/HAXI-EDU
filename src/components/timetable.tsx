@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { AddSessionButton } from "@/components/manual-scheduler";
 import { Badge } from "@/components/ui/badge";
+import { type ShiftTone, shiftTone } from "@/domain/time-slots";
 import { WEEKDAY_LABELS, WEEKDAY_SHORT, addDays, eachDay, endOfMonth, isoWeekday, startOfMonth, startOfWeek } from "@/lib/dates";
 import { formatDate, formatTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -38,6 +39,10 @@ const teacherOf = (s: TimetableSession) => s.teacherShortName || s.teacherName;
 const substituteOf = (s: TimetableSession) => s.substituteShortName || s.substituteName;
 const assistantOf = (s: TimetableSession) => s.assistantShortName || s.assistantName;
 
+// Nền theo ca (Sáng → Chiều → Tối đậm dần): nền hàng của lưới tuần và nền thẻ buổi học trên điện thoại.
+const TONE_ROW = ["bg-shift-1", "bg-shift-2", "bg-shift-3"] as const;
+const TONE_CARD = ["", "[--glass-bg:var(--shift-2)]", "[--glass-bg:var(--shift-3)]"] as const;
+
 export function SessionBadges({ session, today }: { session: TimetableSession; today: string }) {
   if (session.extra) return <Badge variant="outline">Học thêm</Badge>;
   return (
@@ -53,10 +58,21 @@ export function SessionBadges({ session, today }: { session: TimetableSession; t
 }
 
 /** Thẻ buổi học đầy đủ, dùng cho danh sách theo ngày (di động) và các bảng tổng hợp. */
-export function SessionCard({ session, href, today }: { session: TimetableSession; href: string; today: string }) {
+export function SessionCard({
+  session,
+  href,
+  today,
+  tone,
+}: {
+  session: TimetableSession;
+  href: string;
+  today: string;
+  /** Bậc nền theo ca của buổi (Thời khóa biểu theo ngày); bỏ trống thì thẻ giữ nền sáng. */
+  tone?: ShiftTone;
+}) {
   if (session.extra) {
     return (
-      <div className="rounded-lg border border-dashed border-amber-600/40 bg-amber-500/10 p-3 text-sm">
+      <div className="glass-chip glass-extra rounded-lg border border-dashed p-3 text-sm">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <span className="font-semibold tabular-nums">
             {formatTime(session.startTime)}–{formatTime(session.endTime)}
@@ -75,7 +91,13 @@ export function SessionCard({ session, href, today }: { session: TimetableSessio
   return (
     <Link
       href={href}
-      className={cn("block rounded-lg border p-3 text-sm hover:bg-muted", session.status === "cancelled" && "opacity-60")}
+      data-tone={tone}
+      className={cn(
+        "block rounded-lg border p-3 text-sm",
+        // Buổi đã hủy để phẳng, không bóng, cho lùi về sau.
+        session.status === "cancelled" ? "opacity-60 hover:bg-muted" : "glass-chip glass-lift",
+        tone !== undefined && TONE_CARD[tone],
+      )}
     >
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
         <span className="font-semibold tabular-nums">
@@ -101,7 +123,7 @@ function SessionChip({ session, href }: { session: TimetableSession; href: strin
     return (
       <div
         title={`Lớp học thêm · ${session.className}`}
-        className="min-w-0 overflow-hidden rounded-md border border-dashed border-amber-600/40 bg-amber-500/10 px-1.5 py-1 text-xs leading-tight"
+        className="glass-chip glass-extra min-w-0 overflow-hidden rounded-md border border-dashed px-1.5 py-1 text-xs leading-tight"
       >
         <span className="block truncate">
           <span className="font-medium tabular-nums">{formatTime(session.startTime)}</span> {session.classCode}
@@ -118,9 +140,9 @@ function SessionChip({ session, href }: { session: TimetableSession; href: strin
       href={href}
       title={`${session.className} · ${STATUS_LABEL[session.status]}`}
       className={cn(
-        "block min-w-0 overflow-hidden rounded-md border px-1.5 py-1 text-xs leading-tight hover:bg-muted",
-        session.status === "cancelled" && "text-muted-foreground line-through",
-        session.status === "done" && "border-emerald-600/30 bg-emerald-500/10",
+        "block min-w-0 overflow-hidden rounded-md border px-1.5 py-1 text-xs leading-tight",
+        session.status === "cancelled" ? "text-muted-foreground line-through hover:bg-muted" : "glass-chip glass-lift",
+        session.status === "done" && "glass-done",
         session.kind === "makeup" && "border-dashed",
       )}
     >
@@ -152,13 +174,19 @@ export function WeekView({
 }) {
   const weekStart = startOfWeek(date);
   const days = [...eachDay(weekStart, addDays(weekStart, 6))];
-  const slotIds = new Set(slots.map((s) => s.id));
+  const toneBySlot = new Map(slots.map((s) => [s.id, shiftTone(s.name)]));
   // Buổi không gắn ca (học bù giờ tự do) nằm ở hàng "Khác".
   const rows = [
-    ...slots.map((s) => ({ key: s.id, label: s.name, hint: `${formatTime(s.defaultStart)}–${formatTime(s.defaultEnd)}` })),
-    { key: "other", label: "Khác", hint: "" },
+    ...slots.map((s) => ({
+      key: s.id,
+      label: s.name,
+      hint: `${formatTime(s.defaultStart)}–${formatTime(s.defaultEnd)}`,
+      tone: shiftTone(s.name),
+    })),
+    { key: "other", label: "Khác", hint: "", tone: shiftTone(null) },
   ];
-  const rowOf = (s: TimetableSession) => (s.timeSlotId && slotIds.has(s.timeSlotId) ? s.timeSlotId : "other");
+  const rowOf = (s: TimetableSession) => (s.timeSlotId && toneBySlot.has(s.timeSlotId) ? s.timeSlotId : "other");
+  const toneOf = (s: TimetableSession) => toneBySlot.get(s.timeSlotId ?? "") ?? shiftTone(null);
   const hasOther = sessions.some((s) => rowOf(s) === "other");
 
   return (
@@ -174,7 +202,7 @@ export function WeekView({
               {items.length === 0 ? (
                 <p className="text-sm text-muted-foreground">Không có buổi học.</p>
               ) : (
-                items.map((s) => <SessionCard key={s.id} session={s} href={hrefOf(s)} today={today} />)
+                items.map((s) => <SessionCard key={s.id} session={s} href={hrefOf(s)} today={today} tone={toneOf(s)} />)
               )}
               <AddSessionButton date={day} label={`Xếp buổi học ngày ${formatDate(day)}`} className="min-h-10 w-full" />
             </section>
@@ -182,10 +210,10 @@ export function WeekView({
         })}
       </div>
 
-      <div className="hidden overflow-x-auto rounded-lg border md:block">
+      <div className="glass-panel hidden overflow-x-auto rounded-xl border md:block">
         <table className="w-full table-fixed border-collapse text-sm">
           <thead>
-            <tr className="bg-muted/50">
+            <tr className="bg-linear-to-b from-white/80 to-muted">
               <th className="w-24 border-b p-2 text-left font-medium">Ca</th>
               {days.map((day) => (
                 <th key={day} className={cn("border-b border-l p-2 text-left font-medium", day === today && "bg-primary/10")}>
@@ -199,12 +227,16 @@ export function WeekView({
               .filter((r) => r.key !== "other" || hasOther)
               .map((row) => (
                 <tr key={row.key} className="align-top">
-                  <th className="border-b p-2 text-left font-medium">
+                  <th data-tone={row.tone} className={cn("border-b p-2 text-left font-medium", TONE_ROW[row.tone])}>
                     {row.label}
                     <span className="block text-xs font-normal text-muted-foreground">{row.hint}</span>
                   </th>
                   {days.map((day) => (
-                    <td key={day} className={cn("border-b border-l p-1", day === today && "bg-primary/5")}>
+                    <td
+                      key={day}
+                      // Cột hôm nay phủ sắc xanh ngọc lên trên nền của ca nên vẫn nhận ra ca.
+                      className={cn("border-b border-l p-1", TONE_ROW[row.tone], day === today && "bg-linear-to-b from-primary/8 to-primary/8")}
+                    >
                       <div className="grid grid-cols-1 gap-1">
                         {sessions
                           .filter((s) => s.date === day && rowOf(s) === row.key)
@@ -250,8 +282,8 @@ export function MonthView({
   const month = date.slice(0, 7);
 
   return (
-    <div className="overflow-hidden rounded-lg border">
-      <div className="grid grid-cols-7 bg-muted/50 text-center text-xs font-medium">
+    <div className="glass-panel overflow-hidden rounded-xl border">
+      <div className="grid grid-cols-7 bg-linear-to-b from-white/80 to-muted text-center text-xs font-medium">
         {[1, 2, 3, 4, 5, 6, 7].map((d) => (
           <div key={d} className="p-1.5">
             {WEEKDAY_SHORT[d]}
@@ -280,7 +312,7 @@ export function MonthView({
               )}
               <span className="hidden gap-0.5 md:grid">
                 {items.slice(0, 3).map((s) => (
-                  <span key={s.id} className={cn("truncate rounded bg-muted px-1", s.status === "done" && "bg-emerald-500/15")}>
+                  <span key={s.id} className={cn("glass-chip truncate rounded border px-1", s.status === "done" && "glass-done")}>
                     {formatTime(s.startTime)} {s.classCode}
                   </span>
                 ))}
