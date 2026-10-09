@@ -126,7 +126,7 @@ export function ColumnChart({
   const range = top - bottom;
   const ticks = Array.from({ length: range / step + 1 }, (_, i) => top - i * step);
   return (
-    <div className="grid grid-cols-[auto_1fr] gap-x-2 text-xs">
+    <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-2 text-xs">
       <div className="flex h-40 flex-col justify-between text-right tabular-nums text-muted-foreground" aria-hidden>
         {ticks.map((t) => (
           <span key={t} className="-translate-y-1/2 leading-none first:translate-y-0 last:translate-y-0">
@@ -173,7 +173,7 @@ export function ColumnChart({
               <span className="whitespace-nowrap">{d.label}</span>
             </li>
           ) : (
-            <li key={d.key} className="flex-1 truncate">
+            <li key={d.key} className="min-w-0 flex-1 truncate">
               {d.label}
             </li>
           ),

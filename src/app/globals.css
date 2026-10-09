@@ -19,6 +19,7 @@
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar: var(--sidebar);
   --color-brand-gold: var(--brand-gold);
+  --color-brand-teal: var(--brand-teal);
   --color-shift-1: var(--shift-1);
   --color-shift-2: var(--shift-2);
   --color-shift-3: var(--shift-3);
@@ -52,44 +53,52 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
-/* Bảng màu HAXI STEM: xanh ngọc chủ đạo; xanh navy và vàng đồng lấy từ logo; nền kem ấm. */
+/*
+ * Bảng màu HAXI STEM (nguồn duy nhất của mọi màu giao diện):
+ * xanh lá ngọc chủ đạo, teal cho mục/tab đang chọn, navy cho chữ và thanh điều hướng, nền kem, vàng đồng của logo.
+ */
 :root {
-  --background: oklch(0.985 0.012 85);
-  --foreground: oklch(0.27 0.06 262);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.27 0.06 262);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.27 0.06 262);
-  /* Xanh ngọc đậm: chữ trắng trên nền này đạt độ tương phản AA. */
-  --primary: oklch(0.51 0.09 186);
-  --primary-foreground: oklch(0.99 0.01 180);
-  --secondary: oklch(0.95 0.035 182);
-  --secondary-foreground: oklch(0.33 0.065 188);
+  --background: #fdf8f2;
+  --foreground: #0e2841;
+  --card: #ffffff;
+  --card-foreground: #0e2841;
+  --popover: #ffffff;
+  --popover-foreground: #0e2841;
+  /* Xanh lá ngọc: chữ trắng trên nền này đạt tương phản 5,0:1 (AA). */
+  --primary: #2e7d5b;
+  --primary-foreground: #ffffff;
+  --secondary: oklch(0.95 0.035 165);
+  --secondary-foreground: oklch(0.33 0.07 162);
   --muted: oklch(0.96 0.014 85);
-  --muted-foreground: oklch(0.5 0.035 258);
-  --accent: oklch(0.95 0.035 182);
-  --accent-foreground: oklch(0.33 0.065 188);
+  /* Xám navy cho chữ phụ: đạt AA cả trên mặt kính trắng 66%. */
+  --muted-foreground: oklch(0.46 0.04 255);
+  --accent: oklch(0.95 0.035 165);
+  --accent-foreground: oklch(0.33 0.07 162);
   --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.9 0.02 195);
-  --input: oklch(0.87 0.025 195);
-  --ring: oklch(0.7 0.11 184);
-  --chart-1: oklch(0.7 0.11 184);
-  --chart-2: oklch(0.51 0.09 186);
+  /* Viền và ô nhập dùng navy trong suốt để ăn với mặt kính. */
+  --border: rgb(14 40 65 / 0.13);
+  --input: rgb(14 40 65 / 0.22);
+  --ring: #4dd0c0;
+  --chart-1: #4dd0c0;
+  --chart-2: #2e7d5b;
   --chart-3: oklch(0.67 0.12 75);
-  --chart-4: oklch(0.34 0.07 260);
+  --chart-4: #0e2841;
   --chart-5: oklch(0.52 0.1 160);
-  --radius: 0.75rem;
-  /* Thanh điều hướng nền navy, mục đang chọn màu xanh ngọc sáng. */
-  --sidebar: oklch(0.25 0.065 262);
+  --radius: 0.875rem;
+  /* Thanh điều hướng nền navy, mục đang chọn là pill teal. */
+  --sidebar: #0e2841;
   --sidebar-foreground: oklch(0.96 0.01 240);
-  --sidebar-primary: oklch(0.78 0.12 182);
-  --sidebar-primary-foreground: oklch(0.22 0.06 262);
-  --sidebar-accent: oklch(0.33 0.07 262);
+  --sidebar-primary: #4dd0c0;
+  --sidebar-primary-foreground: #0e2841;
+  --sidebar-accent: rgb(255 255 255 / 0.1);
   --sidebar-accent-foreground: oklch(0.98 0.005 240);
-  --sidebar-border: oklch(0.35 0.06 262);
-  --sidebar-ring: oklch(0.78 0.12 182);
-  /* Vàng đồng của logo, dùng cho điểm nhấn. */
+  --sidebar-border: rgb(255 255 255 / 0.14);
+  --sidebar-ring: #4dd0c0;
+  /* Teal nhấn cho nút/tab đang chọn (chữ navy đặt trên); vàng đồng của logo cho huy hiệu, sao. */
+  --brand-teal: #4dd0c0;
   --brand-gold: oklch(0.67 0.12 75);
+  /* Bề rộng thanh điều hướng theo cỡ màn hình (app-shell đặt lại ở từng mốc); thanh Lưu cố định dựa vào đây. */
+  --sidebar-w: 0px;
   /* Thời khóa biểu: nền theo ca, cùng tông kem của nền trang, chỉ đậm dần (Sáng → Chiều → Tối). */
   --shift-1: oklch(0.985 0.012 85);
   --shift-2: oklch(0.953 0.02 85);
@@ -158,8 +167,7 @@
     @apply border-border outline-ring/50;
   }
   body {
-    /* Quicksand nét mảnh nên chữ thường dùng độ đậm 500 để dễ đọc trên điện thoại. */
-    @apply bg-background font-medium text-foreground;
+    @apply bg-background text-foreground;
   }
   html {
     @apply font-sans;
@@ -167,6 +175,99 @@
   h1,
   h2,
   h3 {
-    @apply font-bold tracking-tight;
+    @apply font-semibold tracking-tight;
   }
+}
+
+/*
+ * Nền toàn trang (src/components/app-background.tsx): gradient mesh xanh lá – xanh trời – vàng nhạt,
+ * dùng tạm cho tới khi có ảnh phong cảnh thật ở public/bg/.
+ */
+@utility app-bg {
+  background:
+    radial-gradient(58% 48% at 10% 6%, oklch(0.86 0.085 220 / 0.9), transparent 72%),
+    radial-gradient(52% 44% at 90% 10%, oklch(0.9 0.07 190 / 0.85), transparent 72%),
+    radial-gradient(60% 52% at 82% 92%, oklch(0.91 0.1 95 / 0.85), transparent 72%),
+    radial-gradient(66% 58% at 12% 94%, oklch(0.78 0.115 152 / 0.9), transparent 72%),
+    radial-gradient(48% 42% at 52% 48%, oklch(0.86 0.09 158 / 0.55), transparent 76%),
+    var(--background);
+}
+
+/*
+ * Ba cấp kính dùng chung cho mọi trang.
+ * backdrop-filter chỉ bật ở thanh điều hướng, cửa sổ nội dung và thẻ đứng riêng (glass-blur), từ 768px trở lên;
+ * các thẻ nằm trong cửa sổ nội dung không blur riêng để không chồng nhiều lớp blur.
+ */
+@utility glass-window {
+  /* Điện thoại: nền gần đặc, không blur. */
+  background-color: rgb(255 255 255 / 0.9);
+  @media (min-width: 48rem) {
+    border: 1px solid rgb(255 255 255 / 0.6);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.75),
+      0 30px 60px -36px color-mix(in oklab, var(--foreground) 40%, transparent);
+    @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+      background-color: rgb(255 255 255 / 0.66);
+      -webkit-backdrop-filter: blur(22px) saturate(1.25);
+      backdrop-filter: blur(22px) saturate(1.25);
+    }
+  }
+}
+/* Thẻ số liệu, biểu đồ: trắng trong, viền sáng, bóng rất nhẹ. */
+@utility glass-card {
+  background-color: rgb(255 255 255 / 0.62);
+  border: 1px solid rgb(255 255 255 / 0.75);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.9),
+    0 1px 2px color-mix(in oklab, var(--foreground) 5%, transparent),
+    0 10px 24px -16px color-mix(in oklab, var(--foreground) 28%, transparent);
+}
+/* Bảng dữ liệu, form, hộp thoại: trắng gần đặc để dễ đọc và nhẹ GPU. */
+@utility glass-solid {
+  background-color: rgb(255 255 255 / 0.9);
+  border-color: color-mix(in oklab, var(--foreground) 11%, transparent);
+  box-shadow:
+    0 1px 2px color-mix(in oklab, var(--foreground) 5%, transparent),
+    0 8px 20px -16px color-mix(in oklab, var(--foreground) 24%, transparent);
+}
+@utility glass-sidebar {
+  background-color: var(--sidebar);
+  @media (min-width: 48rem) {
+    @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+      background-color: color-mix(in oklab, var(--sidebar) 88%, transparent);
+      -webkit-backdrop-filter: blur(18px) saturate(1.2);
+      backdrop-filter: blur(18px) saturate(1.2);
+    }
+  }
+}
+/* Thẻ đứng riêng ngoài cửa sổ nội dung (vd. form đăng nhập): một lớp blur của riêng nó. */
+@utility glass-blur {
+  @media (min-width: 48rem) {
+    @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+      -webkit-backdrop-filter: blur(20px) saturate(1.2);
+      backdrop-filter: blur(20px) saturate(1.2);
+    }
+  }
+}
+
+/* Đổi trang: nội dung mới (và khung chờ) hiện dần trong 220ms, chỉ dùng opacity nên không ảnh hưởng thanh cố định. */
+@keyframes page-fade {
+  from {
+    opacity: 0;
+  }
+}
+@utility page-enter {
+  & > * {
+    animation: page-fade 220ms ease-out backwards;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    & > * {
+      animation: none;
+    }
+  }
+}
+/* Thanh cuộn mảnh trong thanh điều hướng. */
+@utility sidebar-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(255 255 255 / 0.25) transparent;
 }

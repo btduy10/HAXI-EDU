@@ -1,14 +1,16 @@
 import type { Metadata, Viewport } from "next";
-import { Quicksand } from "next/font/google";
+import { Be_Vietnam_Pro } from "next/font/google";
 import { connection } from "next/server";
+import { AppBackground } from "@/components/app-background";
 import { Toaster } from "@/components/ui/sonner";
 import "./globals.css";
 
-// Quicksand: chữ bo tròn, thân thiện, có đủ dấu tiếng Việt.
-const font = Quicksand({
+// Be Vietnam Pro: thiết kế riêng cho tiếng Việt, dấu rõ và cân ở mọi độ đậm.
+const font = Be_Vietnam_Pro({
   variable: "--font-sans",
   subsets: ["latin", "vietnamese"],
-  weight: ["500", "600", "700"],
+  weight: ["400", "500", "600", "700"],
+  display: "swap",
 });
 
 export const metadata: Metadata = {
@@ -24,6 +26,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="vi" className={`${font.variable} h-full antialiased`}>
       <body className="flex min-h-full flex-col">
+        <AppBackground />
         {children}
         <Toaster position="top-center" richColors />
       </body>
