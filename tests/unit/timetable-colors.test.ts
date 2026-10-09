@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { EXTRA_LIGHTNESS, TEACHER_DARKEST, TEACHER_LIGHTEST, teacherLightness, teacherShade } from "@/domain/timetable-colors";
+import { TEACHER_DARKEST, TEACHER_LIGHTEST, teacherLightness, teacherShade } from "@/domain/timetable-colors";
 
 describe("màu theo giáo viên trên Thời khóa biểu", () => {
   it("giáo viên xếp trước nhạt hơn, các mức chia đều từ nhạt nhất tới đậm nhất", () => {
@@ -12,10 +12,9 @@ describe("màu theo giáo viên trên Thời khóa biểu", () => {
     expect(Math.max(...steps) - Math.min(...steps)).toBeLessThanOrEqual(1);
   });
 
-  it("mỗi giáo viên một màu riêng; lớp học thêm đậm hơn mọi giáo viên", () => {
+  it("mỗi giáo viên một màu riêng", () => {
     const shades = Array.from({ length: 8 }, (_, i) => teacherShade(i, 8));
     expect(new Set(shades).size).toBe(8);
-    for (let i = 0; i < 8; i++) expect(teacherLightness(i, 8)).toBeGreaterThan(EXTRA_LIGHTNESS);
   });
 
   it("chỉ một giáo viên thì dùng mức giữa; thứ tự ngoài khoảng được kẹp về hai đầu", () => {

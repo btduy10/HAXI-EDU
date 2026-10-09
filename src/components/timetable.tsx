@@ -31,12 +31,10 @@ export type TimetableSession = {
   kind: "regular" | "makeup";
   status: "planned" | "done" | "cancelled";
   attendanceCount: number;
-  /** Lớp học thêm (lớp ngoài, chỉ giữ phòng): không phải buổi học, không bấm vào được, không có điểm danh. */
-  extra?: boolean;
 };
 
 type HrefOf = (session: TimetableSession) => string;
-/** Màu nền của một buổi (theo giáo viên thực dạy; lớp học thêm đậm nhất). Không có thì ô giữ nền trắng. */
+/** Màu nền của một buổi (theo giáo viên thực dạy). Không có thì ô giữ nền trắng. */
 type ShadeOf = (session: TimetableSession) => string | undefined;
 
 /** Người thực dạy của buổi: giáo viên dạy thay nếu có, không thì giáo viên chính. */
@@ -45,9 +43,6 @@ export const leadTeacherId = (s: TimetableSession) => s.substituteTeacherId ?? s
 // Ô có màu: đặt màu vào mặt kính và giảm lớp bóng sáng để độ đậm của màu không bị phai.
 const shadeStyle = (shade: string | undefined, sheen: number): CSSProperties | undefined =>
   shade ? ({ "--glass-bg": shade, "--glass-sheen": sheen } as CSSProperties) : undefined;
-// Lớp học thêm: nền đậm nhất, chữ trắng, viền sáng.
-const extraStyle = (shade: string | undefined): CSSProperties | undefined =>
-  shade ? ({ ...shadeStyle(shade, 0.12), "--glass-border": "rgb(255 255 255 / 0.55)" } as CSSProperties) : undefined;
 
 /** Dấu tick "đã điểm danh" ở góc ô buổi học (nền ô đã dành cho màu của giáo viên). */
 function DoneTick({ className }: { className?: string }) {
@@ -59,9 +54,9 @@ function DoneTick({ className }: { className?: string }) {
   );
 }
 
-/** Chú giải màu: mỗi giáo viên một độ đậm, lớp học thêm đậm nhất. */
-export function TeacherLegend({ entries, extraShade }: { entries: { id: string; name: string; shade: string }[]; extraShade?: string }) {
-  if (entries.length === 0 && !extraShade) return null;
+/** Chú giải màu: mỗi giáo viên một độ đậm. */
+export function TeacherLegend({ entries }: { entries: { id: string; name: string; shade: string }[] }) {
+  if (entries.length === 0) return null;
   const swatch = "size-3.5 shrink-0 rounded-full border border-foreground/25";
   return (
     <ul aria-label="Chú giải màu theo giáo viên" className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-muted-foreground">
@@ -71,12 +66,6 @@ export function TeacherLegend({ entries, extraShade }: { entries: { id: string; 
           {entry.name}
         </li>
       ))}
-      {extraShade && (
-        <li data-legend="extra" className="flex items-center gap-1.5">
-          <span aria-hidden className={swatch} style={{ backgroundColor: extraShade }} />
-          Học thêm
-        </li>
-      )}
     </ul>
   );
 }
@@ -91,14 +80,7 @@ const assistantOf = (s: TimetableSession) => s.assistantShortName || s.assistant
 // Nền theo ca (Sáng → Chiều → Tối đậm dần) của các hàng trong lưới tuần.
 const TONE_ROW = ["bg-shift-1", "bg-shift-2", "bg-shift-3"] as const;
 
-export function SessionBadges({ session, today, onDark = false }: { session: TimetableSession; today: string; onDark?: boolean }) {
-  if (session.extra) {
-    return (
-      <Badge variant="outline" className={cn(onDark && "border-white/60 text-white")}>
-        Học thêm
-      </Badge>
-    );
-  }
+export function SessionBadges({ session, today }: { session: TimetableSession; today: string }) {
   return (
     <>
       {session.kind === "makeup" && <Badge variant="outline">Học bù</Badge>}
@@ -127,28 +109,6 @@ export function SessionCard({
   /** Màu nền theo giáo viên; bỏ trống thì thẻ giữ nền sáng. */
   shade?: string;
 }) {
-  if (session.extra) {
-    return (
-      <div
-        data-extra
-        style={extraStyle(shade)}
-        className={cn("glass-chip rounded-lg border border-dashed p-3 text-sm", shade && "text-white [&_p]:text-white/85")}
-      >
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-          <span className="font-semibold tabular-nums">
-            {formatTime(session.startTime)}–{formatTime(session.endTime)}
-          </span>
-          <span className="font-medium">{session.classCode}</span>
-          <SessionBadges session={session} today={today} onDark={Boolean(shade)} />
-        </div>
-        <p className="mt-1 text-muted-foreground">
-          {session.className}
-          {session.roomName && ` · ${session.roomName}`}
-        </p>
-        {session.teacherName && <p className="text-muted-foreground">GV: {teacherOf(session)}</p>}
-      </div>
-    );
-  }
   return (
     <Link
       href={href}
@@ -182,24 +142,6 @@ export function SessionCard({
 }
 
 function SessionChip({ session, href, shade }: { session: TimetableSession; href: string; shade?: string }) {
-  if (session.extra) {
-    return (
-      <div
-        data-extra
-        title={`Lớp học thêm · ${session.className}`}
-        style={extraStyle(shade)}
-        className={cn("glass-chip min-w-0 overflow-hidden rounded-md border border-dashed px-1.5 py-1 text-xs leading-tight", shade && "text-white")}
-      >
-        <span className="block truncate">
-          <span className="font-medium tabular-nums">{formatTime(session.startTime)}</span> {session.classCode}
-        </span>
-        <span className={cn("block truncate", shade ? "text-white/85" : "text-muted-foreground")}>
-          Học thêm{session.teacherName && ` · ${teacherOf(session)}`}
-          {session.roomName && ` · ${session.roomName}`}
-        </span>
-      </div>
-    );
-  }
   return (
     <Link
       href={href}
@@ -387,8 +329,8 @@ export function MonthView({
                   return (
                     <span
                       key={s.id}
-                      style={s.extra ? extraStyle(shade) : shadeStyle(shade, 0.3)}
-                      className={cn("glass-chip flex min-w-0 items-center gap-1 overflow-hidden rounded border px-1", s.extra && shade && "text-white")}
+                      style={shadeStyle(shade, 0.3)}
+                      className="glass-chip flex min-w-0 items-center gap-1 overflow-hidden rounded border px-1"
                     >
                       <span className="min-w-0 flex-1 truncate">
                         {formatTime(s.startTime)} {s.classCode}

@@ -221,7 +221,8 @@ export const syllabusLessons = pgTable(
   ],
 );
 
-// Lớp học thêm: lớp ngoài hệ thống, chỉ để giữ phòng hằng tuần trên Thời khóa biểu (không điểm danh, sao, chấm công).
+// Lớp học thêm (lớp ngoài hệ thống, giữ phòng hằng tuần): tính năng đã gỡ khỏi ứng dụng, không còn mã nào đọc hay ghi bảng này.
+// Bảng được giữ lại để không mất dữ liệu cũ; chỉ xóa bằng một migration riêng khi chủ hệ thống đồng ý.
 export const extraClasses = pgTable(
   "extra_classes",
   {

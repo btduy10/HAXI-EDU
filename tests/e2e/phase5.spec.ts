@@ -105,47 +105,34 @@ test("Phân công GV chính + trợ giảng, lịch mẫu tự sinh buổi; tr�
   await db.end();
 });
 
-test("Lớp học thêm: Admin thêm ở trang Thời khóa biểu (trang Lớp học không còn mục này), lưới hiện mục Học thêm đúng thứ; trùng thứ + khung + phòng bị báo", async ({ page }) => {
+test("Lớp học thêm đã gỡ: trang Lớp học và Thời khóa biểu không còn mục này, dữ liệu cũ trong bảng không hiện lên lưới; nút Excel vẫn xuất Thời khóa biểu", async ({ page }) => {
   await login(page, "admin", NEW_PASSWORD);
   await page.getByLabel("Mã xác thực").fill(totp(loadAdminSecret()));
   await page.getByRole("button", { name: "Xác nhận" }).click();
   await expect(page).toHaveURL(/\/admin\/dashboard$/);
 
-  // Dùng thứ của ngày mai để không trùng lịch mẫu của RB-TG01 (thứ hôm nay, Ca E2E).
-  const day = shift(today(), 1);
-  await page.goto("/admin/classes");
-  await expect(page.getByRole("heading", { name: /^Lớp học/ })).toHaveCount(1);
-  await expect(page.getByRole("heading", { name: /Lớp học thêm/ })).toHaveCount(0);
+  // Bảng extra_classes được giữ lại trong CSDL: dữ liệu cũ còn nằm đó cũng không được hiện ở đâu nữa.
+  const day = today();
+  const db = sql();
+  await db`
+    insert into extra_classes (name, course_id, room_id, weekday, time_slot_id)
+    select 'Toán thêm E2E', c.id, r.id, ${isoWeekday(day)}, s.id from courses c, rooms r, time_slots s limit 1`;
+  await db.end();
+
+  for (const [url, heading] of [
+    ["/admin/classes", /^Lớp học/],
+    [`/admin/timetable?date=${day}`, "Thời khóa biểu"],
+    [`/admin/timetable?view=month&date=${day}`, "Thời khóa biểu"],
+  ] as const) {
+    await page.goto(url);
+    await expect(page.getByRole("heading", { name: heading }).first()).toBeVisible();
+    await expect(page.getByRole("heading", { name: /Lớp học thêm/ })).toHaveCount(0);
+    await expect(page.getByText("Toán thêm E2E")).toHaveCount(0);
+    await expect(page.getByText("Học thêm", { exact: true })).toHaveCount(0);
+    await expectNoHorizontalScroll(page);
+  }
 
   await page.goto(`/admin/timetable?date=${day}`);
-  const section = page.locator("section").filter({ has: page.getByRole("heading", { name: /Lớp học thêm/ }) });
-  const add = async (name: string) => {
-    await section.getByRole("button", { name: "Thêm", exact: true }).click();
-    await page.locator("#f-name").fill(name);
-    await page.locator("#f-courseId").selectOption({ index: 1 });
-    await page.locator("#f-roomId").selectOption({ index: 1 });
-    await page.locator("#f-weekday").selectOption(String(isoWeekday(day)));
-    await page.locator("#f-timeSlotId").selectOption({ label: "Ca E2E – Khung 1 (05:00–05:45)" });
-    await page.getByRole("button", { name: "Lưu" }).click();
-  };
-  await add("Toán thêm E2E");
-  await expect(page.getByText("Đã lưu.")).toBeVisible();
-  await expect(section.getByText("Toán thêm E2E").first()).toBeVisible();
-  await expect(page.getByText("Đã lưu.")).toHaveCount(0);
-  await expectNoHorizontalScroll(page);
-
-  await add("Trùng phòng E2E");
-  await expect(page.getByText(/Trùng phòng với lớp học thêm "Toán thêm E2E"/).first()).toBeVisible();
-  await page.getByRole("button", { name: "Hủy" }).click();
-
-  // Lớp học thêm hiện trên lưới của đúng thứ, tô màu đậm nhất và có trong chú giải.
-  await page.reload();
-  const extraCard = page.locator("[data-extra]").filter({ hasText: "Toán thêm E2E" }).filter({ visible: true }).first();
-  await expect(extraCard).toBeVisible();
-  await expect(extraCard.getByText("Học thêm", { exact: true })).toBeVisible();
-  await expect(page.locator('[data-legend="extra"]')).toBeVisible();
-  await expectNoHorizontalScroll(page);
-
   // Không còn ô chọn loại lớp khi xuất: nút Excel luôn xuất Thời khóa biểu của lớp Robotics, không có tệp riêng cho lớp học thêm.
   await expect(page.getByLabel("Loại lớp cần xuất")).toHaveCount(0);
   const [download] = await Promise.all([page.waitForEvent("download"), page.getByRole("link", { name: "Excel" }).click()]);

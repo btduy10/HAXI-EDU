@@ -40,7 +40,6 @@ import type {
 import { audit } from "../audit";
 import { AppError, notFound } from "../errors";
 import { type Actor, allowedClassIds, assertAdmin, assertCan, assertCanAny, assertClassAccess, assertSessionAccess } from "../guard";
-import { assertNoWeeklyClash } from "./extra-classes";
 import { purgeSessionStarLogs } from "./stars";
 
 const substitute = alias(teachers, "substitute");
@@ -291,12 +290,6 @@ async function reflowClass(tx: Tx, actor: Actor, cls: ClassRow, from: string): P
 }
 
 /** Thêm dòng lịch mẫu rồi tự xếp lại các buổi sắp tới của lớp cho đủ số buổi của khóa học (bỏ ngày nghỉ, báo buổi bị trùng). */
-/** Vị trí hằng tuần của một dòng lịch mẫu, để so trùng với Lớp học thêm (cùng Thứ + Ca + Khung giờ). */
-const templatePlace = (
-  data: { weekday: number; timeSlotId: string; roomId: string | null; teacherId: string | null; assistantTeacherId: string | null },
-  cls: { defaultRoomId: string | null },
-) => ({ weekday: data.weekday, timeSlotId: data.timeSlotId, roomId: data.roomId ?? cls.defaultRoomId, teacherIds: [data.teacherId, data.assistantTeacherId] });
-
 /** Một lớp không có hai dòng lịch mẫu cùng Thứ + Ca + Khung giờ. */
 async function assertTemplateUnique(tx: Tx, classId: string, data: { weekday: number; timeSlotId: string }, exceptId?: string) {
   const conditions = [eq(scheduleTemplates.classId, classId), eq(scheduleTemplates.weekday, data.weekday), eq(scheduleTemplates.timeSlotId, data.timeSlotId)];
@@ -317,7 +310,6 @@ export async function createTemplate(actor: Actor, data: z.output<typeof templat
     const [cls] = await tx.select().from(classes).where(eq(classes.id, data.classId)).limit(1);
     if (!cls) throw notFound("lớp học");
     await assertTemplateUnique(tx, data.classId, data);
-    await assertNoWeeklyClash(tx, templatePlace(data, cls), { extrasOnly: true });
     const [row] = await tx.insert(scheduleTemplates).values(data).returning();
     await audit(tx, { userId: actor.userId, action: "create", tableName: "schedule_templates", recordId: row!.id, newValue: row });
     if (cls.status !== "open") return { created: 0, alreadyExisting: 0, conflicts: [], warnings: [] };
@@ -347,7 +339,6 @@ export async function updateTemplate(
     const [cls] = await tx.select().from(classes).where(eq(classes.id, before.classId)).limit(1);
     if (!cls) throw notFound("lớp học");
     await assertTemplateUnique(tx, before.classId, data, id);
-    await assertNoWeeklyClash(tx, templatePlace(data, cls), { extrasOnly: true });
     const [after] = await tx.update(scheduleTemplates).set(data).where(eq(scheduleTemplates.id, id)).returning();
     await audit(tx, { userId: actor.userId, action: "update", tableName: "schedule_templates", recordId: id, oldValue: before, newValue: after });
 
