@@ -277,3 +277,102 @@
   scrollbar-width: thin;
   scrollbar-color: rgb(255 255 255 / 0.25) transparent;
 }
+
+/*
+ * Hiệu ứng vào trang. Chỉ dùng transform và opacity (riêng biểu đồ tròn vẽ dần bằng stroke-dashoffset trên vùng 160px).
+ * Mọi animation dùng fill-mode "backwards": chạy xong thì phần tử trở về trạng thái thường, không giữ transform.
+ */
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+}
+@keyframes grow-y {
+  from {
+    transform: scaleY(0);
+  }
+}
+@keyframes grow-x {
+  from {
+    transform: scaleX(0);
+  }
+}
+@keyframes draw-stroke {
+  from {
+    stroke-dashoffset: 1;
+  }
+}
+/* Các thẻ con hiện lần lượt, trượt lên 14px. */
+@utility stagger {
+  & > * {
+    animation: rise-in 500ms cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
+  }
+  & > *:nth-child(2) {
+    animation-delay: 60ms;
+  }
+  & > *:nth-child(3) {
+    animation-delay: 120ms;
+  }
+  & > *:nth-child(4) {
+    animation-delay: 180ms;
+  }
+  & > *:nth-child(5) {
+    animation-delay: 240ms;
+  }
+  & > *:nth-child(n + 6) {
+    animation-delay: 300ms;
+  }
+}
+/* Cột biểu đồ lớn dần từ trục; --i là thứ tự cột để các cột lên lần lượt. */
+@utility chart-grow-up {
+  transform-origin: bottom;
+  animation: grow-y 700ms cubic-bezier(0.2, 0.7, 0.2, 1) calc(200ms + var(--i, 0) * 40ms) backwards;
+}
+@utility chart-grow-down {
+  transform-origin: top;
+  animation: grow-y 700ms cubic-bezier(0.2, 0.7, 0.2, 1) calc(200ms + var(--i, 0) * 40ms) backwards;
+}
+@utility chart-grow-right {
+  transform-origin: left;
+  animation: grow-x 700ms cubic-bezier(0.2, 0.7, 0.2, 1) calc(200ms + var(--i, 0) * 60ms) backwards;
+}
+@utility chart-draw {
+  animation: draw-stroke 900ms ease-out 200ms backwards;
+}
+/* Thẻ nổi nhẹ khi rê chuột, viền sáng lên. */
+@utility card-lift {
+  transition:
+    transform 200ms ease,
+    box-shadow 200ms ease,
+    border-color 200ms ease;
+  @media (hover: hover) {
+    &:hover {
+      transform: translateY(-3px);
+      border-color: #ffffff;
+      box-shadow:
+        inset 0 1px 0 #ffffff,
+        0 2px 4px color-mix(in oklab, var(--foreground) 6%, transparent),
+        0 18px 32px -18px color-mix(in oklab, var(--foreground) 36%, transparent);
+    }
+  }
+}
+
+/* Người dùng bật "giảm chuyển động": tắt mọi animation và transition của toàn ứng dụng. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    transition-delay: 0ms !important;
+    scroll-behavior: auto !important;
+  }
+  .card-lift:hover,
+  .glass-lift:hover,
+  .glass-lift:focus-visible {
+    transform: none !important;
+  }
+}

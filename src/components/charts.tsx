@@ -1,3 +1,4 @@
+import { type CSSProperties, useId } from "react";
 import { cn } from "@/lib/utils";
 
 // Biểu đồ vẽ bằng HTML/SVG thuần (không dùng thư viện), render ở máy chủ.
@@ -26,7 +27,7 @@ export function ChartCard({
   className?: string;
 }) {
   return (
-    <section className={cn("glass-card grid min-w-0 content-start gap-4 rounded-3xl p-5", className)}>
+    <section className={cn("glass-card card-lift grid min-w-0 content-start gap-4 rounded-3xl p-5", className)}>
       <div className="border-b pb-3">
         <h2 className="text-base">{title}</h2>
         {subtitle && <p className="text-sm text-muted-foreground">{subtitle}</p>}
@@ -37,7 +38,7 @@ export function ChartCard({
 }
 
 function Empty({ text = "Chưa có dữ liệu." }: { text?: string }) {
-  return <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">{text}</p>;
+  return <p className="rounded-2xl border border-dashed p-6 text-center text-sm text-muted-foreground">{text}</p>;
 }
 
 /** Khung chú thích hiện khi rê chuột hoặc chạm/tab vào một cột. */
@@ -63,13 +64,13 @@ export function BarList({ data, max, emptyText }: { data: BarDatum[]; max?: numb
   const top = Math.max(max ?? 0, ...data.map((d) => d.value), 1);
   return (
     <ul className="grid gap-2">
-      {data.map((d) => (
+      {data.map((d, index) => (
         <li key={d.key} tabIndex={0} className="group relative grid grid-cols-[minmax(0,7.5rem)_1fr_auto] items-center gap-2 rounded-sm text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring sm:grid-cols-[minmax(0,11rem)_1fr_auto]">
           <span className="truncate">{d.label}</span>
           <span className="flex h-3.5 items-center border-l border-border">
             <span
-              className="h-full min-w-0.5 rounded-r-sm bg-primary transition-opacity group-hover:opacity-80"
-              style={{ width: `${Math.max(0, (d.value / top) * 100)}%`, ...(d.color ? { backgroundColor: d.color } : {}) }}
+              className="chart-grow-right h-full min-w-0.5 rounded-r-full bg-primary transition-opacity group-hover:opacity-80"
+              style={{ "--i": index, width: `${Math.max(0, (d.value / top) * 100)}%`, ...(d.color ? { backgroundColor: d.color } : {}) } as CSSProperties}
             />
           </span>
           <span className="w-12 text-right tabular-nums">{d.display ?? formatNumber(d.value)}</span>
@@ -148,9 +149,10 @@ export function ColumnChart({
                 <span
                   className={cn(
                     "absolute left-1/2 w-full max-w-6 -translate-x-1/2 bg-primary transition-opacity group-hover:opacity-80",
-                    value < 0 ? "rounded-b-sm" : "rounded-t-sm",
+                    value < 0 ? "chart-grow-down rounded-b-md" : "chart-grow-up rounded-t-md",
                   )}
                   style={{
+                    ["--i" as string]: index,
                     height: `${(Math.abs(value) / range) * 100}%`,
                     ...(value < 0 ? { top: `${(top / range) * 100}%` } : { bottom: `${(-bottom / range) * 100}%` }),
                   }}
@@ -202,6 +204,8 @@ export function DonutChart({
   unit: string;
   emptyText?: string;
 }) {
+  // Mặt nạ vẽ dần vành khuyên khi tải; id riêng cho từng biểu đồ trên trang.
+  const maskId = `donut-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
   const total = data.reduce((sum, d) => sum + d.value, 0);
   if (total === 0) return <Empty text={emptyText} />;
   const radius = 42;
@@ -220,9 +224,13 @@ export function DonutChart({
     <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-center">
       <div className="relative size-40 shrink-0">
         <svg viewBox="0 0 120 120" className="size-full -rotate-90" role="img" aria-label={`${centerLabel}: ${centerValue}`}>
+          <mask id={maskId} maskUnits="userSpaceOnUse">
+            <circle cx="60" cy="60" r={radius} fill="none" stroke="#fff" strokeWidth="18" pathLength={1} strokeDasharray="1" className="chart-draw" />
+          </mask>
           {arcs.map((a) => (
             <circle
               key={a.key}
+              mask={`url(#${maskId})`}
               cx="60"
               cy="60"
               r={radius}
