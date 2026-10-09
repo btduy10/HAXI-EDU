@@ -6,10 +6,11 @@ import { Toaster } from "@/components/ui/sonner";
 import "./globals.css";
 
 // Be Vietnam Pro: thiết kế riêng cho tiếng Việt, dấu rõ và cân ở mọi độ đậm.
+// Font này không có bản variable nên mỗi độ đậm là một tệp: chỉ nạp 400/500/600 cho nhẹ, chữ đậm (bold) dùng nét 600.
 const font = Be_Vietnam_Pro({
   variable: "--font-sans",
   subsets: ["latin", "vietnamese"],
-  weight: ["400", "500", "600", "700"],
+  weight: ["400", "500", "600"],
   display: "swap",
 });
 

@@ -274,6 +274,11 @@ export function AppShell({
   children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
+  // Hiệu ứng hiện dần chỉ dùng khi chuyển trang trong ứng dụng; lần tải đầu hiện ngay để không làm chậm nội dung chính.
+  const pathname = usePathname();
+  const [firstPath] = useState(pathname);
+  const [navigated, setNavigated] = useState(false);
+  if (!navigated && pathname !== firstPath) setNavigated(true);
   const visible = (list: NavItem[]) =>
     list.filter((item) => hrefs.includes(item.href)).map((item) => ({ ...item, label: labels?.[item.href] ?? item.label }));
   // Nhóm chỉ hiện khi còn ít nhất một mục con được phép.
@@ -331,7 +336,7 @@ export function AppShell({
       */}
       <div className="relative min-w-0 flex-1 md:p-3 xl:p-4 print:p-0">
         <div aria-hidden className="glass-window pointer-events-none absolute inset-0 md:inset-3 md:rounded-3xl xl:inset-4 print:hidden" />
-        <main className="page-enter relative min-w-0 p-3 sm:p-6 xl:p-8 print:p-0">{children}</main>
+        <main className={cn("relative min-w-0 p-3 sm:p-6 xl:p-8 print:p-0", navigated && "page-enter")}>{children}</main>
       </div>
     </div>
   );

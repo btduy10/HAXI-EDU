@@ -156,6 +156,18 @@ Nguyên tắc: mọi hàm trong `server/services` nhận `actor` lấy từ phi�
 - **Nhật ký** (Admin): lọc theo hành động, bảng, khoảng ngày; xem giá trị cũ/mới.
 - **Cấu hình** (Admin): số ngày khóa điểm danh, giới hạn trừ sao mỗi buổi.
 
+## Giao diện
+
+Kiểu "cửa sổ kính" trên nền thiên nhiên mờ; mọi trang dùng chung một bộ token nên trông nhất quán.
+
+- **Token màu, bo góc** nằm ở một chỗ: khối `:root` trong `src/app/globals.css` (xanh lá ngọc `#2E7D5B`, teal `#4DD0C0` cho mục/tab đang chọn, navy `#0E2841`, nền kem `#FDF8F2`, vàng đồng của logo). Font Be Vietnam Pro (400/500/600) nạp bằng `next/font` ở `src/app/layout.tsx`.
+- **Nền:** `src/components/app-background.tsx`. Chưa có ảnh nên dùng gradient mesh (`app-bg`). Khi có ảnh phong cảnh (WebP/AVIF ≤ 250KB, đã làm mờ ở giữa), đặt vào `public/bg/garden.webp` và đổi hằng số `PHOTO` trong tệp đó; `next/image` tự tạo bản nhỏ cho điện thoại.
+- **Ba cấp kính** (class trong `globals.css`): `glass-card` cho thẻ số liệu và biểu đồ; `glass-solid` (trắng 90%) cho bảng, form, dòng danh sách; `glass-sidebar` cho thanh điều hướng. Vùng nội dung là một `glass-window` đặt cạnh `<main>` trong `src/components/app-shell.tsx`.
+- **Blur** (`backdrop-filter`) chỉ bật ở thanh điều hướng, cửa sổ nội dung và thẻ đăng nhập, từ 768px trở lên; điện thoại dùng nền gần đặc. Không bọc nội dung trang trong phần tử có `backdrop-filter` hay `transform`: thanh Lưu cố định ở Điểm danh/Chấm sao sẽ lệch.
+- **Bố cục:** từ 1280px thanh điều hướng đầy đủ; 768–1279px thu thành dải icon; dưới 768px là menu trượt. Bề rộng thanh điều hướng nằm trong biến `--sidebar-w`.
+- **Hiệu ứng** (CSS thuần, không thêm thư viện): thẻ Tổng quan hiện lần lượt (`stagger`), số KPI đếm tăng (`src/components/count-up.tsx`), biểu đồ vẽ dần (`chart-grow-*`, `chart-draw`), thẻ nổi khi rê chuột (`card-lift`), pill teal trượt giữa các mục menu, nội dung hiện dần khi chuyển trang. Tất cả tắt khi máy bật "giảm chuyển động".
+- **Ảnh so sánh giao diện:** `SHOTS=<tên bộ ảnh> npm run test:e2e` chụp các trang chính ở 360/768/1280/1920px vào `ui-shots/<tên bộ ảnh>/` (không commit).
+
 ## Triển khai trên Vercel
 
 Vercel không chạy Docker nên cần một PostgreSQL bên ngoài. Repo đã có `vercel.json`: mỗi lần build chạy `npm run db:migrate` rồi `npm run build`, hàm chạy ở vùng Singapore (`sin1`). Gói Hobby của Vercel chỉ dành cho mục đích phi thương mại.
