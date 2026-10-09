@@ -135,6 +135,23 @@ test("Admin: TKB có bộ lọc, sửa giờ riêng một buổi, trùng lịch 
   expect(rowTones.slice(0, 3).map((row) => row.tone)).toEqual(["0", "1", "2"]);
   for (const row of rowTones) expect(row.colors).toHaveLength(1);
   expect(new Set(rowTones.slice(0, 3).map((row) => row.colors[0])).size).toBe(3);
+  // Tiêu đề Ca, T2, T3… canh giữa.
+  const headAligns = await page.locator("thead th").evaluateAll((cells) => cells.map((cell) => getComputedStyle(cell).textAlign));
+  expect(headAligns).toHaveLength(8);
+  expect(new Set(headAligns)).toEqual(new Set(["center"]));
+  // Mỗi giáo viên một độ đậm: ô của hai giáo viên khác nhau có màu nền khác nhau, ô của cùng một giáo viên cùng màu.
+  const chipShades = await page.locator("tbody a[data-teacher]").evaluateAll((chips) =>
+    chips.map((chip) => [chip.getAttribute("data-teacher")!, (chip as HTMLElement).style.getPropertyValue("--glass-bg")] as const),
+  );
+  const shadeByTeacher = new Map<string, Set<string>>();
+  // Ô đã hủy không tô màu nên không tính.
+  for (const [teacher, shade] of chipShades) if (shade) shadeByTeacher.set(teacher, (shadeByTeacher.get(teacher) ?? new Set()).add(shade));
+  expect(shadeByTeacher.size).toBeGreaterThanOrEqual(2);
+  for (const shades of shadeByTeacher.values()) expect([...shades]).toHaveLength(1);
+  expect(new Set([...shadeByTeacher.values()].map((shades) => [...shades][0])).size).toBe(shadeByTeacher.size);
+  await expect(page.locator("[data-legend]")).toHaveCount(shadeByTeacher.size);
+  // Buổi đã điểm danh (07:00 RB-CB01 hôm nay) có dấu tick thay cho nền xanh lá.
+  await expect(page.getByRole("link", { name: /07:00 RB-CB01/ }).filter({ visible: true })).toContainText("Đã điểm danh");
 
   // Xếp tay: bấm dấu + ở ô Chủ nhật × Ca chiều, chọn lớp, lưu → buổi hiện ngay trong ô.
   const sundayAfternoon = page.getByRole("button", { name: /^Xếp buổi học CN .*, Ca chiều$/ });

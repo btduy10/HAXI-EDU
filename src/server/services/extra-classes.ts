@@ -95,15 +95,15 @@ const placeOf = (data: z.output<typeof extraClassInput>): WeeklyPlacement => ({
 });
 
 export async function createExtraClass(actor: Actor, data: z.output<typeof extraClassInput>) {
-  assertCan(actor, "classes", "add");
+  assertCan(actor, "timetable", "add");
   await assertNoWeeklyClash(db, placeOf(data));
-  return createRow(actor, extraClasses, "extra_classes", data, "classes");
+  return createRow(actor, extraClasses, "extra_classes", data, "timetable");
 }
 
 export async function updateExtraClass(actor: Actor, id: string, data: z.output<typeof extraClassInput>) {
-  assertCan(actor, "classes", "edit");
+  assertCan(actor, "timetable", "edit");
   await assertNoWeeklyClash(db, placeOf(data), { exceptExtraId: id });
-  return updateRow(actor, extraClasses, "extra_classes", id, data, "classes");
+  return updateRow(actor, extraClasses, "extra_classes", id, data, "timetable");
 }
 
 export const deleteExtraClass = (actor: Actor, id: string) => deleteRow(actor, extraClasses, "extra_classes", id);

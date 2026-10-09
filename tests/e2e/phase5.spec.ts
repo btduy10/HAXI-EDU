@@ -105,7 +105,7 @@ test("Phân công GV chính + trợ giảng, lịch mẫu tự sinh buổi; tr�
   await db.end();
 });
 
-test("Lớp học thêm: Admin thêm ở trang Lớp học, Thời khóa biểu hiện mục Học thêm đúng thứ; trùng thứ + khung + phòng bị báo", async ({ page }) => {
+test("Lớp học thêm: Admin thêm ở trang Thời khóa biểu (trang Lớp học không còn mục này), lưới hiện mục Học thêm đúng thứ; trùng thứ + khung + phòng bị báo", async ({ page }) => {
   await login(page, "admin", NEW_PASSWORD);
   await page.getByLabel("Mã xác thực").fill(totp(loadAdminSecret()));
   await page.getByRole("button", { name: "Xác nhận" }).click();
@@ -114,6 +114,10 @@ test("Lớp học thêm: Admin thêm ở trang Lớp học, Thời khóa biểu 
   // Dùng thứ của ngày mai để không trùng lịch mẫu của RB-TG01 (thứ hôm nay, Ca E2E).
   const day = shift(today(), 1);
   await page.goto("/admin/classes");
+  await expect(page.getByRole("heading", { name: /^Lớp học/ })).toHaveCount(1);
+  await expect(page.getByRole("heading", { name: /Lớp học thêm/ })).toHaveCount(0);
+
+  await page.goto(`/admin/timetable?date=${day}`);
   const section = page.locator("section").filter({ has: page.getByRole("heading", { name: /Lớp học thêm/ }) });
   const add = async (name: string) => {
     await section.getByRole("button", { name: "Thêm", exact: true }).click();
@@ -134,9 +138,12 @@ test("Lớp học thêm: Admin thêm ở trang Lớp học, Thời khóa biểu 
   await expect(page.getByText(/Trùng phòng với lớp học thêm "Toán thêm E2E"/).first()).toBeVisible();
   await page.getByRole("button", { name: "Hủy" }).click();
 
-  await page.goto(`/admin/timetable?date=${day}`);
-  await expect(page.getByText("Toán thêm E2E").first()).toBeVisible();
-  await expect(page.getByText("Học thêm", { exact: true }).first()).toBeVisible();
+  // Lớp học thêm hiện trên lưới của đúng thứ, tô màu đậm nhất và có trong chú giải.
+  await page.reload();
+  const extraCard = page.locator("[data-extra]").filter({ hasText: "Toán thêm E2E" }).filter({ visible: true }).first();
+  await expect(extraCard).toBeVisible();
+  await expect(extraCard.getByText("Học thêm", { exact: true })).toBeVisible();
+  await expect(page.locator('[data-legend="extra"]')).toBeVisible();
   await expectNoHorizontalScroll(page);
 
   // Xuất: chọn Lớp học thêm rồi tải Excel.

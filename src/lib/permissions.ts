@@ -24,7 +24,7 @@ export const PERMISSION_MENUS = [
   { key: "classes", label: "Lớp học", href: "/admin/classes", actions: ["view", "add", "edit"], hint: "Sửa gồm cả phân công giáo viên, lịch mẫu và sinh buổi học." },
   { key: "rooms", label: "Phòng & Ca học", href: "/admin/rooms-slots", actions: ["view", "add", "edit"], hint: "Gồm cả ngày nghỉ." },
   { key: "enrollments", label: "Ghi danh", href: "/admin/enrollments", actions: ["view", "add", "edit"], hint: "Thêm = ghi danh; Sửa = cho rời lớp." },
-  { key: "timetable", label: "Thời khóa biểu", href: "/admin/timetable", actions: ["view", "add", "edit"], hint: "Thêm = xếp buổi, buổi bù; Sửa = sửa, dời, hủy, khôi phục, dạy thay." },
+  { key: "timetable", label: "Thời khóa biểu", href: "/admin/timetable", actions: ["view", "add", "edit"], hint: "Thêm = xếp buổi, buổi bù, thêm lớp học thêm; Sửa = sửa, dời, hủy, khôi phục, dạy thay, sửa lớp học thêm. Xóa lớp học thêm chỉ Admin." },
   { key: "attendance", label: "Điểm danh", href: "/admin/attendance", actions: ["view", "add", "edit"], hint: "Thêm = điểm danh buổi chưa điểm danh; Sửa = sửa điểm danh đã lưu." },
   { key: "stars", label: "Sao & Avatar", href: "/admin/stars", actions: ["view", "add", "edit"], hint: "Thêm = ghi sao; Sửa = hoàn tác sao, đổi avatar. Tiêu chí, cấp bậc, kho avatar chỉ Admin chỉnh." },
   { key: "rewards", label: "Quà & Tổng kết", href: "/admin/rewards", actions: ["view", "add", "edit"], hint: "Thêm = quà, mốc quà; Sửa = sửa quà, đóng lớp, duyệt và trao quà, đổi quà bằng sao cho học viên." },

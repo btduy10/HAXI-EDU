@@ -2,6 +2,8 @@ import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/db";
 import { auditLogs, extraClasses, rooms, timeSlots } from "@/db/schema";
+import { DEFAULT_PERMISSIONS, type Menu, type MenuPermission } from "@/lib/permissions";
+import type { Actor } from "@/server/guard";
 import * as svc from "@/server/services/extra-classes";
 import { extraTimetableDoc } from "@/server/services/reports";
 import * as sessionSvc from "@/server/services/sessions";
@@ -37,10 +39,27 @@ const input = (extra: Partial<Parameters<typeof svc.createExtraClass>[1]> = {}) 
   ...extra,
 });
 
+const FULL: MenuPermission = { view: true, add: true, edit: true };
+const withMenus = (actor: Actor, menus: Partial<Record<Menu, MenuPermission>>): Actor => ({
+  ...actor,
+  perms: { scope: "all", menus: { ...DEFAULT_PERMISSIONS.teacher.menus, ...menus } },
+});
+
 describe("lớp học thêm", () => {
-  it("thêm, sửa, xóa theo quyền menu Lớp học; xóa chỉ Admin; có nhật ký", async () => {
+  it("thêm, sửa theo quyền menu Thời khóa biểu (quyền Lớp học không đủ); xóa chỉ Admin; có nhật ký", async () => {
     await expect(svc.createExtraClass(f.actorA, input())).rejects.toMatchObject({ code: "FORBIDDEN" });
     await expect(svc.listExtraClasses(f.actorA)).rejects.toMatchObject({ code: "FORBIDDEN" });
+    // Chỉ có quyền Lớp học: xem được danh sách nhưng không thêm, không sửa.
+    const classesOnly = withMenus(f.actorA, { classes: FULL });
+    await expect(svc.createExtraClass(classesOnly, input())).rejects.toMatchObject({ code: "FORBIDDEN" });
+    // Có quyền Thêm/Sửa của Thời khóa biểu: thêm và sửa được, xóa thì không.
+    const scheduler = withMenus(f.actorA, { timetable: FULL });
+    const own = await svc.createExtraClass(scheduler, input({ name: "Của người xếp lịch", weekday: 5 }));
+    await expect(svc.updateExtraClass(classesOnly, own.id, input({ name: "X", weekday: 5 }))).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await svc.updateExtraClass(scheduler, own.id, input({ name: "Đã đổi tên", weekday: 5 }));
+    await expect(svc.deleteExtraClass(scheduler, own.id)).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await svc.deleteExtraClass(f.admin, own.id);
+    await db.delete(auditLogs).where(eq(auditLogs.tableName, "extra_classes"));
     const row = await svc.createExtraClass(f.admin, input());
     await svc.updateExtraClass(f.admin, row.id, input({ name: "Toán thêm 2", teacherId: null }));
     expect(await svc.listExtraClasses(f.admin)).toMatchObject([
