@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { StudentProgressCard } from "@/components/avatar";
-import { LinkButton } from "@/components/link-button";
 import { Badge } from "@/components/ui/badge";
 import { LABELS, formatDate } from "@/lib/format";
 import { orNotFound, uuidParam } from "@/server/page";
@@ -38,10 +37,6 @@ export default async function TeacherClassPage({ params }: PageProps<"/teacher/c
           Giáo viên: {teachers.map((t) => `${t.fullName} (${LABELS.classTeacherRole[t.role]})`).join(", ")}
         </p>
       </div>
-
-      <LinkButton variant="outline" className="h-10 w-fit" href={`/teacher/classes/${classId}/report`}>
-        Báo cáo lớp
-      </LinkButton>
 
       <section className="grid gap-2">
         <h2 className="font-medium">

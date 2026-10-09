@@ -95,17 +95,42 @@ function niceMax(value: number): { max: number; step: number } {
 
 export type ColumnDatum = { key: string; label: string; value: number; detail?: string };
 
-/** Biểu đồ cột đứng cho chuỗi theo thời gian (vd. theo tuần). Giá trị âm hiển thị ở mức 0. */
-export function ColumnChart({ data, unit, emptyText }: { data: ColumnDatum[]; unit: string; emptyText?: string }) {
+/**
+ * Biểu đồ cột đứng cho chuỗi theo thời gian (vd. theo tuần). Mặc định giá trị âm hiển thị ở mức 0;
+ * `signed` vẽ cột âm bên dưới trục 0 (vd. kỳ lỗ). `dense` = nhiều cột: trên điện thoại chỉ ghi nhãn cách một cột.
+ * `format` định dạng giá trị trong chú thích, `tickFormat` định dạng số trên trục (mặc định như `format`).
+ */
+export function ColumnChart({
+  data,
+  unit,
+  emptyText,
+  signed = false,
+  dense = false,
+  format = formatNumber,
+  tickFormat = format,
+}: {
+  data: ColumnDatum[];
+  unit: string;
+  emptyText?: string;
+  signed?: boolean;
+  dense?: boolean;
+  format?: (value: number) => string;
+  tickFormat?: (value: number) => string;
+}) {
   if (data.every((d) => d.value === 0)) return <Empty text={emptyText} />;
-  const { max, step } = niceMax(Math.max(...data.map((d) => d.value)));
-  const ticks = Array.from({ length: max / step + 1 }, (_, i) => max - i * step);
+  const values = data.map((d) => (signed ? d.value : Math.max(0, d.value)));
+  const { step } = niceMax(Math.max(...values.map(Math.abs)));
+  const bottom = Math.floor(Math.min(0, ...values) / step) * step;
+  // Trục luôn chứa mức 0; không có cột nào khác 0 thì vẫn chừa 4 vạch.
+  const top = Math.ceil(Math.max(0, ...values) / step) * step || (bottom === 0 ? step * 4 : 0);
+  const range = top - bottom;
+  const ticks = Array.from({ length: range / step + 1 }, (_, i) => top - i * step);
   return (
     <div className="grid grid-cols-[auto_1fr] gap-x-2 text-xs">
       <div className="flex h-40 flex-col justify-between text-right tabular-nums text-muted-foreground" aria-hidden>
         {ticks.map((t) => (
           <span key={t} className="-translate-y-1/2 leading-none first:translate-y-0 last:translate-y-0">
-            {formatNumber(t)}
+            {tickFormat(t)}
           </span>
         ))}
       </div>
@@ -115,28 +140,44 @@ export function ColumnChart({ data, unit, emptyText }: { data: ColumnDatum[]; un
             <span key={t} className={cn("h-px w-full", t === 0 ? "bg-muted-foreground/50" : "bg-border")} />
           ))}
         </div>
-        <ul className="absolute inset-0 flex items-end justify-around gap-1">
-          {data.map((d) => (
-            <li key={d.key} tabIndex={0} className="group relative flex h-full flex-1 items-end justify-center rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring">
-              <span
-                className="w-full max-w-6 rounded-t-sm bg-primary transition-opacity group-hover:opacity-80"
-                style={{ height: `${(Math.max(0, d.value) / max) * 100}%` }}
-              />
-              <Tip className="bottom-full left-1/2 mb-1 -translate-x-1/2">
-                <strong>{d.label}</strong>: {formatNumber(d.value)} {unit}
-                {d.detail && <span className="block text-muted-foreground">{d.detail}</span>}
-              </Tip>
-            </li>
-          ))}
+        <ul className="absolute inset-0 flex justify-around gap-1">
+          {data.map((d, index) => {
+            const value = values[index]!;
+            return (
+              <li key={d.key} tabIndex={0} className="group relative h-full flex-1 rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                <span
+                  className={cn(
+                    "absolute left-1/2 w-full max-w-6 -translate-x-1/2 bg-primary transition-opacity group-hover:opacity-80",
+                    value < 0 ? "rounded-b-sm" : "rounded-t-sm",
+                  )}
+                  style={{
+                    height: `${(Math.abs(value) / range) * 100}%`,
+                    ...(value < 0 ? { top: `${(top / range) * 100}%` } : { bottom: `${(-bottom / range) * 100}%` }),
+                  }}
+                />
+                <Tip className="bottom-full left-1/2 mb-1 -translate-x-1/2">
+                  <strong>{d.label}</strong>: {format(d.value)} {unit}
+                  {d.detail && <span className="block text-muted-foreground">{d.detail}</span>}
+                </Tip>
+              </li>
+            );
+          })}
         </ul>
       </div>
       <span />
       <ul className="mt-1 flex justify-around gap-1 text-center text-muted-foreground">
-        {data.map((d) => (
-          <li key={d.key} className="flex-1 truncate">
-            {d.label}
-          </li>
-        ))}
+        {data.map((d, index) =>
+          dense ? (
+            // Nhãn không bị cắt; trên điện thoại ẩn xen kẽ (luôn giữ nhãn của kỳ mới nhất).
+            <li key={d.key} className={cn("flex min-w-0 flex-1 justify-center", (data.length - 1 - index) % 2 === 1 && "max-sm:invisible")}>
+              <span className="whitespace-nowrap">{d.label}</span>
+            </li>
+          ) : (
+            <li key={d.key} className="flex-1 truncate">
+              {d.label}
+            </li>
+          ),
+        )}
       </ul>
     </div>
   );
@@ -215,7 +256,7 @@ export function DonutChart({
   );
 }
 
-/** Biểu đồ tròn cơ cấu điểm danh, dùng chung cho Tổng quan và Báo cáo lớp. */
+/** Biểu đồ tròn cơ cấu điểm danh của trang Tổng quan. */
 export function AttendanceDonut({
   counts,
   emptyText,

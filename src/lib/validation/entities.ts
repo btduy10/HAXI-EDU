@@ -106,6 +106,15 @@ export const timesheetAdjustInput = z.object({
   note: optText(300),
 });
 
+/** Một khoản mua sắm của trung tâm. Thành tiền = số lượng × đơn giá. */
+export const purchaseInput = z.object({
+  purchasedAt: isoDate,
+  item: reqText(200),
+  category: reqText(60).transform((v) => v.replace(/\s+/g, " ")),
+  quantity: intIn(1, 100_000),
+  unitPrice: intIn(0, 1_000_000_000),
+});
+
 export const holidayInput = z.object({
   date: isoDate,
   reason: reqText(200),
@@ -216,3 +225,4 @@ export const extraClassUpdate = withId(extraClassInput);
 export const syllabusUpdate = withId(syllabusInput);
 export const classUpdate = withId(classInput);
 export const teacherRateUpdate = withId(teacherRateInput);
+export const purchaseUpdate = withId(purchaseInput);

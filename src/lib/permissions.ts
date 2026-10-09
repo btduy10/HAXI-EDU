@@ -30,7 +30,7 @@ export const PERMISSION_MENUS = [
   { key: "rewards", label: "Quà & Tổng kết", href: "/admin/rewards", actions: ["view", "add", "edit"], hint: "Thêm = quà, mốc quà; Sửa = sửa quà, đóng lớp, duyệt và trao quà, đổi quà bằng sao cho học viên." },
   { key: "timesheet", label: "Chấm công", href: "/admin/timesheet", actions: ["view", "add", "edit"], hint: "Xem gồm cả mức lương, thành tiền. Thêm = chấm công bổ sung; Sửa = sửa ngày, ca, lớp của dòng công và đặt mức lương (đặt mức lương cần phạm vi “Tất cả lớp”). Xóa chỉ Admin. Phạm vi “lớp của mình” chỉ thấy và thao tác công của chính mình." },
   { key: "tuition", label: "Học phí", href: "/admin/tuition", actions: ["view", "add", "edit"], hint: "Thêm = lập phiếu thu; Sửa = đặt học phí lớp, giảm học phí. Hủy phiếu thu chỉ Admin." },
-  { key: "reports", label: "Báo cáo", href: "/admin/reports", actions: ["view"], hint: "Gồm cả xuất Excel/PDF." },
+  { key: "reports", label: "Báo cáo", href: "/admin/reports", actions: ["view", "add", "edit"], hint: "Doanh thu, chi, lãi của cả trung tâm; cần phạm vi “Tất cả lớp”. Xem gồm cả xuất tệp. Thêm/Sửa = nhập, sửa mua sắm. Xóa chỉ Admin." },
 ] as const satisfies readonly { key: string; label: string; href: string; actions: readonly PermissionAction[]; hint: string }[];
 
 export type Menu = (typeof PERMISSION_MENUS)[number]["key"];

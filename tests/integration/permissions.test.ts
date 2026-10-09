@@ -45,7 +45,7 @@ beforeEach(async () => {
 });
 
 describe("bảng phân quyền", () => {
-  it("chuẩn hóa: thiếu thì lấy mặc định, không có Xem thì bỏ Thêm/Sửa, bỏ thao tác menu không hỗ trợ", () => {
+  it("chuẩn hóa: thiếu thì lấy mặc định, không có Xem thì bỏ Thêm/Sửa", () => {
     expect(normalizePermissions(null)).toEqual(DEFAULT_PERMISSIONS);
     const config = normalizePermissions({
       teacher: { scope: "all", menus: { students: { view: false, add: true, edit: true }, reports: FULL } },
@@ -53,7 +53,7 @@ describe("bảng phân quyền", () => {
     });
     expect(config.teacher.scope).toBe("all");
     expect(config.teacher.menus.students).toEqual({ view: false, add: false, edit: false });
-    expect(config.teacher.menus.reports).toEqual({ view: true, add: false, edit: false });
+    expect(config.teacher.menus.reports).toEqual(FULL);
     expect(config.teacher.menus.attendance).toEqual(FULL); // không gửi → giữ mặc định
     expect(config.duty_teacher).toEqual(DEFAULT_PERMISSIONS.duty_teacher);
   });

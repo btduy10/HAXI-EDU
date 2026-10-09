@@ -364,3 +364,77 @@ test("Chấm công: đặt mức lương giáo viên theo lớp, thành tiền; 
   await expect(page.getByText("Đã xóa công bổ sung.")).toBeVisible();
   await expect(manual).toHaveCount(0);
 });
+
+test("Báo cáo: doanh thu – chi – lãi theo tuần/tháng/năm có biểu đồ; nhập mua sắm; chi lương; xuất học phí chưa đóng", async ({ page }) => {
+  const money = (n: number) => `${n.toLocaleString("vi-VN")} đ`;
+  const db = sql();
+  // Lớp RB-CB01 đặt học phí nhưng chưa ai đóng → có học viên trong danh sách chưa đóng học phí.
+  await db`update classes set tuition_fee = 1500000 where code = 'RB-CB01'`;
+  const [{ revenue }] = await db`
+    select coalesce(sum(amount), 0)::int as revenue from tuition_receipts
+    where status = 'active' and to_char(paid_at, 'YYYY') = ${today().slice(0, 4)}`;
+  await db.end();
+  expect(revenue).toBeGreaterThan(0);
+
+  await login(page, "admin", NEW_PASSWORD);
+  await page.getByLabel("Mã xác thực").fill(totp(loadAdminSecret()));
+  await page.getByRole("button", { name: "Xác nhận" }).click();
+  await expect(page).toHaveURL(/\/admin\/dashboard$/);
+
+  // Doanh thu: mặc định theo tháng của năm nay; doanh thu = các phiếu thu học phí còn hiệu lực.
+  await page.goto("/admin/reports");
+  await expect(page.getByRole("heading", { name: "Báo cáo", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Doanh thu", exact: true })).toHaveAttribute("aria-current", "page");
+  const tile = (label: string | RegExp) => page.locator("div.rounded-xl").filter({ has: page.getByText(label, { exact: true }) });
+  await expect(tile("Tổng doanh thu")).toContainText(money(revenue));
+  await expect(page.getByRole("heading", { name: "Doanh thu theo tháng" })).toBeVisible();
+  await expect(page.getByRole("columnheader", { name: "Lãi" })).toBeVisible();
+  await expectNoHorizontalScroll(page);
+  await page.screenshot({ path: "test-results/shots/finance-month-360.png", fullPage: true });
+
+  // Đổi kỳ xem và chỉ số của biểu đồ.
+  await page.getByLabel("Xem theo").selectOption({ label: "Tuần" });
+  await expect(page).toHaveURL(/view=week/);
+  await expect(page.getByRole("heading", { name: "Doanh thu theo tuần" })).toBeVisible();
+  await page.getByLabel("Chỉ số trên biểu đồ").selectOption({ label: "Lãi" });
+  await expect(page.getByRole("heading", { name: "Lãi theo tuần" })).toBeVisible();
+  await expectNoHorizontalScroll(page);
+  await page.screenshot({ path: "test-results/shots/finance-week-360.png", fullPage: true });
+  await page.getByLabel("Xem theo").selectOption({ label: "Năm" });
+  await expect(page.getByRole("heading", { name: "Lãi theo năm" })).toBeVisible();
+  await expect(page.getByRole("cell", { name: `Năm ${today().slice(0, 4)}` })).toBeVisible();
+
+  // Mua sắm: thêm một khoản, thành tiền = số lượng × đơn giá, cộng vào Tổng chi.
+  await page.getByRole("link", { name: "Mua sắm", exact: true }).click();
+  await expect(page).toHaveURL(/tab=purchases/);
+  await page.getByRole("button", { name: "Thêm", exact: true }).click();
+  await page.locator("#f-item").fill("Bộ robot E2E");
+  await page.locator("#f-category").fill("Thiết bị");
+  await page.locator("#f-quantity").fill("2");
+  await page.locator("#f-unitPrice").fill("350000");
+  await expect(page.locator("#f-unitPrice")).toHaveValue("350,000");
+  await page.getByRole("button", { name: "Lưu" }).click();
+  await expect(page.getByText("Đã lưu.")).toBeVisible();
+  await expect(page.getByText("Bộ robot E2E").first()).toBeVisible();
+  await expect(page.getByText(/Tổng mua sắm tháng .*700\.000 đ/)).toBeVisible();
+  await expectNoHorizontalScroll(page);
+  await page.getByRole("link", { name: "Doanh thu", exact: true }).click();
+  await expect(tile("Tổng chi")).toContainText("Mua sắm 700.000 đ");
+
+  // Chi lương: lấy từ Chấm công, có dòng của GV01 (đã đặt mức lương ở lớp RB-TG01).
+  await page.getByRole("link", { name: "Chi lương", exact: true }).click();
+  await expect(page.getByRole("heading", { name: /Lương giáo viên tháng/ })).toBeVisible();
+  await expect(page.getByRole("row").filter({ hasText: "GV01" })).toContainText(/\d đ/);
+  await expectNoHorizontalScroll(page);
+
+  // Học phí chưa đóng: có học viên của RB-CB01, tải được tệp Excel và PDF.
+  await page.getByRole("link", { name: "Học phí chưa đóng", exact: true }).click();
+  await expect(page.getByRole("heading", { name: /Học viên chưa đóng đủ học phí/ })).toBeVisible();
+  await expect(page.getByRole("row").filter({ hasText: "RB-CB01" }).first()).toContainText("Chưa đóng");
+  await expectNoHorizontalScroll(page);
+  await page.screenshot({ path: "test-results/shots/finance-unpaid-360.png", fullPage: true });
+  const [download] = await Promise.all([page.waitForEvent("download"), page.getByRole("link", { name: "Excel" }).click()]);
+  expect(download.suggestedFilename()).toBe("hoc-phi-chua-dong.xlsx");
+  const pdf = await page.request.get("/api/export/unpaid-tuition?format=pdf");
+  expect((await pdf.body()).subarray(0, 5).toString()).toBe("%PDF-");
+});

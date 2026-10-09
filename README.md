@@ -144,8 +144,13 @@ Nguyên tắc: mọi hàm trong `server/services` nhận `actor` lấy từ phi�
 - **Mốc quà** theo khóa học hoặc riêng cho lớp (lớp có mốc riêng thì không dùng mốc của khóa). Mỗi học viên nhận quà của mốc cao nhất đạt được.
 - **Đổi quà bằng sao trong khóa học:** ở hồ sơ học viên, người có quyền Sửa ở menu Quà & Tổng kết (theo Cấu hình → Phân quyền) đổi quà cho học viên bất cứ lúc nào em đủ sao theo Mốc quà của lớp đang học. Mỗi lần đổi trừ "sao còn lại" đúng bằng mốc sao và trừ 1 tồn kho; tổng sao tích lũy, cấp bậc và avatar không đổi. Chỉ Admin hủy được lần đổi ghi nhầm (trả lại sao và tồn kho).
 - **Quy trình trao quà:** hệ thống đề xuất → Admin chọn và duyệt → ghi nhận đã trao (ngày, người trao, trừ tồn kho). Có bảng số lượng quà cần chuẩn bị so với tồn kho.
-- **Báo cáo lớp** (Admin mọi lớp, GV lớp mình): sao của lớp, số buổi theo từng trạng thái điểm danh, chuyên cần, xếp hạng.
-- **Xuất Excel/PDF:** thời khóa biểu, báo cáo lớp, tổng kết (kèm danh sách trao quà có cột ký nhận để in). Mỗi lần xuất được ghi vào nhật ký.
+- **Báo cáo** (menu Báo cáo; quyền Xem / Thêm / Sửa theo Cấu hình → Phân quyền **và** phạm vi "Tất cả lớp", mặc định chỉ Admin) là báo cáo tài chính của cả trung tâm, gồm bốn mục:
+  - **Doanh thu:** xem theo Tuần (12 tuần tới tuần chứa ngày mốc), Tháng (12 tháng của năm) hoặc Năm (5 năm gần nhất); ba ô tổng Doanh thu – Chi – Lãi; biểu đồ cột của chỉ số đang chọn (Doanh thu / Chi / Lãi, kỳ lỗ vẽ dưới trục 0) và bảng từng kỳ. Doanh thu = phiếu thu học phí còn hiệu lực theo ngày thu; Chi = chi lương + mua sắm; Lãi = Doanh thu − Chi.
+  - **Chi lương:** lương tháng của từng giáo viên, tự tính từ Chấm công (số công đã dạy × mức lương ở từng lớp); công chưa có mức lương được báo riêng.
+  - **Mua sắm:** nhập Ngày mua, Hạng mục mua, Loại (nhóm chi gõ tự do, có gợi ý các loại đã nhập), Số lượng, Đơn giá; Thành tiền = Số lượng × Đơn giá. Thêm/Sửa theo quyền, xóa chỉ Admin.
+  - **Học phí chưa đóng:** học viên còn phải đóng (chưa đóng hoặc đóng một phần) ở các lớp đã đặt học phí, lọc theo lớp, xuất Excel/PDF. Tệp chỉ có mã, họ tên, lớp và số tiền — không có điện thoại, phụ huynh, ngày sinh.
+  - Báo cáo lớp (điểm danh, sao theo học viên) đã bỏ ở cả menu Báo cáo lẫn khu giảng dạy; số liệu sao và chuyên cần của lớp vẫn xem ở Sao & Quà → Quà & Tổng kết.
+- **Xuất Excel/PDF:** thời khóa biểu, tổng kết (kèm danh sách trao quà có cột ký nhận để in), chấm công, danh sách học phí chưa đóng. Mỗi lần xuất được ghi vào nhật ký.
 - **Nhật ký** (Admin): lọc theo hành động, bảng, khoảng ngày; xem giá trị cũ/mới.
 - **Cấu hình** (Admin): số ngày khóa điểm danh, giới hạn trừ sao mỗi buổi.
 

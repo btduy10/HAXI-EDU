@@ -16,6 +16,8 @@ import {
   holidayInput,
   leaveInput,
   lockInput,
+  purchaseInput,
+  purchaseUpdate,
   resetPasswordInput,
   roomInput,
   roomUpdate,
@@ -40,6 +42,7 @@ import { runAction } from "../action";
 import * as accounts from "../services/accounts";
 import * as catalog from "../services/catalog";
 import * as extraClasses from "../services/extra-classes";
+import * as finance from "../services/finance";
 import * as syllabus from "../services/syllabus";
 import * as teacherRates from "../services/teacher-rates";
 import * as timesheet from "../services/timesheet";
@@ -100,6 +103,12 @@ export const updateTeacherRateAction = async (input: unknown) =>
   runAction(teacherRateUpdate, input, (a, d) => teacherRates.updateTeacherRate(a, d.id, d.data), ADMIN);
 export const deleteTeacherRateAction = async (input: unknown) =>
   runAction(idOnly, input, (a, d) => teacherRates.deleteTeacherRate(a, d.id), ADMIN);
+
+export const createPurchaseAction = async (input: unknown) => runAction(purchaseInput, input, finance.createPurchase, ADMIN);
+export const updatePurchaseAction = async (input: unknown) =>
+  runAction(purchaseUpdate, input, (a, d) => finance.updatePurchase(a, d.id, d.data), ADMIN);
+export const deletePurchaseAction = async (input: unknown) =>
+  runAction(idOnly, input, (a, d) => finance.deletePurchase(a, d.id), ADMIN);
 
 export const createHolidayAction = async (input: unknown) => runAction(holidayInput, input, catalog.createHoliday, ADMIN);
 export const deleteHolidayAction = async (input: unknown) =>

@@ -64,12 +64,9 @@ describe("báo cáo lớp", () => {
     expect((await stars.progressOf(db, [a1()])).get(a1())!.total).toBe(26);
   });
 
-  it("GV chỉ xem và xuất được báo cáo lớp mình", async () => {
+  it("GV chỉ xem được số liệu lớp mình; không xuất được tổng kết", async () => {
     await expect(summaries.getClassReport(f.actorB, f.classA.id)).rejects.toMatchObject({ code: "NOT_FOUND" });
-    await expect(reports.classReportDoc(f.actorB, f.classA.id)).rejects.toMatchObject({ code: "NOT_FOUND" });
     await expect(reports.summaryDoc(f.actorA, f.classA.id)).rejects.toMatchObject({ code: "FORBIDDEN" });
-    const doc = await reports.classReportDoc(f.actorA, f.classA.id);
-    expect(doc.sections[0]!.rows[0]).toEqual([1, "A1", "Học viên A1", 6, 2, 0, 0, 0, 0, 2, 100]);
   });
 
   it("TKB xuất ra của GV chỉ gồm buổi của mình", async () => {

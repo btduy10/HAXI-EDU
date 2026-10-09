@@ -134,6 +134,13 @@
       "when": 1791503379574,
       "tag": "0018_teacher_rates",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1791521488170,
+      "tag": "0019_finance",
+      "breakpoints": true
     }
   ]
 }

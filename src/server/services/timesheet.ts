@@ -232,6 +232,19 @@ export async function teacherTimesheet(actor: Actor, filters: TimesheetFilters, 
   const teacherId = ownOnly ? actor.teacherId : filters.teacherId;
 
   const rows = await loadRows({ ...filters, teacherId }, todayIso(now));
+  return { rows, summary: summarize(rows) };
+}
+
+/**
+ * Mọi dòng công trong khoảng ngày kèm tổng theo giáo viên, KHÔNG kiểm quyền Chấm công:
+ * dùng cho Báo cáo (chi lương), hàm gọi phải tự kiểm quyền.
+ */
+export async function timesheetForReport(from: string, to: string, now: Date = new Date()) {
+  const rows = await loadRows({ from, to }, todayIso(now));
+  return { rows, summary: summarize(rows) };
+}
+
+function summarize(rows: TimesheetRow[]): TimesheetSummary[] {
   const byTeacher = new Map<string, TimesheetSummary>();
   for (const r of rows) {
     const item = byTeacher.get(r.teacherId) ?? {
@@ -263,7 +276,7 @@ export async function teacherTimesheet(actor: Actor, filters: TimesheetFilters, 
     }
     byTeacher.set(r.teacherId, item);
   }
-  return { rows, summary: [...byTeacher.values()] };
+  return [...byTeacher.values()];
 }
 
 /** Phạm vi "lớp của mình": chỉ thao tác trên công của chính mình. NOT_FOUND để không lộ công của người khác. */

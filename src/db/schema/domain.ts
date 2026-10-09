@@ -493,6 +493,28 @@ export const tuitionReceipts = pgTable(
   (t) => [index("tuition_receipts_enrollment_idx").on(t.enrollmentId), check("tuition_receipts_amount_chk", sql`${t.amount} > 0`)],
 );
 
+// Mua sắm: khoản chi của trung tâm, nhập ở Báo cáo → Mua sắm. Thành tiền = số lượng × đơn giá (tính khi đọc).
+export const purchases = pgTable(
+  "purchases",
+  {
+    id: id(),
+    purchasedAt: date("purchased_at").notNull(),
+    item: text("item").notNull(),
+    // Nhóm chi do người dùng tự gõ (vd. Thiết bị, Học cụ, Văn phòng phẩm).
+    category: text("category").notNull(),
+    quantity: integer("quantity").notNull(),
+    unitPrice: integer("unit_price").notNull(),
+    createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    index("purchases_date_idx").on(t.purchasedAt),
+    check("purchases_quantity_chk", sql`${t.quantity} >= 1`),
+    check("purchases_unit_price_chk", sql`${t.unitPrice} >= 0`),
+  ],
+);
+
 // Mức lương mỗi buổi (công) của một giáo viên/trợ giảng ở một lớp, đặt ở Chấm công → Mức lương giáo viên/Nhân viên.
 // Không phụ thuộc phân công: đặt được cho cả người dạy thay hay có công bổ sung ở lớp đó.
 export const teacherRates = pgTable(

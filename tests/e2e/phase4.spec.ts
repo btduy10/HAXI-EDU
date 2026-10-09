@@ -17,33 +17,26 @@ test.beforeAll(async () => {
   mkdirSync("test-results/exports", { recursive: true });
 });
 
-test("GV: báo cáo lớp mình, xuất Excel/PDF; không xem hay xuất được lớp khác", async ({ page }) => {
+test("GV: không còn Báo cáo lớp; không xuất được tổng kết hay báo cáo tài chính; TKB xuất ra chỉ của mình", async ({ page }) => {
   await login(page, "gv.lan", NEW_PASSWORD);
   await expect(page).toHaveURL(/\/teacher\/dashboard$/);
+  // Báo cáo lớp đã bỏ: trang lớp không còn nút, đường dẫn cũ và API xuất cũ không còn.
   await page.goto(`/teacher/classes/${ownClassId}`);
-  await page.getByRole("link", { name: "Báo cáo lớp" }).click();
-  await expect(page.getByRole("heading", { name: "Báo cáo lớp RB-CB01" })).toBeVisible();
-  await expect(page.getByText(/Chuyên cần tính trên buổi đã dạy/)).toBeVisible();
+  await expect(page.getByRole("heading", { name: /RB-CB01/ })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Báo cáo lớp" })).toHaveCount(0);
   await expectNoHorizontalScroll(page);
-  await page.screenshot({ path: "test-results/shots/class-report-360.png", fullPage: true });
+  expect((await page.request.get(`/api/export/class-report/${ownClassId}?format=xlsx`)).status()).toBe(404);
+  await expectNotFound(page, `/teacher/classes/${ownClassId}/report`);
 
   // Gọi trực tiếp API xuất bằng phiên của GV.
-  const own = await page.request.get(`/api/export/class-report/${ownClassId}?format=xlsx`);
-  expect(own.status()).toBe(200);
-  expect(own.headers()["content-type"]).toContain("spreadsheetml");
-  expect((await own.body()).subarray(0, 2).toString()).toBe("PK");
-  const pdf = await page.request.get(`/api/export/class-report/${ownClassId}?format=pdf`);
-  expect((await pdf.body()).subarray(0, 5).toString()).toBe("%PDF-");
-  writeFileSync("test-results/exports/class-report.pdf", await pdf.body());
-
-  expect((await page.request.get(`/api/export/class-report/${otherClassId}?format=xlsx`)).status()).toBe(404);
   expect((await page.request.get(`/api/export/summary/${ownClassId}?format=xlsx`)).status()).toBe(403);
-  expect((await page.request.get(`/api/export/class-report/${ownClassId}?format=exe`)).status()).toBe(400);
-  await expectNotFound(page, `/teacher/classes/${otherClassId}/report`);
+  expect((await page.request.get("/api/export/unpaid-tuition?format=xlsx")).status()).toBe(403);
+  expect((await page.request.get("/api/export/timetable?format=exe")).status()).toBe(400);
 
   // TKB xuất ra chỉ gồm lịch của mình dù truyền classId của lớp khác.
   const timetable = await page.request.get(`/api/export/timetable?format=pdf&classId=${otherClassId}`);
   expect(timetable.status()).toBe(200);
+  expect((await timetable.body()).subarray(0, 5).toString()).toBe("%PDF-");
   for (const path of ["/admin/rewards", "/admin/reports", "/admin/audit", "/admin/settings"]) {
     await page.goto(path);
     await expect(page).toHaveURL(/\/teacher\/dashboard$/);
@@ -126,13 +119,12 @@ test("Admin: cấu hình, đóng lớp, chốt tổng kết, duyệt và trao qu
   writeFileSync("test-results/exports/tkb.pdf", await timetable.body());
   expect((await page.request.get("/api/export/timetable?format=xlsx&from=2026-01-01&to=2027-01-01")).status()).toBe(400);
 
-  // Báo cáo lớp trên màn hình rộng.
+  // Báo cáo tài chính trên màn hình rộng (chi tiết luồng ở phase5).
   await page.setViewportSize({ width: 1280, height: 800 });
-  await page.goto(`/admin/reports?classId=${ownClassId}`);
-  await expect(page.getByRole("columnheader", { name: "Chuyên cần" })).toBeVisible();
+  await page.goto("/admin/reports");
+  await expect(page.getByRole("heading", { name: "Doanh thu theo tháng" })).toBeVisible();
+  await expect(page.getByRole("columnheader", { name: "Tổng chi" })).toBeVisible();
   await page.screenshot({ path: "test-results/shots/report-1280.png", fullPage: true });
-  await expect(page.getByRole("heading", { name: "Cơ cấu điểm danh của lớp" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Sao của lớp theo học viên" })).toBeVisible();
   await page.goto(`/admin/rewards?tab=summary&classId=${otherClassId}`);
   await page.screenshot({ path: "test-results/shots/summary-1280.png", fullPage: true });
   await page.goto("/admin/dashboard");
@@ -163,7 +155,8 @@ test("Admin: cấu hình, đóng lớp, chốt tổng kết, duyệt và trao qu
   await expect(page.getByRole("listitem").filter({ hasText: "Vắng không phép" }).first()).toBeVisible();
   await expectNoHorizontalScroll(page);
   await page.screenshot({ path: "test-results/shots/dashboard-360.png", fullPage: true });
-  await page.goto(`/admin/reports?classId=${ownClassId}`);
+  await page.goto("/admin/reports");
+  await expect(page.getByRole("heading", { name: "Doanh thu theo tháng" })).toBeVisible();
   await expectNoHorizontalScroll(page);
   await page.screenshot({ path: "test-results/shots/report-charts-360.png", fullPage: true });
 

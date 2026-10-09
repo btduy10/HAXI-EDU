@@ -13,7 +13,7 @@ import { ADMIN_LABEL, type PermissionConfig, normalizePermissions } from "@/lib/
 import { PERMISSIONS_KEY, SETTING_DEFAULTS, type SettingKey, getPermissionConfig, getSettings } from "../settings";
 import { extraClassesForRange } from "./extra-classes";
 import { type SessionFilters, listSessions } from "./sessions";
-import { getClassReport, getClassSummary } from "./summaries";
+import { getClassSummary } from "./summaries";
 
 // Dựng nội dung báo cáo để xuất. Quyền xem do các service nguồn kiểm tra.
 
@@ -86,46 +86,6 @@ export async function extraTimetableDoc(actor: Actor, filters: Parameters<typeof
           r.courseName,
           r.roomName,
           r.teacherName ?? "",
-        ]),
-      },
-    ],
-  };
-}
-
-export async function classReportDoc(actor: Actor, classId: string): Promise<ExportDoc> {
-  const report = await getClassReport(actor, classId);
-  return {
-    filename: `bao-cao-lop-${report.class.code}`,
-    title: `Báo cáo lớp ${report.class.code} – ${report.class.name}`,
-    subtitle: `${report.class.courseName} · đã dạy ${report.sessions.done} buổi, hủy ${report.sessions.cancelled} buổi`,
-    sections: [
-      {
-        title: "Sao và chuyên cần",
-        columns: [
-          { header: "Hạng", width: 7, align: "right" },
-          { header: "Mã HV", width: 10 },
-          { header: "Họ tên", width: 26 },
-          { header: "Sao của lớp", width: 12, align: "right" },
-          { header: "Có mặt", width: 9, align: "right" },
-          { header: "Đi trễ", width: 9, align: "right" },
-          { header: "Về sớm", width: 9, align: "right" },
-          { header: "Vắng phép", width: 10, align: "right" },
-          { header: "Vắng KP", width: 9, align: "right" },
-          { header: "Số buổi", width: 9, align: "right" },
-          { header: "Chuyên cần (%)", width: 14, align: "right" },
-        ],
-        rows: report.rows.map((r) => [
-          r.rank,
-          r.code,
-          r.fullName,
-          r.totalStars,
-          r.attendance.present,
-          r.attendance.late,
-          r.attendance.left_early,
-          r.attendance.excused,
-          r.attendance.absent,
-          r.attendance.taught,
-          r.attendance.rate,
         ]),
       },
     ],

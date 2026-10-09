@@ -29,7 +29,14 @@ export type TuitionFilters = { classId?: string | null; status?: TuitionStatus |
 /** Mỗi lượt ghi danh một dòng: phải đóng, đã đóng, còn lại, trạng thái. Giới hạn theo phạm vi lớp của người xem. */
 export async function listTuition(actor: Actor, filters: TuitionFilters = {}) {
   assertCan(actor, "tuition", "view");
-  const allowed = await allowedClassIds(actor);
+  return tuitionRows(await allowedClassIds(actor), filters);
+}
+
+/**
+ * Truy vấn học phí theo lượt ghi danh, KHÔNG kiểm quyền: hàm gọi phải tự kiểm (menu Học phí hoặc Báo cáo).
+ * `allowed` = danh sách lớp được xem, null = mọi lớp.
+ */
+export async function tuitionRows(allowed: string[] | null, filters: TuitionFilters = {}) {
   const zero = { due: 0, paid: 0, remaining: 0 };
   if (allowed && allowed.length === 0) return { rows: [], total: zero };
   const conditions = [];

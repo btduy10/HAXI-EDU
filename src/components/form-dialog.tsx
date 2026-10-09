@@ -21,6 +21,8 @@ export type Field = {
   hint?: string;
   /** Giá trị ban đầu khi form không có dữ liệu sẵn (form thêm mới). */
   defaultValue?: string;
+  /** Gợi ý cho ô gõ tự do (vd. các loại đã nhập trước đó); người dùng vẫn gõ được giá trị khác. */
+  suggestions?: string[];
 };
 
 export type ActionFn = (input: unknown) => Promise<{ ok: true; data: unknown } | { ok: false; error: string; fieldErrors?: Record<string, string> }>;
@@ -187,13 +189,23 @@ export function FormDialog({
                     onInput={(event) => reformatMoney(event.currentTarget)}
                   />
                 ) : (
-                  <Input
-                    {...common}
-                    type={field.type ?? "text"}
-                    inputMode={field.type === "number" ? "numeric" : undefined}
-                    autoComplete="off"
-                    className="h-11"
-                  />
+                  <>
+                    <Input
+                      {...common}
+                      type={field.type ?? "text"}
+                      inputMode={field.type === "number" ? "numeric" : undefined}
+                      autoComplete="off"
+                      list={field.suggestions?.length ? `${id}-list` : undefined}
+                      className="h-11"
+                    />
+                    {field.suggestions && field.suggestions.length > 0 && (
+                      <datalist id={`${id}-list`}>
+                        {field.suggestions.map((s) => (
+                          <option key={s} value={s} />
+                        ))}
+                      </datalist>
+                    )}
+                  </>
                 )}
                 {field.hint && !invalid && <p className="text-xs text-muted-foreground">{field.hint}</p>}
                 {invalid && (
