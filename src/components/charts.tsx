@@ -26,8 +26,8 @@ export function ChartCard({
   className?: string;
 }) {
   return (
-    <section className={cn("grid min-w-0 content-start gap-3 rounded-xl border bg-card p-4", className)}>
-      <div>
+    <section className={cn("glass-card grid min-w-0 content-start gap-4 rounded-3xl p-5", className)}>
+      <div className="border-b pb-3">
         <h2 className="text-base">{title}</h2>
         {subtitle && <p className="text-sm text-muted-foreground">{subtitle}</p>}
       </div>

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { ClassList } from "@/components/class-list";
 import { DashboardCharts } from "@/components/dashboard-charts";
+import { DashboardHero } from "@/components/dashboard-hero";
 import { OverdueSessions, TodaySessions } from "@/components/session-lists";
 import { todayIso } from "@/lib/format";
 import { seesAllClasses } from "@/server/guard";
@@ -27,7 +28,10 @@ export default async function TeacherDashboardPage() {
 
   return (
     <div className="grid gap-6">
-      <h1 className="text-lg font-semibold">Xin chào, {user.name}</h1>
+      <DashboardHero
+        name={user.name}
+        description={all ? "Tổng quan hoạt động của trung tâm hôm nay." : "Tổng quan các lớp của bạn hôm nay."}
+      />
       <TodaySessions sessions={todaySessions} hrefOf={(s) => attendanceHref(s.id)} today={today} />
       <OverdueSessions sessions={overdue} hrefOf={attendanceHref} />
       <DashboardCharts data={charts} scopeLabel={all ? "toàn trung tâm" : "các lớp của tôi"} />

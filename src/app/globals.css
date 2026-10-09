@@ -213,22 +213,28 @@
     }
   }
 }
-/* Thẻ số liệu, biểu đồ: trắng trong, viền sáng, bóng rất nhẹ. */
-@utility glass-card {
-  background-color: rgb(255 255 255 / 0.62);
-  border: 1px solid rgb(255 255 255 / 0.75);
-  box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 0.9),
-    0 1px 2px color-mix(in oklab, var(--foreground) 5%, transparent),
-    0 10px 24px -16px color-mix(in oklab, var(--foreground) 28%, transparent);
-}
-/* Bảng dữ liệu, form, hộp thoại: trắng gần đặc để dễ đọc và nhẹ GPU. */
-@utility glass-solid {
-  background-color: rgb(255 255 255 / 0.9);
-  border-color: color-mix(in oklab, var(--foreground) 11%, transparent);
-  box-shadow:
-    0 1px 2px color-mix(in oklab, var(--foreground) 5%, transparent),
-    0 8px 20px -16px color-mix(in oklab, var(--foreground) 24%, transparent);
+/*
+ * glass-card và glass-solid khai báo ở lớp components: các utility nền theo trạng thái của Tailwind
+ * (hover:bg-muted, has-checked:bg-muted, bg-muted/40…) vẫn được ưu tiên hơn.
+ */
+@layer components {
+  /* Thẻ số liệu, biểu đồ: trắng trong, viền sáng, bóng rất nhẹ. */
+  .glass-card {
+    background-color: rgb(255 255 255 / 0.62);
+    border: 1px solid rgb(255 255 255 / 0.8);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.9),
+      0 1px 2px color-mix(in oklab, var(--foreground) 5%, transparent),
+      0 10px 24px -16px color-mix(in oklab, var(--foreground) 28%, transparent);
+  }
+  /* Bảng dữ liệu, form, hộp thoại, dòng danh sách: trắng gần đặc để dễ đọc và nhẹ GPU. */
+  .glass-solid {
+    background-color: rgb(255 255 255 / 0.9);
+    border-color: color-mix(in oklab, var(--foreground) 11%, transparent);
+    box-shadow:
+      0 1px 2px color-mix(in oklab, var(--foreground) 4%, transparent),
+      0 8px 18px -16px color-mix(in oklab, var(--foreground) 22%, transparent);
+  }
 }
 @utility glass-sidebar {
   background-color: var(--sidebar);

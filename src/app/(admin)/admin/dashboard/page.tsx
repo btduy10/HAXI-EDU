@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { DashboardCharts } from "@/components/dashboard-charts";
+import { DashboardHero } from "@/components/dashboard-hero";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { listOverdueSessions } from "@/server/services/attendance";
 import { adminOverview, dashboardCharts } from "@/server/services/dashboard";
@@ -22,16 +23,16 @@ export default async function AdminDashboardPage() {
     { label: "Buổi quá hạn chưa điểm danh", value: overdue.length, href: "/admin/attendance" },
   ];
   return (
-    <div className="grid gap-4">
-      <h1 className="text-lg font-semibold">Xin chào, {user.name}</h1>
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+    <div className="grid gap-6">
+      <DashboardHero name={user.name} description="Tổng quan hoạt động của trung tâm hôm nay." />
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {stats.map((s) => (
-          <Link key={s.href} href={s.href} className="rounded-xl focus-visible:outline-2">
-            <Card>
+          <Link key={s.href} href={s.href} className="rounded-3xl focus-visible:outline-2">
+            <Card className="h-full justify-between">
               <CardHeader>
                 <CardTitle className="text-sm font-normal text-muted-foreground">{s.label}</CardTitle>
               </CardHeader>
-              <CardContent className="text-3xl font-semibold tabular-nums">{s.value}</CardContent>
+              <CardContent className="text-4xl leading-none font-bold tabular-nums">{s.value}</CardContent>
             </Card>
           </Link>
         ))}
