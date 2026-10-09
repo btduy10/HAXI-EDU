@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { todayIso } from "@/lib/format";
 import { orNotFound, uuidParam } from "@/server/page";
 import { listRooms, listTeachers, listTimeSlots } from "@/server/services/catalog";
@@ -8,6 +7,7 @@ import { listClassStudents } from "@/server/services/students";
 import { redirect } from "next/navigation";
 import { requireMenu } from "@/server/session";
 import { MakeupForm } from "./makeup-form";
+import { BackLink } from "@/components/back-link";
 
 export const metadata: Metadata = { title: "Thêm buổi bù" };
 
@@ -28,9 +28,7 @@ export default async function MakeupPage({ searchParams }: PageProps<"/admin/ses
   return (
     <div className="grid max-w-2xl gap-4">
       <div className="grid gap-1">
-        <Link href={`/admin/classes/${classId}`} className="text-sm text-muted-foreground underline-offset-2 hover:underline">
-          ← {cls.code} – {cls.name}
-        </Link>
+        <BackLink href={`/admin/classes/${classId}`}>{cls.code} – {cls.name}</BackLink>
         <h1 className="text-xl font-semibold sm:text-2xl">Thêm buổi bù</h1>
         <p className="text-sm text-muted-foreground">Buổi bù chỉ gồm các học viên được chọn bên dưới.</p>
       </div>

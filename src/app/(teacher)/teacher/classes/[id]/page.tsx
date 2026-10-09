@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import { BackLink } from "@/components/back-link";
 import { StudentProgressCard } from "@/components/avatar";
 import { Badge } from "@/components/ui/badge";
 import { LABELS, formatDate } from "@/lib/format";
@@ -20,9 +20,7 @@ export default async function TeacherClassPage({ params }: PageProps<"/teacher/c
   return (
     <div className="grid gap-4">
       <div className="grid gap-2">
-        <Link href="/teacher/classes" className="text-sm text-muted-foreground underline-offset-2 hover:underline">
-          ← Lớp của tôi
-        </Link>
+        <BackLink href="/teacher/classes">Lớp của tôi</BackLink>
         <div className="flex flex-wrap items-center gap-2">
           <h1 className="text-xl font-semibold">
             {cls.code} – {cls.name}

@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import { BackLink } from "@/components/back-link";
 import { StudentProgressCard } from "@/components/avatar";
 import { CrudSection } from "@/components/crud-section";
 import type { Field } from "@/components/form-dialog";
@@ -101,9 +101,7 @@ export default async function ClassDetailPage({ params }: PageProps<"/admin/clas
 
   return (    <div className="grid gap-6">
       <div className="grid gap-2">
-        <Link href="/admin/classes" className="text-sm text-muted-foreground underline-offset-2 hover:underline">
-          ← Danh sách lớp
-        </Link>
+        <BackLink href="/admin/classes">Danh sách lớp</BackLink>
         <div className="flex flex-wrap items-center gap-2">
           <h1 className="text-xl font-semibold">
             {cls.code} – {cls.name}

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { redirect } from "next/navigation";
+import { BackLink } from "@/components/back-link";
 import { CrudSection } from "@/components/crud-section";
 import type { Field } from "@/components/form-dialog";
 import { formatMoney } from "@/lib/format";
@@ -40,9 +40,7 @@ export default async function TeacherRatesPage() {
   return (
     <div className="grid gap-4">
       <div className="grid gap-2">
-        <Link href="/admin/timesheet" className="text-sm text-muted-foreground underline-offset-2 hover:underline">
-          ← Chấm công
-        </Link>
+        <BackLink href="/admin/timesheet">Chấm công</BackLink>
         <p className="text-sm text-muted-foreground">
           Đặt mức lương mỗi buổi theo từng lớp cho giáo viên, trợ giảng. Chấm công lấy mức lương của đúng giáo viên ở đúng lớp để tính
           thành tiền; công ở lớp chưa đặt mức lương được báo riêng.

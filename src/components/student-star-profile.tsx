@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { BackLink } from "@/components/back-link";
 import { ConfirmButton, FormDialogButton } from "@/components/action-buttons";
 import { AvatarBadge, LevelProgress } from "@/components/avatar";
 import { AvatarPicker } from "@/components/avatar-picker";
@@ -29,9 +29,7 @@ export async function StudentStarProfile({ actor, studentId, backHref }: { actor
   return (
     <div className="mx-auto grid max-w-3xl gap-6">
       <div className="grid gap-3">
-        <Link href={backHref} className="text-sm text-muted-foreground underline-offset-2 hover:underline">
-          ← Quay lại
-        </Link>
+        <BackLink href={backHref}>Quay lại</BackLink>
         <div className="flex items-center gap-4">
           <AvatarBadge avatar={progress.avatar} frameColor={progress.level.frameColor} size={72} />
           <div className="grid min-w-0 flex-1 gap-1">

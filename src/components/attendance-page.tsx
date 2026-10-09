@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { BackLink } from "@/components/back-link";
 import { ConfirmButton } from "@/components/action-buttons";
 import { AttendanceSheet } from "@/components/attendance-sheet";
 import { SessionTabs } from "@/components/session-tabs";
@@ -31,9 +31,7 @@ export async function AttendancePage({
   return (
     <div className="mx-auto grid max-w-3xl gap-4">
       <div className="grid gap-1">
-        <Link href={backHref} className="text-sm text-muted-foreground underline-offset-2 hover:underline">
-          ← Quay lại
-        </Link>
+        <BackLink href={backHref}>Quay lại</BackLink>
         <h1 className="text-xl font-semibold sm:text-2xl">
           Điểm danh {session.classCode} – {session.className}
         </h1>

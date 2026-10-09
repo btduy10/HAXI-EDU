@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import { BackLink } from "@/components/back-link";
 import { ConfirmButton, FormDialogButton } from "@/components/action-buttons";
 import { SessionBadges } from "@/components/timetable";
 import { LinkButton } from "@/components/link-button";
@@ -49,9 +49,7 @@ export default async function SessionDetailPage({ params }: PageProps<"/admin/se
   return (
     <div className="grid max-w-3xl gap-4">
       <div className="grid gap-2">
-        <Link href={`/admin/timetable?date=${session.date}`} className="text-sm text-muted-foreground underline-offset-2 hover:underline">
-          ← Thời khóa biểu
-        </Link>
+        <BackLink href={`/admin/timetable?date=${session.date}`}>Thời khóa biểu</BackLink>
         <h1 className="text-xl font-semibold">
           Buổi học {session.classCode} – {session.className}
         </h1>
