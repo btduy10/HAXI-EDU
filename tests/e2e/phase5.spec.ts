@@ -247,7 +247,7 @@ test("Lớp chỉ hiển thị trên Thời khóa biểu: tạo ở Lớp học,
   }
 });
 
-test("Ghi danh: tổng quan theo buổi trong tuần, mỗi lớp 8 hàng, bấm hàng trống để thêm học viên, lớp đủ sĩ số không thêm được", async ({ page }) => {
+test("Ghi danh: tổng quan theo buổi trong tuần (buổi - giờ, tên lớp - GV), mỗi lớp 8 hàng, hàng trống đánh số theo chỗ còn lại, lớp đủ sĩ số không thêm được", async ({ page }) => {
   await login(page, "admin", NEW_PASSWORD);
   await page.getByLabel("Mã xác thực").fill(totp(loadAdminSecret()));
   await page.getByRole("button", { name: "Xác nhận" }).click();
@@ -274,8 +274,12 @@ test("Ghi danh: tổng quan theo buổi trong tuần, mỗi lớp 8 hàng, bấm
     // Lớp học 2 buổi/tuần hiện ở cả hai buổi, buổi Tối đứng trước buổi Sáng cuối tuần.
     const blocks = page.locator('[data-roster="GD-E2E"]');
     await expect(blocks).toHaveCount(2);
-    await expect(blocks.nth(0).getByRole("heading")).toHaveText("Tối Thứ 2");
-    await expect(blocks.nth(1).getByRole("heading")).toHaveText("Sáng Thứ 7");
+    // Tiêu đề: hàng trên "Buổi - giờ", hàng dưới "Tên lớp - Tên GV" (lớp thử chưa có giáo viên nên chỉ có tên lớp).
+    await expect(blocks.nth(0).getByRole("heading")).toHaveText("Tối Thứ 2 - 18h00 - 19h30");
+    await expect(blocks.nth(1).getByRole("heading")).toHaveText("Sáng Thứ 7 - 08h00 - 09h30");
+    await expect(blocks.nth(0).getByRole("link")).toHaveText("Lớp thử ghi danh");
+    // Lớp có giáo viên: tên lớp kèm tên giáo viên của buổi.
+    await expect(page.locator('[data-roster="RB-CB01"]').first().getByRole("link")).toHaveText(/^Robotics Cơ bản 01 - \S/);
     // Lớp đã đóng và lớp chỉ hiển thị trên Thời khóa biểu không có trong bảng.
     await expect(page.locator('[data-roster="RB-NC01"]')).toHaveCount(0);
     await expect(page.locator('[data-roster="MP-E2E"]')).toHaveCount(0);
@@ -283,13 +287,16 @@ test("Ghi danh: tổng quan theo buổi trong tuần, mỗi lớp 8 hàng, bấm
     const block = blocks.nth(0);
     await expect(block.getByRole("columnheader")).toHaveText(["STT", "Họ tên HS", "Lớp"]);
     await expect(block.locator("tbody tr")).toHaveCount(8);
-    await expect(block.getByRole("button", { name: /Thêm học viên/ })).toHaveCount(8);
+    // Lớp tối đa 2 học viên: hai chỗ trống được đánh số, các hàng còn lại để trống; không còn dấu +.
+    const addButtons = block.getByRole("button", { name: /Thêm \d+ học viên/ });
+    await expect(addButtons).toHaveText(["Thêm 1 học viên", "Thêm 2 học viên"]);
+    await expect(block.locator("tbody svg")).toHaveCount(0);
     await expect(block.getByText("0/2")).toBeVisible();
     await expectNoHorizontalScroll(page);
 
     // Bấm một hàng trống → chọn học viên → hàng đó có tên và khối.
     const enroll = async (expectRow: number) => {
-      await block.getByRole("button", { name: /Thêm học viên/ }).first().click();
+      await addButtons.first().click();
       await expect(page.getByRole("dialog")).toContainText("Ghi danh vào GD-E2E");
       const option = page.locator("#f-studentId option").nth(1);
       const [, fullName] = ((await option.textContent()) ?? "").split(" – ");
@@ -303,7 +310,7 @@ test("Ghi danh: tổng quan theo buổi trong tuần, mỗi lớp 8 hàng, bấm
     };
     const first = await enroll(0);
     await expect(block.getByText("1/2")).toBeVisible();
-    await expect(block.getByRole("button", { name: /Thêm học viên/ })).toHaveCount(7);
+    await expect(addButtons).toHaveText(["Thêm 1 học viên"]);
     // Cùng lớp ở buổi kia cũng có học viên này; em đã ghi danh không còn trong danh sách chọn.
     await expect(blocks.nth(1).locator("tbody tr").first()).toContainText(first);
     const [grade] = await db`select s.school_grade from students s join enrollments e on e.student_id = s.id where e.class_id = ${rosterClassId}`;
@@ -314,11 +321,11 @@ test("Ghi danh: tổng quan theo buổi trong tuần, mỗi lớp 8 hàng, bấm
     // Đủ sĩ số tối đa: vẫn 8 hàng nhưng hàng trống không bấm được nữa.
     await expect(block.getByText("2/2")).toBeVisible();
     await expect(block.locator("tbody tr")).toHaveCount(8);
-    await expect(blocks.getByRole("button", { name: /Thêm học viên/ })).toHaveCount(0);
+    await expect(blocks.getByRole("button", { name: /Thêm \d+ học viên/ })).toHaveCount(0);
     await expectNoHorizontalScroll(page);
 
     // Bấm tên lớp mở danh sách ghi danh chi tiết như cũ, có đường quay lại tổng quan.
-    await block.getByRole("link", { name: /GD-E2E/ }).click();
+    await block.getByRole("link", { name: "Lớp thử ghi danh" }).click();
     await expect(page).toHaveURL(new RegExp(`classId=${rosterClassId}`));
     await expect(page.getByRole("button", { name: "Cho rời lớp" })).toHaveCount(2);
     await page.getByRole("link", { name: /Tổng quan ghi danh/ }).click();

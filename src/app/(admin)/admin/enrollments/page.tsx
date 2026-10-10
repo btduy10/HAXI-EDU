@@ -5,7 +5,7 @@ import { AutoSubmitSelect } from "@/components/auto-submit-select";
 import { BackLink } from "@/components/back-link";
 import { AddStudentButton, RosterEnroll } from "@/components/roster-enroll";
 import { Badge } from "@/components/ui/badge";
-import { ROSTER_ROWS } from "@/domain/roster";
+import { ROSTER_ROWS, rosterTime } from "@/domain/roster";
 import { LABELS, formatDate, todayIso } from "@/lib/format";
 import { deleteEnrollmentAction, enrollStudentAction, leaveEnrollmentAction } from "@/server/actions/admin";
 import { listClasses, listEnrollments, weeklyRoster } from "@/server/services/classes";
@@ -140,21 +140,24 @@ export default async function EnrollmentsPage({ searchParams }: PageProps<"/admi
           today={today}
         >
           <p className="text-sm text-muted-foreground">
-            Các lớp đang học theo buổi trong tuần (theo lịch mẫu của lớp). Bấm tên lớp để xem lịch sử ghi danh, cho rời lớp.
-            {can("add") && " Bấm một hàng trống để thêm học viên vào lớp."}
+            Các lớp đang học theo buổi trong tuần (theo Thời khóa biểu tuần này). Bấm tên lớp để xem lịch sử ghi danh, cho rời lớp.
+            {can("add") && " Bấm một hàng “Thêm … học viên” để thêm học viên vào lớp."}
           </p>
           {roster.blocks.length === 0 ? (
-            <p className="rounded-2xl border border-dashed p-6 text-center text-sm text-muted-foreground">Chưa có lớp đang mở nào có lịch mẫu.</p>
+            <p className="rounded-2xl border border-dashed p-6 text-center text-sm text-muted-foreground">Chưa có lớp đang mở nào có buổi học trong tuần hoặc lịch mẫu.</p>
           ) : (
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
               {roster.blocks.map((block) => {
                 const rows = Math.max(ROSTER_ROWS, block.students.length);
-                const hasRoom = block.students.length < block.maxSize;
+                // Số chỗ còn lại theo sĩ số tối đa: mỗi chỗ một hàng "Thêm n học viên".
+                const free = block.maxSize - block.students.length;
                 return (
                   <section key={block.key} data-roster={block.classCode} className="glass-solid min-w-0 overflow-hidden rounded-2xl border text-sm">
                     <header className="grid gap-0.5 border-b bg-muted/60 px-3 py-2">
                       <div className="flex items-baseline justify-between gap-2">
-                        <h2 className="font-semibold">{block.label}</h2>
+                        <h2 className="font-semibold">
+                          {block.label} - {rosterTime(block.startTime)} - {rosterTime(block.endTime)}
+                        </h2>
                         <span className="text-muted-foreground tabular-nums" aria-label={`Sĩ số ${block.students.length} trên ${block.maxSize}`}>
                           {block.students.length}/{block.maxSize}
                         </span>
@@ -163,7 +166,8 @@ export default async function EnrollmentsPage({ searchParams }: PageProps<"/admi
                         href={`/admin/enrollments?classId=${block.classId}`}
                         className="w-fit max-w-full truncate rounded text-primary underline-offset-2 outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/50"
                       >
-                        {block.classCode} – {block.className}
+                        {block.className}
+                        {block.teacherName && ` - ${block.teacherName}`}
                       </Link>
                     </header>
                     <table className="w-full table-fixed">
@@ -177,6 +181,7 @@ export default async function EnrollmentsPage({ searchParams }: PageProps<"/admi
                       <tbody>
                         {Array.from({ length: rows }, (_, index) => {
                           const student = block.students[index];
+                          const seat = index - block.students.length + 1;
                           return (
                             <tr key={index} className="h-10 border-t md:h-8">
                               <td className="px-1 text-center text-muted-foreground tabular-nums">{index + 1}</td>
@@ -189,12 +194,13 @@ export default async function EnrollmentsPage({ searchParams }: PageProps<"/admi
                                 </>
                               ) : (
                                 <td colSpan={2} className="px-1">
-                                  {hasRoom && can("add") && (
+                                  {seat <= free && can("add") && (
                                     <AddStudentButton
                                       classId={block.classId}
                                       classCode={block.classCode}
                                       startDate={block.startDate}
-                                      label={`Thêm học viên vào ${block.classCode}, ${block.label}, hàng ${index + 1}`}
+                                      seat={seat}
+                                      label={`Thêm ${seat} học viên vào ${block.className}, ${block.label}`}
                                     />
                                   )}
                                 </td>
@@ -211,7 +217,7 @@ export default async function EnrollmentsPage({ searchParams }: PageProps<"/admi
           )}
           {roster.unscheduled.length > 0 && (
             <p className="text-sm text-muted-foreground">
-              Lớp đang mở chưa có lịch mẫu (chưa thuộc buổi nào):{" "}
+              Lớp đang mở chưa có buổi học trong tuần và chưa có lịch mẫu (chưa thuộc buổi nào):{" "}
               {roster.unscheduled.map((c, index) => (
                 <span key={c.id}>
                   {index > 0 && ", "}

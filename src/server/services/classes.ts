@@ -1,4 +1,5 @@
-import { and, asc, count, desc, eq, gte, inArray, lt, sql } from "drizzle-orm";
+import { and, asc, between, count, desc, eq, gte, inArray, lt, ne, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import type { z } from "zod";
 import { db } from "@/db";
 import {
@@ -19,7 +20,9 @@ import {
   timesheetEntries,
   tuitionReceipts,
 } from "@/db/schema";
-import { rosterSessionLabel, rosterSessionOrder } from "@/domain/roster";
+import { rosterSessionLabel, rosterSessionOrder, shiftOfTime } from "@/domain/roster";
+import { addDays, isoWeekday, startOfWeek } from "@/lib/dates";
+import { todayIso } from "@/lib/format";
 import type { classInput, classTeacherInput, classTeacherUpdate, enrollInput, leaveInput } from "@/lib/validation/entities";
 import { audit } from "../audit";
 import { AppError, notFound, translateDbError } from "../errors";
@@ -184,23 +187,66 @@ export async function unassignTeacher(actor: Actor, id: string) {
   });
 }
 
+const substituteTeacher = alias(teachers, "substitute");
+
 /**
- * Tổng quan Ghi danh theo buổi học trong tuần: mỗi dòng lịch mẫu (thứ + ca) của một lớp đang mở là một khung,
- * kèm học viên đang học của lớp (chỉ họ tên và khối). Lớp học nhiều buổi/tuần xuất hiện ở từng buổi.
+ * Tổng quan Ghi danh theo buổi học trong tuần: mỗi buổi (thứ + ca) của một lớp đang mở là một khung,
+ * kèm giờ học, giáo viên và học viên đang học của lớp (chỉ họ tên và khối). Lớp học nhiều buổi/tuần xuất hiện ở từng buổi.
+ * Buổi lấy từ Thời khóa biểu của tuần chứa `today` (buổi chưa hủy, không tính buổi bù) nên luôn khớp Thời khóa biểu;
+ * lớp không có buổi nào trong tuần (tuần nghỉ, chưa sinh buổi) thì lấy theo lịch mẫu.
  * Chỉ các lớp trong phạm vi của người dùng; không gồm lớp đã đóng và lớp chỉ hiển thị trên Thời khóa biểu.
  */
-export async function weeklyRoster(actor: Actor) {
+export async function weeklyRoster(actor: Actor, today: string = todayIso()) {
   assertCan(actor, "enrollments", "view");
   const open = (await listClasses(actor)).filter((c) => c.status === "open");
   if (open.length === 0) return { blocks: [], unscheduled: [] };
   const ids = open.map((c) => c.id);
-  const [slots, active] = await Promise.all([
-    // Nhiều khung giờ của cùng một ca trong cùng một thứ vẫn là một buổi.
+  const weekStart = startOfWeek(today);
+  const [held, templates, mains, active] = await Promise.all([
     db
-      .selectDistinct({ classId: scheduleTemplates.classId, weekday: scheduleTemplates.weekday, slotName: timeSlots.name })
+      .select({
+        classId: sessions.classId,
+        date: sessions.date,
+        slotName: timeSlots.name,
+        startTime: sessions.startTime,
+        endTime: sessions.endTime,
+        teacherShort: teachers.shortName,
+        teacherName: teachers.fullName,
+        substituteShort: substituteTeacher.shortName,
+        substituteName: substituteTeacher.fullName,
+      })
+      .from(sessions)
+      .leftJoin(timeSlots, eq(timeSlots.id, sessions.timeSlotId))
+      .leftJoin(teachers, eq(teachers.id, sessions.teacherId))
+      .leftJoin(substituteTeacher, eq(substituteTeacher.id, sessions.substituteTeacherId))
+      .where(
+        and(
+          inArray(sessions.classId, ids),
+          between(sessions.date, weekStart, addDays(weekStart, 6)),
+          ne(sessions.status, "cancelled"),
+          eq(sessions.kind, "regular"),
+        ),
+      ),
+    db
+      .select({
+        classId: scheduleTemplates.classId,
+        weekday: scheduleTemplates.weekday,
+        slotName: timeSlots.name,
+        startTime: sql<string>`coalesce(${scheduleTemplates.startTime}, ${timeSlots.defaultStart})`,
+        endTime: sql<string>`coalesce(${scheduleTemplates.endTime}, ${timeSlots.defaultEnd})`,
+        teacherShort: teachers.shortName,
+        teacherName: teachers.fullName,
+      })
       .from(scheduleTemplates)
       .innerJoin(timeSlots, eq(timeSlots.id, scheduleTemplates.timeSlotId))
+      .leftJoin(teachers, eq(teachers.id, scheduleTemplates.teacherId))
       .where(inArray(scheduleTemplates.classId, ids)),
+    db
+      .select({ classId: classTeachers.classId, teacherShort: teachers.shortName, teacherName: teachers.fullName })
+      .from(classTeachers)
+      .innerJoin(teachers, eq(teachers.id, classTeachers.teacherId))
+      .where(and(inArray(classTeachers.classId, ids), eq(classTeachers.role, "main")))
+      .orderBy(asc(teachers.code)),
     db
       .select({ classId: enrollments.classId, id: students.id, fullName: students.fullName, schoolGrade: students.schoolGrade })
       .from(enrollments)
@@ -209,15 +255,51 @@ export async function weeklyRoster(actor: Actor) {
       // Theo ngày vào lớp: học viên mới thêm nằm ở hàng trống kế tiếp.
       .orderBy(asc(enrollments.joinedAt), asc(enrollments.createdAt), asc(students.fullName)),
   ]);
+
+  // Tên giáo viên hiển thị: tên viết tắt nếu có, không thì họ tên.
+  const shown = (short: string | null, full: string | null) => short || full || null;
+  const mainOf = new Map<string, string | null>();
+  for (const m of mains) if (!mainOf.has(m.classId)) mainOf.set(m.classId, shown(m.teacherShort, m.teacherName));
+
+  type Slot = { classId: string; weekday: number; slotName: string; startTime: string; endTime: string; teacher: string | null };
+  const fromTimetable: Slot[] = held.map((h) => ({
+    classId: h.classId,
+    weekday: isoWeekday(h.date),
+    slotName: h.slotName ?? shiftOfTime(h.startTime),
+    startTime: h.startTime,
+    endTime: h.endTime,
+    // Người thực dạy: giáo viên dạy thay nếu có.
+    teacher: shown(h.substituteShort, h.substituteName) ?? shown(h.teacherShort, h.teacherName),
+  }));
+  const onTimetable = new Set(fromTimetable.map((slot) => slot.classId));
+  const fromTemplates: Slot[] = templates
+    .filter((t) => !onTimetable.has(t.classId))
+    .map((t) => ({ ...t, teacher: shown(t.teacherShort, t.teacherName) ?? mainOf.get(t.classId) ?? null }));
+
+  // Nhiều khung giờ của cùng một ca trong cùng một ngày là một buổi: giờ từ khung sớm nhất tới khung muộn nhất.
+  const merged = new Map<string, Slot>();
+  for (const slot of [...fromTimetable, ...fromTemplates].sort((a, b) => a.startTime.localeCompare(b.startTime))) {
+    const key = `${slot.classId}|${slot.weekday}|${slot.slotName}`;
+    const first = merged.get(key);
+    if (!first) merged.set(key, { ...slot });
+    else {
+      if (slot.endTime > first.endTime) first.endTime = slot.endTime;
+      first.teacher ??= slot.teacher;
+    }
+  }
+
   const studentsOf = (classId: string) => active.filter((s) => s.classId === classId).map((s) => ({ id: s.id, fullName: s.fullName, schoolGrade: s.schoolGrade }));
   const classOf = new Map(open.map((c) => [c.id, c]));
-  const blocks = slots
-    .map((slot) => {
+  const blocks = [...merged.entries()]
+    .map(([key, slot]) => {
       const cls = classOf.get(slot.classId)!;
       return {
-        key: `${slot.classId}|${slot.weekday}|${slot.slotName}`,
+        key,
         label: rosterSessionLabel(slot.slotName, slot.weekday),
         order: rosterSessionOrder(slot.slotName, slot.weekday),
+        startTime: slot.startTime,
+        endTime: slot.endTime,
+        teacherName: slot.teacher,
         classId: cls.id,
         classCode: cls.code,
         className: cls.name,
@@ -226,11 +308,12 @@ export async function weeklyRoster(actor: Actor) {
         students: studentsOf(cls.id),
       };
     })
-    .sort((a, b) => a.order - b.order || a.classCode.localeCompare(b.classCode, "vi"));
-  const scheduled = new Set(slots.map((s) => s.classId));
+    // Cùng một buổi: lớp học sớm hơn đứng trước.
+    .sort((a, b) => a.order - b.order || a.startTime.localeCompare(b.startTime) || a.classCode.localeCompare(b.classCode, "vi"));
+  const scheduled = new Set(blocks.map((block) => block.classId));
   return {
     blocks,
-    /** Lớp đang mở chưa có lịch mẫu nên chưa thuộc buổi nào. */
+    /** Lớp đang mở không có buổi trong tuần và cũng chưa có lịch mẫu nên chưa thuộc buổi nào. */
     unscheduled: open.filter((c) => !scheduled.has(c.id)).map((c) => ({ id: c.id, code: c.code, name: c.name })),
   };
 }

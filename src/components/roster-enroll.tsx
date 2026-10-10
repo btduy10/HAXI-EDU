@@ -1,6 +1,5 @@
 "use client";
 
-import { PlusIcon } from "lucide-react";
 import { createContext, useContext, useState } from "react";
 import { type FieldOption, FormDialog } from "@/components/form-dialog";
 import { enrollStudentAction } from "@/server/actions/admin";
@@ -50,8 +49,11 @@ export function RosterEnroll({
   );
 }
 
-/** Hàng trống của một lớp: bấm để thêm học viên. Không hiển thị nếu không nằm trong RosterEnroll. */
-export function AddStudentButton({ label, ...target }: Target & { label: string }) {
+/**
+ * Hàng trống của một lớp: bấm để thêm học viên. `seat` = chỗ trống thứ mấy của lớp ("Thêm 1 học viên", "Thêm 2 học viên"…).
+ * Không hiển thị nếu không nằm trong RosterEnroll.
+ */
+export function AddStudentButton({ label, seat, ...target }: Target & { label: string; seat: number }) {
   const open = useContext(EnrollContext);
   if (!open) return null;
   return (
@@ -60,10 +62,9 @@ export function AddStudentButton({ label, ...target }: Target & { label: string 
       aria-label={label}
       title={label}
       onClick={() => open(target)}
-      className="flex h-8 w-full items-center gap-1 rounded-md border border-dashed px-2 text-xs text-muted-foreground md:h-6 transition-colors hover:border-primary hover:bg-secondary hover:text-secondary-foreground focus-visible:border-primary focus-visible:outline-2"
+      className="flex h-8 w-full items-center rounded-md border border-dashed px-2 text-xs text-muted-foreground transition-colors md:h-6 hover:border-primary hover:bg-secondary hover:text-secondary-foreground focus-visible:border-primary focus-visible:outline-2"
     >
-      <PlusIcon className="size-3.5" aria-hidden />
-      Thêm học viên
+      Thêm {seat} học viên
     </button>
   );
 }
