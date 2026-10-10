@@ -260,13 +260,13 @@ test("GV của lớp đã đóng: thấy lớp ở trạng thái đã đóng, kh
   await expect(page.getByText(/Lớp đã đóng và đã chốt tổng kết/)).toBeVisible();
 });
 
-test("Phân quyền: Admin mở menu Học viên cho Giáo viên trực; Giáo viên trực chỉ làm được đúng phần được mở", async ({ page, context }) => {
+test("Phân quyền: ô tick thông tin cá nhân học viên; Giáo viên trực xem và sửa học viên, chỉ làm được đúng phần được mở", async ({ page, context }) => {
   await login(page, "admin", NEW_PASSWORD);
   await page.getByLabel("Mã xác thực").fill(totp(loadAdminSecret()));
   await page.getByRole("button", { name: "Xác nhận" }).click();
   await expect(page).toHaveURL(/\/admin\/dashboard$/);
 
-  // Cấu hình → Phân quyền: tick Xem Học viên cho Giáo viên trực. Tick Sửa thì tự tick Xem; bỏ Xem thì bỏ hết.
+  // Cấu hình → Phân quyền. Tick Sửa thì tự tick Xem; bỏ Xem thì bỏ hết.
   await page.goto("/admin/settings");
   await expect(page.getByRole("heading", { name: "Phân quyền" })).toBeVisible();
   const box = (name: string) => page.getByRole("checkbox", { name, exact: true });
@@ -275,6 +275,11 @@ test("Phân quyền: Admin mở menu Học viên cho Giáo viên trực; Giáo v
   await expect(roleSelect.locator("option")).toHaveText(["Giáo viên (2 tài khoản)", "Giáo viên trực (0 tài khoản)"]);
   await expect(page.getByText(/Tài khoản mang vai trò này: .*gv\.lan .*gv\.minh \(Trần Văn Minh\)/)).toBeVisible();
   await expect(box("Giáo viên: Thêm Sao")).toBeChecked();
+  // Mặc định: Giáo viên xem QL Học viên (không sửa), không có thông tin cá nhân; menu này không còn cột Thêm.
+  await expect(box("Giáo viên: Xem QL Học viên")).toBeChecked();
+  await expect(box("Giáo viên: Sửa QL Học viên")).not.toBeChecked();
+  await expect(box("Giáo viên: Thêm QL Học viên")).toHaveCount(0);
+  await expect(box("Giáo viên: Thông tin cá nhân học viên")).not.toBeChecked();
   await expect(box("Giáo viên trực: Xem Điểm danh")).toHaveCount(0);
   await roleSelect.selectOption("duty_teacher");
   await expect(page.getByText("Chưa có tài khoản nào mang vai trò này.")).toBeVisible();
@@ -283,7 +288,11 @@ test("Phân quyền: Admin mở menu Học viên cho Giáo viên trực; Giáo v
   await expect(box("Giáo viên trực: Xem Khóa học")).toBeChecked();
   await box("Giáo viên trực: Xem Khóa học").uncheck();
   await expect(box("Giáo viên trực: Sửa Khóa học")).not.toBeChecked();
-  await box("Giáo viên trực: Xem QL Học viên").check();
+  // Mặc định: Giáo viên trực xem + sửa QL Học viên và có thông tin cá nhân.
+  await expect(box("Giáo viên trực: Xem QL Học viên")).toBeChecked();
+  await expect(box("Giáo viên trực: Sửa QL Học viên")).toBeChecked();
+  await expect(box("Giáo viên trực: Thông tin cá nhân học viên")).toBeChecked();
+  await box("Giáo viên trực: Xem Khóa học").check();
   await expectNoHorizontalScroll(page);
   await page.screenshot({ path: "test-results/shots/permissions-360.png", fullPage: true });
   await page.getByRole("button", { name: "Lưu phân quyền" }).click();
@@ -384,25 +393,31 @@ test("Phân quyền: Admin mở menu Học viên cho Giáo viên trực; Giáo v
   await expect(page.getByText("RB-CB01").first()).toBeVisible();
   await expect(page.getByText("RB-NC01").first()).toBeVisible();
 
-  // Học viên: chỉ xem, không có nút thêm/sửa/xóa/nhập Excel, không có thông tin phụ huynh.
+  // QL Học viên: xem mọi học viên kèm thông tin cá nhân và sửa được khi sai; không có nút thêm/xóa/nhập Excel.
   await page.goto("/admin/students");
   await expect(page.getByRole("heading", { name: /Học viên/ })).toBeVisible();
   await expect(page.locator("ul:visible > li")).toHaveCount(10);
   await expect(page.getByRole("button", { name: "Thêm" })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: /^(Sửa|Xóa) / })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /^Xóa / })).toHaveCount(0);
   await expect(page.getByRole("link", { name: "Nhập từ Excel" })).toHaveCount(0);
-  await expect(page.getByText(/Phụ huynh|09020000/)).toHaveCount(0);
+  await expect(page.getByText("Phụ huynh:").first()).toBeVisible();
+  await page.getByRole("button", { name: "Sửa Lê Gia Bảo" }).click();
+  await expect(page.locator("#f-guardianName")).toHaveValue("Phụ huynh Bảo");
+  await page.locator("#f-phone").fill("0902000099");
+  await page.getByRole("button", { name: "Lưu" }).click();
+  await expect(page.getByText("Đã lưu.")).toBeVisible();
+  await expect(page.getByText("0902000099").first()).toBeVisible();
   await expectNoHorizontalScroll(page);
   await page.screenshot({ path: "test-results/shots/duty-students-360.png" });
 
   // Điểm danh: thấy buổi của mọi lớp. Các menu không được mở và trang quản trị: bị đưa về trang chủ.
   await page.goto("/admin/attendance");
   await expect(page.getByRole("heading", { name: "Điểm danh", exact: true })).toBeVisible();
-  for (const path of ["/admin/teachers", "/admin/timesheet", "/admin/accounts", "/admin/settings", "/admin/students/import", "/admin/dashboard"]) {
+  for (const path of ["/admin/teachers", "/admin/timesheet", "/admin/accounts", "/admin/settings", "/admin/enrollments", "/admin/dashboard"]) {
     await page.goto(path);
     await expect(page).toHaveURL(/\/teacher\/dashboard$/);
   }
   // Gọi thẳng API và Server Action ngoài quyền đều bị máy chủ từ chối.
-  expect((await page.request.get("/api/import/students")).status()).toBe(403);
+  expect((await page.request.get("/api/import/syllabus")).status()).toBe(403);
   expect((await page.request.get(`/api/export/summary/${otherClassId}?format=xlsx`)).status()).toBe(403);
 });

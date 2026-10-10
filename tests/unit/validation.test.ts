@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { normalizeDate, validateImportRows } from "@/domain/student-import";
 import { accountInput, classInput, password, studentInput, teacherInput, timeSlotInput } from "@/lib/validation/entities";
 import { consumeToken, resetRateLimits } from "@/server/rate-limit";
 
@@ -50,28 +49,6 @@ describe("xác thực dữ liệu vào", () => {
     // Vai trò là khóa trong Cấu hình: khóa sai định dạng bị chặn ở đây, khóa không tồn tại bị chặn ở service.
     expect(accountInput.safeParse({ ...account, role: "Super User!" }).success).toBe(false);
     expect(accountInput.safeParse({ ...account, role: "" }).success).toBe(false);
-  });
-});
-
-describe("nhập Excel (quy tắc thuần)", () => {
-  it("chuẩn hóa ngày", () => {
-    expect(normalizeDate("5/9/2015")).toBe("2015-09-05");
-    expect(normalizeDate("2015-09-05")).toBe("2015-09-05");
-    expect(normalizeDate("")).toBe("");
-    expect(normalizeDate("hôm qua")).toBeNull();
-  });
-
-  it("phát hiện mã lặp trong tệp và mã đã có", () => {
-    const rows = validateImportRows(
-      [
-        { rowNumber: 2, cells: { code: "hv1", fullName: "A" } },
-        { rowNumber: 3, cells: { code: "HV1", fullName: "B" } },
-        { rowNumber: 4, cells: { code: "HV2", fullName: "C" } },
-      ],
-      new Set(["HV2"]),
-    );
-    expect(rows.map((r) => r.errors.length)).toEqual([0, 1, 1]);
-    expect(rows[0]!.data?.code).toBe("HV1");
   });
 });
 

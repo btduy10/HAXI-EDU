@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/db";
 import { auditLogs, sessions, students as studentsTable, teachers as teachersTable, user as userTable } from "@/db/schema";
 import { DEFAULT_PERMISSIONS, type Menu, type MenuPermission, type RolePermissions, normalizePermissions } from "@/lib/permissions";
-import { type Actor, can } from "@/server/guard";
+import { type Actor, can, seesStudentPrivate } from "@/server/guard";
 import { getPermissionConfig } from "@/server/settings";
 import * as accounts from "@/server/services/accounts";
 import * as attendance from "@/server/services/attendance";
@@ -56,6 +56,36 @@ describe("bảng phân quyền", () => {
     expect(config.teacher.menus.reports).toEqual(FULL);
     expect(config.teacher.menus.attendance).toEqual(FULL); // không gửi → giữ mặc định
     expect(config.duty_teacher).toEqual(DEFAULT_PERMISSIONS.duty_teacher);
+  });
+
+  it("mặc định: Giáo viên xem học viên lớp mình, không có thông tin cá nhân; Giáo viên trực xem + sửa và có thông tin cá nhân", () => {
+    expect(DEFAULT_PERMISSIONS.teacher).toMatchObject({ scope: "own", studentPrivate: false });
+    expect(DEFAULT_PERMISSIONS.teacher!.menus.students).toEqual(VIEW);
+    expect(DEFAULT_PERMISSIONS.duty_teacher).toMatchObject({ scope: "all", studentPrivate: true });
+    expect(DEFAULT_PERMISSIONS.duty_teacher!.menus.students).toEqual({ view: true, add: false, edit: true });
+  });
+
+  it("ô tick Thông tin cá nhân học viên: cấu hình cũ chưa có thì theo mặc định của vai trò; vai trò tự tạo mặc định không có", () => {
+    // Cấu hình lưu trước khi có ô tick: không có trường studentPrivate.
+    const old = normalizePermissions({
+      teacher: { scope: "own", menus: {} },
+      duty_teacher: { scope: "all", menus: {} },
+      role_le_tan: { label: "Lễ tân", scope: "all", menus: { students: FULL } },
+    });
+    expect([old.teacher!.studentPrivate, old.duty_teacher!.studentPrivate, old.role_le_tan!.studentPrivate]).toEqual([false, true, false]);
+    // Admin đã tick/bỏ tick thì giữ đúng lựa chọn; giá trị sai kiểu bị bỏ qua.
+    const chosen = normalizePermissions({
+      teacher: { studentPrivate: true },
+      duty_teacher: { studentPrivate: false },
+      role_le_tan: { label: "Lễ tân", studentPrivate: "true" },
+    });
+    expect([chosen.teacher!.studentPrivate, chosen.duty_teacher!.studentPrivate, chosen.role_le_tan!.studentPrivate]).toEqual([true, false, false]);
+    // Menu QL Học viên không còn Thêm: ô Thêm lưu từ trước bị bỏ.
+    expect(old.role_le_tan!.menus.students).toEqual({ view: true, add: false, edit: true });
+    expect(seesStudentPrivate(f.admin)).toBe(true);
+    expect(seesStudentPrivate(f.actorA)).toBe(false);
+    expect(seesStudentPrivate({ ...f.actorA, perms: old.duty_teacher })).toBe(true);
+    expect(seesStudentPrivate({ ...f.actorA, role: "role_da_xoa" })).toBe(false);
   });
 
   it("chỉ Admin lưu được; lưu xong có hiệu lực và có nhật ký", async () => {
@@ -123,14 +153,17 @@ describe("bảng phân quyền", () => {
     expect(Object.keys(config)).toEqual(["teacher", "duty_teacher", "role_ok"]);
     expect(config.teacher!.label).toBe("Giáo viên");
     expect(config.role_ok).toMatchObject({ label: "Lễ tân", scope: "all" });
-    expect(config.role_ok!.menus.students).toEqual(FULL);
+    expect(config.role_ok!.menus.students).toEqual({ view: true, add: false, edit: true });
     expect(config.role_ok!.menus.attendance).toEqual({ view: false, add: false, edit: false });
   });
 
   it("Admin luôn có toàn quyền; vai trò lạ không có quyền gì", () => {
     expect(can(f.admin, "rewards", "edit")).toBe(true);
     expect(can(f.actorA, "attendance", "add")).toBe(true);
-    expect(can(f.actorA, "students", "view")).toBe(false);
+    // Giáo viên mặc định xem được QL Học viên nhưng không sửa; không có menu Ghi danh.
+    expect(can(f.actorA, "students", "view")).toBe(true);
+    expect(can(f.actorA, "students", "edit")).toBe(false);
+    expect(can(f.actorA, "enrollments", "view")).toBe(false);
     expect(can({ ...f.actorA, role: "khác" }, "attendance", "view")).toBe(false);
   });
 });
@@ -181,12 +214,13 @@ describe("Giáo viên trực (mặc định: thấy mọi lớp, hỗ trợ đi�
     expect(await attendance.listOverdueSessions(duty(), new Date("2026-01-14T05:00:00Z"))).toHaveLength(1); // buổi lớp B chưa điểm danh
   });
 
-  it("không chấm sao, không sửa lịch, không xem học viên, không mở khóa, không xóa", async () => {
+  it("không chấm sao, không sửa lịch, không mở khóa, không xóa; xem được danh sách học viên", async () => {
     const [criteria] = await catalogCriteria();
     const denied = { code: "FORBIDDEN" };
     await expect(stars.awardStars(duty(), { sessionId: sessionA.id, criteriaId: criteria!, studentIds: [f.students[0]!.id], note: null }, now)).rejects.toMatchObject(denied);
     await expect(sessionSvc.cancelSession(duty(), { id: sessionA.id, note: null })).rejects.toMatchObject(denied);
-    await expect(students.listStudentsPage(duty(), undefined, 1)).rejects.toMatchObject(denied);
+    expect((await students.listStudentsPage(duty(), undefined, 1)).total).toBe(6);
+    await expect(students.deleteStudent(duty(), f.students[0]!.id)).rejects.toMatchObject(denied);
     await expect(attendance.unlockAttendance(duty(), sessionA.id, now)).rejects.toMatchObject(denied);
     await expect(sessionSvc.deleteSession(duty(), sessionA.id)).rejects.toMatchObject(denied);
     await expect(reports.updatePermissions(duty(), DEFAULT_PERMISSIONS)).rejects.toMatchObject(denied);
@@ -214,7 +248,7 @@ describe("quyền theo menu", () => {
     await expect(attendance.saveAttendance(f.actorA, { ...input, entries: entries(sheet.rows, "absent") }, now)).resolves.toMatchObject({ changed: 2 });
   });
 
-  it("học viên: chỉ thấy học viên lớp mình, không có thông tin riêng tư; thêm/sửa không ghi được thông tin đó", async () => {
+  it("học viên: chỉ thấy học viên lớp mình, không có thông tin cá nhân; sửa không ghi được thông tin đó", async () => {
     await db.update(studentsTable).set({ guardianName: "Phụ huynh", note: "ghi chú", birthDate: "2015-01-01", gender: "male" });
     const viewer = withPerms(f.actorA, "own", { students: FULL });
     const page = await students.listStudentsPage(viewer, undefined, 1);
@@ -230,13 +264,37 @@ describe("quyền theo menu", () => {
     expect(stored).toMatchObject({ fullName: "Tên mới", schoolGrade: 5, phone: "0900000000", guardianName: "Phụ huynh", note: "ghi chú", birthDate: "2015-01-01" });
     // Học viên lớp khác: không sửa được, kể cả khi gửi đúng id.
     await expect(students.updateStudent(viewer, f.students[2]!.id, input)).rejects.toMatchObject({ code: "NOT_FOUND" });
+    // Xóa luôn chỉ Admin dù được tick hết.
+    await expect(students.deleteStudent(viewer, f.students[4]!.id)).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
 
-    await students.createStudent(viewer, { ...input, code: "MOI" });
-    const [created] = await db.select().from(studentsTable).where(eq(studentsTable.code, "MOI"));
-    expect(created).toMatchObject({ phone: null, guardianName: null, note: null });
-    // Chỉ Xem thì không thêm/sửa; xóa luôn chỉ Admin dù được tick hết.
-    await expect(students.createStudent(withPerms(f.actorA, "own", { students: VIEW }), { ...input, code: "X9" })).rejects.toMatchObject({ code: "FORBIDDEN" });
-    await expect(students.deleteStudent(viewer, created!.id)).rejects.toMatchObject({ code: "FORBIDDEN" });
+  it("Giáo viên mặc định: xem học viên lớp mình để theo dõi, không có thông tin cá nhân, không sửa được", async () => {
+    const teacher: Actor = { ...f.actorA, perms: DEFAULT_PERMISSIONS.teacher };
+    const page = await students.listStudentsPage(teacher, undefined, 1);
+    expect(page.rows.map((s) => `${s.code}:${s.phone}`)).toEqual(["A1:null", "A2:null"]);
+    expect(await students.getStudent(teacher, f.students[0]!.id)).toMatchObject({ code: "A1", phone: null });
+    await expect(students.getStudent(teacher, f.students[2]!.id)).rejects.toMatchObject({ code: "NOT_FOUND" });
+    const input = { code: "A1", fullName: "Sửa lậu", birthDate: null, gender: null, schoolGrade: 5, guardianName: null, phone: null, status: "active" as const, note: null };
+    await expect(students.updateStudent(teacher, f.students[0]!.id, input)).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+
+  it("Giáo viên trực mặc định: thấy mọi học viên kèm thông tin cá nhân và sửa được khi sai", async () => {
+    const duty: Actor = { ...f.actorB, role: "duty_teacher", perms: DEFAULT_PERMISSIONS.duty_teacher };
+    const page = await students.listStudentsPage(duty, undefined, 1);
+    expect(page.total).toBe(6);
+    expect(page.rows[0]).toMatchObject({ code: "A1", phone: "0900000000" });
+
+    const input = { code: "A1", fullName: "Học viên A1", birthDate: "2015-06-01", gender: "female" as const, schoolGrade: 4, guardianName: "Mẹ A1", phone: "0911222333", status: "active" as const, note: "đã sửa" };
+    expect(await students.updateStudent(duty, f.students[0]!.id, input)).toMatchObject({ phone: "0911222333", guardianName: "Mẹ A1" });
+    const [stored] = await db.select().from(studentsTable).where(eq(studentsTable.id, f.students[0]!.id));
+    expect(stored).toMatchObject({ birthDate: "2015-06-01", gender: "female", guardianName: "Mẹ A1", phone: "0911222333", note: "đã sửa" });
+    // Vẫn không xóa được, và bỏ tick Sửa thì chỉ còn xem.
+    await expect(students.deleteStudent(duty, f.students[0]!.id)).rejects.toMatchObject({ code: "FORBIDDEN" });
+    const viewOnly: Actor = { ...duty, perms: { ...DEFAULT_PERMISSIONS.duty_teacher!, menus: { ...DEFAULT_PERMISSIONS.duty_teacher!.menus, students: VIEW } } };
+    await expect(students.updateStudent(viewOnly, f.students[0]!.id, input)).rejects.toMatchObject({ code: "FORBIDDEN" });
+    // Tick thông tin cá nhân nhưng phạm vi lớp của mình: chỉ sửa được học viên lớp mình.
+    const ownScope: Actor = { ...f.actorB, perms: { ...DEFAULT_PERMISSIONS.duty_teacher!, scope: "own" } };
+    await expect(students.updateStudent(ownScope, f.students[0]!.id, input)).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 
   it("thời khóa biểu và ghi danh: được tick thì làm được trong phạm vi lớp mình, lớp khác coi như không tồn tại", async () => {

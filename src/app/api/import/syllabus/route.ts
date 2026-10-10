@@ -1,6 +1,6 @@
 import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
-import { IMPORT_MAX_BYTES } from "@/domain/student-import";
+import { IMPORT_MAX_BYTES } from "@/domain/excel-import";
 import { AppError } from "@/server/errors";
 import { handleRoute } from "@/server/route";
 import { buildSyllabusTemplate, commitSyllabusImport, previewSyllabusImport } from "@/server/services/syllabus";

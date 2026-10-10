@@ -402,15 +402,12 @@ export async function enrollStudent(actor: Actor, data: z.output<typeof enrollIn
 /**
  * Nhận học viên mới ở trang Ghi danh: tạo học viên và ghi danh vào lớp trong cùng một giao dịch
  * (lớp đủ chỗ, đã đóng… thì không tạo dở học viên). Không chọn lớp thì chỉ tạo học viên, em nằm ở danh sách chờ lớp.
- * Cần quyền Thêm của menu Học viên, và của menu Ghi danh nếu có chọn lớp.
+ * Ghi danh là nơi nhập học viên: chỉ cần quyền Thêm của menu Ghi danh.
  */
 export async function enrollNewStudent(actor: Actor, data: z.output<typeof newEnrollmentInput>, now: Date = new Date()) {
-  assertCan(actor, "students", "add");
+  assertCan(actor, "enrollments", "add");
   const { classId, joinedAt, ...student } = data;
-  if (classId) {
-    assertCan(actor, "enrollments", "add");
-    await assertClassAccess(actor, classId);
-  }
+  if (classId) await assertClassAccess(actor, classId);
   try {
     return await db.transaction(async (tx) => {
       const created = await insertStudent(tx, actor, student, now);

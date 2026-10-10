@@ -57,16 +57,6 @@ export async function expectNotFound(page: Page, url: string) {
 
 export const visibleText = (page: Page, text: string) => page.getByText(text).filter({ visible: true }).first();
 
-/** Tệp Excel học viên theo đúng tiêu đề cột của tệp mẫu. */
-export async function studentWorkbook(rows: (string | number)[][]): Promise<Buffer> {
-  const { default: ExcelJS } = await import("exceljs");
-  const workbook = new ExcelJS.Workbook();
-  const sheet = workbook.addWorksheet("Học viên");
-  sheet.addRow(["Mã HV", "Họ tên", "Ngày sinh", "Giới tính", "Khối lớp", "Phụ huynh", "Điện thoại", "Ghi chú"]);
-  for (const row of rows) sheet.addRow(row);
-  return Buffer.from(await workbook.xlsx.writeBuffer());
-}
-
 // Khóa TOTP của admin được tạo ở phase1 và dùng lại ở các tệp test sau.
 const ADMIN_SECRET_FILE = join(tmpdir(), "haxi-e2e-admin-totp.txt");
 export const saveAdminSecret = (secret: string) => writeFileSync(ADMIN_SECRET_FILE, secret, "utf8");

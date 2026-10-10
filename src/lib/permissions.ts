@@ -22,8 +22,8 @@ export const PERMISSION_MENUS = [
   { key: "teachers", label: "Giáo viên", href: "/admin/teachers", actions: ["view", "add", "edit"], hint: "" },
   { key: "syllabus", label: "Syllabus", href: "/admin/syllabus", actions: ["view", "add", "edit"], hint: "Danh sách bài học của từng lớp. Xóa và nhập Excel chỉ Admin." },
   { key: "classes", label: "Lớp học", href: "/admin/classes", actions: ["view", "add", "edit"], hint: "Sửa gồm cả phân công giáo viên, lịch mẫu và sinh buổi học." },
-  { key: "enrollments", label: "Ghi danh", href: "/admin/enrollments", actions: ["view", "add", "edit"], hint: "Thêm = ghi danh; Sửa = cho rời lớp." },
-  { key: "students", label: "QL Học viên", href: "/admin/students", actions: ["view", "add", "edit"], hint: "Không hiện số điện thoại, phụ huynh, ngày sinh, ghi chú." },
+  { key: "enrollments", label: "Ghi danh", href: "/admin/enrollments", actions: ["view", "add", "edit"], hint: "Thêm = nhập học viên mới, ghi danh, xếp lớp, xếp học bù; Sửa = cho rời lớp, hủy xếp bù." },
+  { key: "students", label: "QL Học viên", href: "/admin/students", actions: ["view", "edit"], hint: "Xem danh sách, hồ sơ, lịch sử học; Sửa = sửa thông tin học viên. Học viên mới nhập ở Ghi danh. Ngày sinh, phụ huynh, điện thoại, ghi chú chỉ hiện khi tick “Thông tin cá nhân học viên”." },
   { key: "timetable", label: "Thời khóa biểu", href: "/admin/timetable", actions: ["view", "add", "edit"], hint: "Thêm = xếp buổi, buổi bù; Sửa = sửa, dời, hủy, khôi phục, dạy thay." },
   { key: "attendance", label: "Điểm danh", href: "/admin/attendance", actions: ["view", "add", "edit"], hint: "Thêm = điểm danh buổi chưa điểm danh; Sửa = sửa điểm danh đã lưu." },
   { key: "stars", label: "Sao", href: "/admin/stars", actions: ["view", "add", "edit"], hint: "Thêm = ghi sao; Sửa = hoàn tác sao. Tiêu chí sao chỉ Admin chỉnh." },
@@ -36,7 +36,12 @@ export const PERMISSION_MENUS = [
 export type Menu = (typeof PERMISSION_MENUS)[number]["key"];
 export type ClassScope = "own" | "all";
 export type MenuPermission = Record<PermissionAction, boolean>;
-export type RolePermissions = { scope: ClassScope; menus: Record<Menu, MenuPermission> };
+export type RolePermissions = {
+  scope: ClassScope;
+  menus: Record<Menu, MenuPermission>;
+  /** Được xem và sửa thông tin cá nhân của học viên (ngày sinh, giới tính, phụ huynh, điện thoại, ghi chú). Thiếu = không. */
+  studentPrivate?: boolean;
+};
 /** Một vai trò trong Cấu hình: tên hiển thị + quyền. */
 export type RoleConfig = RolePermissions & { label: string };
 export type PermissionConfig = Record<string, RoleConfig>;
@@ -49,12 +54,18 @@ const menusWith = (granted: Partial<Record<Menu, MenuPermission>>) =>
   Object.fromEntries(PERMISSION_MENUS.map((m) => [m.key, { ...(granted[m.key] ?? NONE) }])) as Record<Menu, MenuPermission>;
 
 /** Không có quyền gì: dùng cho vai trò lạ hoặc đã bị xóa, và làm điểm bắt đầu cho vai trò mới tạo. */
-export const NO_PERMISSIONS: RolePermissions = { scope: "own", menus: menusWith({}) };
+export const NO_PERMISSIONS: RolePermissions = { scope: "own", menus: menusWith({}), studentPrivate: false };
 
-/** Mặc định: Giáo viên điểm danh và chấm sao lớp mình; Giáo viên trực thấy mọi lớp và hỗ trợ điểm danh. */
+const VIEW: MenuPermission = { view: true, add: false, edit: false };
+const VIEW_EDIT: MenuPermission = { view: true, add: false, edit: true };
+
+/**
+ * Mặc định: Giáo viên điểm danh, chấm sao lớp mình và xem học viên lớp mình (không có thông tin cá nhân);
+ * Giáo viên trực thấy mọi lớp, hỗ trợ điểm danh, xem và sửa thông tin học viên kể cả thông tin cá nhân.
+ */
 export const DEFAULT_PERMISSIONS: PermissionConfig = {
-  teacher: { label: "Giáo viên", scope: "own", menus: menusWith({ attendance: FULL, stars: FULL }) },
-  duty_teacher: { label: "Giáo viên trực", scope: "all", menus: menusWith({ attendance: FULL }) },
+  teacher: { label: "Giáo viên", scope: "own", menus: menusWith({ attendance: FULL, stars: FULL, students: VIEW }), studentPrivate: false },
+  duty_teacher: { label: "Giáo viên trực", scope: "all", menus: menusWith({ attendance: FULL, students: VIEW_EDIT }), studentPrivate: true },
 };
 
 export const isBuiltinRole = (role: string) => (BUILTIN_ROLES as readonly string[]).includes(role);
@@ -67,6 +78,7 @@ const menuPermission = z.object({ view: z.boolean(), add: z.boolean(), edit: z.b
 const roleConfig = z.object({
   label: z.string().trim().min(1, "Bắt buộc nhập tên vai trò").max(ROLE_LABEL_MAX, `Tối đa ${ROLE_LABEL_MAX} ký tự`),
   scope: z.enum(["own", "all"]),
+  studentPrivate: z.boolean().optional(),
   menus: z.object(Object.fromEntries(PERMISSION_MENUS.map((m) => [m.key, menuPermission])) as Record<Menu, typeof menuPermission>),
 });
 export const permissionConfigInput = z
@@ -88,6 +100,7 @@ export function normalizePermissions(value: unknown): PermissionConfig {
     const raw = (source[role] && typeof source[role] === "object" ? source[role] : {}) as {
       label?: unknown;
       scope?: unknown;
+      studentPrivate?: unknown;
       menus?: Record<string, unknown>;
     };
     const label = isBuiltinRole(role)
@@ -105,7 +118,13 @@ export function normalizePermissions(value: unknown): PermissionConfig {
       const view = item.view && supported.includes("view");
       menus[menu.key] = { view, add: view && item.add && supported.includes("add"), edit: view && item.edit && supported.includes("edit") };
     }
-    out[role] = { label, scope: raw.scope === "own" || raw.scope === "all" ? raw.scope : fallback.scope, menus };
+    out[role] = {
+      label,
+      scope: raw.scope === "own" || raw.scope === "all" ? raw.scope : fallback.scope,
+      menus,
+      // Cấu hình lưu trước khi có ô tick này: lấy theo mặc định của vai trò.
+      studentPrivate: typeof raw.studentPrivate === "boolean" ? raw.studentPrivate : fallback.studentPrivate === true,
+    };
   }
   return out;
 }

@@ -1,14 +1,15 @@
 import type { Field } from "@/components/form-dialog";
 import { LABELS, toOptions } from "@/lib/format";
 
-/** Thông tin chỉ Admin được xem và nhập; vai trò khác không có các ô này trên form. */
+/** Thông tin cá nhân: chỉ người được xem thông tin cá nhân học viên mới có các ô này trên form. */
 export const STUDENT_PRIVATE_FIELDS = ["birthDate", "gender", "guardianName", "phone", "note"];
 
 /**
- * Các ô của form học viên, dùng chung cho menu QL Học viên và form "Học viên mới" ở Ghi danh.
- * `suggestedCode`: mã tự cấp kế tiếp, điền sẵn ở form thêm mới (người dùng vẫn sửa được).
+ * Các ô của form học viên, dùng chung cho form sửa ở QL Học viên và form học viên mới ở Ghi danh.
+ * `privateInfo`: người dùng được xem và sửa thông tin cá nhân. `suggestedCode`: mã tự cấp kế tiếp, điền sẵn ở form
+ * học viên mới (người dùng vẫn sửa được).
  */
-export function studentFields({ admin, suggestedCode }: { admin: boolean; suggestedCode?: string }): Field[] {
+export function studentFields({ privateInfo, suggestedCode }: { privateInfo: boolean; suggestedCode?: string }): Field[] {
   const fields: Field[] = [
     {
       name: "code",
@@ -26,5 +27,5 @@ export function studentFields({ admin, suggestedCode }: { admin: boolean; sugges
     { name: "status", label: "Trạng thái", type: "select", required: true, options: toOptions(LABELS.studentStatus), defaultValue: "active" },
     { name: "note", label: "Ghi chú", type: "textarea" },
   ];
-  return admin ? fields : fields.filter((f) => !STUDENT_PRIVATE_FIELDS.includes(f.name));
+  return privateInfo ? fields : fields.filter((f) => !STUDENT_PRIVATE_FIELDS.includes(f.name));
 }

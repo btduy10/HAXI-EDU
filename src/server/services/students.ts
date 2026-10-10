@@ -6,16 +6,16 @@ import { nextStudentCode, studentCodeYearPrefix } from "@/domain/student-code";
 import { todayIso } from "@/lib/format";
 import type { studentCreateInput, studentInput } from "@/lib/validation/entities";
 import { audit } from "../audit";
-import { notFound, translateDbError } from "../errors";
-import { type Actor, allowedClassIds, assertCan, assertClassAccess, isAdmin, seesAllClasses } from "../guard";
+import { notFound } from "../errors";
+import { type Actor, allowedClassIds, assertCan, assertClassAccess, isAdmin, seesAllClasses, seesStudentPrivate } from "../guard";
 import { deleteRow, updateRow } from "./crud";
 
 type StudentRow = typeof students.$inferSelect;
 
-/** Thông tin chỉ Admin được xem và sửa; vai trò khác luôn nhận giá trị rỗng. */
+/** Thông tin cá nhân: chỉ Admin và vai trò được tick "Thông tin cá nhân học viên" được xem và sửa; vai trò khác luôn nhận giá trị rỗng. */
 const PRIVATE_FIELDS = ["birthDate", "gender", "guardianName", "phone", "note"] as const;
 const hidePrivate = (row: StudentRow): StudentRow => ({ ...row, birthDate: null, gender: null, guardianName: null, phone: null, note: null });
-const forActor = (actor: Actor, rows: StudentRow[]) => (isAdmin(actor) ? rows : rows.map(hidePrivate));
+const forActor = (actor: Actor, rows: StudentRow[]) => (seesStudentPrivate(actor) ? rows : rows.map(hidePrivate));
 
 const searchFilter = (search?: string) => {
   const term = search?.trim();
@@ -33,7 +33,7 @@ async function scopeFilter(actor: Actor) {
 
 /**
  * Toàn bộ học viên, dùng cho ô chọn khi ghi danh (học viên mới chưa thuộc lớp nào cũng phải chọn được).
- * Ngoài Admin, cần quyền Thêm ở menu Ghi danh và chỉ nhận mã, tên, khối, trạng thái.
+ * Cần quyền Thêm ở menu Ghi danh; không được xem thông tin cá nhân thì chỉ nhận mã, tên, khối, trạng thái.
  */
 export async function listStudents(actor: Actor, search?: string) {
   assertCan(actor, "enrollments", "add");
@@ -75,11 +75,11 @@ export async function suggestStudentCode(tx: DbOrTx = db, now: Date = new Date()
 }
 
 /**
- * Thêm học viên trong một giao dịch có sẵn (người gọi đã kiểm tra quyền Thêm của menu Học viên).
- * Để trống mã thì tự cấp mã kế tiếp; ngoài Admin, thông tin riêng tư không được ghi qua form.
+ * Thêm học viên trong một giao dịch có sẵn (người gọi đã kiểm tra quyền Thêm của menu Ghi danh).
+ * Để trống mã thì tự cấp mã kế tiếp; không được xem thông tin cá nhân thì các ô đó không được ghi qua form.
  */
 export async function insertStudent(tx: Tx, actor: Actor, data: z.output<typeof studentCreateInput>, now: Date = new Date()): Promise<StudentRow> {
-  const values = isAdmin(actor) ? data : { ...data, birthDate: null, gender: null, guardianName: null, phone: null, note: null };
+  const values = seesStudentPrivate(actor) ? data : { ...data, birthDate: null, gender: null, guardianName: null, phone: null, note: null };
   let code = values.code;
   if (!code) {
     // Hai người thêm cùng lúc không nhận trùng một mã tự cấp.
@@ -89,15 +89,6 @@ export async function insertStudent(tx: Tx, actor: Actor, data: z.output<typeof 
   const [row] = await tx.insert(students).values({ ...values, code }).returning();
   await audit(tx, { userId: actor.userId, action: "create", tableName: "students", recordId: row!.id, newValue: row });
   return row!;
-}
-
-export async function createStudent(actor: Actor, data: z.output<typeof studentCreateInput>, now: Date = new Date()) {
-  assertCan(actor, "students", "add");
-  try {
-    return forActor(actor, [await db.transaction((tx) => insertStudent(tx, actor, data, now))])[0]!;
-  } catch (e) {
-    throw translateDbError(e);
-  }
 }
 
 /**
@@ -125,10 +116,13 @@ export async function listWaitingStudents(actor: Actor) {
 
 export async function updateStudent(actor: Actor, id: string, data: z.output<typeof studentInput>) {
   assertCan(actor, "students", "edit");
-  if (isAdmin(actor)) return updateRow(actor, students, "students", id, data, "students");
-  // Chỉ sửa được học viên trong phạm vi lớp của mình, và giữ nguyên thông tin riêng tư đang lưu.
-  const [inScope] = await db.select({ id: students.id }).from(students).where(and(eq(students.id, id), await scopeFilter(actor))).limit(1);
-  if (!inScope) throw notFound("học viên");
+  if (!isAdmin(actor)) {
+    // Chỉ sửa được học viên trong phạm vi lớp của mình.
+    const [inScope] = await db.select({ id: students.id }).from(students).where(and(eq(students.id, id), await scopeFilter(actor))).limit(1);
+    if (!inScope) throw notFound("học viên");
+  }
+  if (seesStudentPrivate(actor)) return updateRow(actor, students, "students", id, data, "students");
+  // Không được xem thông tin cá nhân: giữ nguyên các ô đó đang lưu.
   const patch: Partial<typeof data> = { ...data };
   for (const field of PRIVATE_FIELDS) delete patch[field];
   return hidePrivate(await updateRow(actor, students, "students", id, patch, "students"));

@@ -112,7 +112,9 @@ describe("chức năng chỉ dành cho Admin", () => {
     await expect(catalog.createRoom(f.actorA, { name: "Phòng lậu", capacity: 5 })).rejects.toMatchObject(denied);
     await expect(catalog.deleteCourse(f.actorA, f.course.id)).rejects.toMatchObject(denied);
     await expect(students.listStudents(f.actorA)).rejects.toMatchObject(denied);
-    await expect(students.getStudent(f.actorA, f.students[0]!.id)).rejects.toMatchObject(denied);
+    // Giáo viên xem được học viên lớp mình (không có thông tin cá nhân); học viên lớp khác coi như không tồn tại.
+    expect(await students.getStudent(f.actorA, f.students[0]!.id)).toMatchObject({ code: "A1", phone: null, guardianName: null });
+    await expect(students.getStudent(f.actorA, f.students[2]!.id)).rejects.toMatchObject({ code: "NOT_FOUND" });
     await expect(students.deleteStudent(f.actorA, f.students[0]!.id)).rejects.toMatchObject(denied);
     await expect(classes.listEnrollments(f.actorA, f.classA.id)).rejects.toMatchObject(denied);
     await expect(

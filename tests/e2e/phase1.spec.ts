@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { NEW_PASSWORD, SEED_PASSWORD, expectNoHorizontalScroll, expectNotFound, firstLogin, login, saveAdminSecret, sql, studentWorkbook, totp, visibleText } from "./helpers";
+import { NEW_PASSWORD, SEED_PASSWORD, expectNoHorizontalScroll, expectNotFound, firstLogin, login, saveAdminSecret, sql, totp, visibleText } from "./helpers";
 
 // Các test chạy tuần tự trên cùng CSDL test và phụ thuộc thứ tự (đổi mật khẩu, bật 2FA).
 test.describe.configure({ mode: "serial" });
@@ -32,7 +32,7 @@ test("chưa đăng nhập bị chuyển về trang đăng nhập, có header b�
   await expect(password).toHaveAttribute("type", "password");
 });
 
-test("GV: buộc đổi mật khẩu, chỉ thấy lớp mình, không vào được dữ liệu lớp khác hay trang Admin", async ({ page }) => {
+test("GV: buộc đổi mật khẩu, chỉ thấy lớp mình và học viên lớp mình (không có thông tin cá nhân), không vào được dữ liệu lớp khác hay trang Admin", async ({ page }) => {
   await firstLogin(page, "gv.lan");
   await expect(page).toHaveURL(/\/teacher\/dashboard$/);
   await expect(page.getByText("RB-CB01").first()).toBeVisible();
@@ -54,16 +54,36 @@ test("GV: buộc đổi mật khẩu, chỉ thấy lớp mình, không vào đư
   await expectNotFound(page, `/teacher/classes/${other!.id}`);
   await expect(page.getByText("Robotics Nâng cao")).toHaveCount(0);
 
-  // Trang Admin: bị đưa về trang của GV.
+  // QL Học viên: GV xem được học viên lớp mình để theo dõi tiến độ; không có thông tin cá nhân, không có nút Thêm/Sửa/Xóa.
   await page.goto("/admin/students");
-  await expect(page).toHaveURL(/\/teacher\/dashboard$/);
+  await expect(page).toHaveURL(/\/admin\/students$/);
+  await expect(page.getByRole("heading", { name: /Học viên/ })).toContainText("(8)");
+  await expect(visibleText(page, "Lê Gia Bảo")).toBeVisible();
+  await expect(page.getByText(/Phụ huynh|Điện thoại|Ngày sinh|09020000/)).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Thêm" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /^(Sửa|Xóa) / })).toHaveCount(0);
+  await expectNoHorizontalScroll(page);
+  await page.screenshot({ path: "test-results/shots/teacher-students-360.png" });
+  // Hồ sơ của học viên lớp mình mở được; học viên lớp khác coi như không tồn tại.
+  await page.getByRole("link", { name: "Hồ sơ" }).first().click();
+  await expect(page.getByRole("heading", { name: "Chương trình đã học" })).toBeVisible();
+  const outsider = sql();
+  const [foreign] = await outsider`
+    select s.id from students s join enrollments e on e.student_id = s.id join classes c on c.id = e.class_id
+    where c.code = 'RB-NC01' and s.id not in (select student_id from enrollments e2 join classes c2 on c2.id = e2.class_id where c2.code = 'RB-CB01') limit 1`;
+  await outsider.end();
+  await expectNotFound(page, `/admin/students/${foreign!.id}`);
+
+  // Trang Admin khác: bị đưa về trang của GV.
   await page.goto(`/admin/classes/${other!.id}`);
+  await expect(page).toHaveURL(/\/teacher\/dashboard$/);
+  await page.goto("/admin/enrollments");
   await expect(page).toHaveURL(/\/teacher\/dashboard$/);
 
   // Gọi thẳng API (kèm cookie phiên của GV) → 403.
-  const template = await page.request.get("/api/import/students");
+  const template = await page.request.get("/api/import/syllabus");
   expect(template.status()).toBe(403);
-  const upload = await page.request.post("/api/import/students?mode=commit", {
+  const upload = await page.request.post("/api/import/syllabus?mode=commit", {
     headers: { origin: new URL(page.url()).origin },
     multipart: { file: { name: "a.xlsx", mimeType: "application/octet-stream", buffer: Buffer.from("PK\u0003\u0004") } },
   });
@@ -71,9 +91,9 @@ test("GV: buộc đổi mật khẩu, chỉ thấy lớp mình, không vào đư
 });
 
 test("API ghi dữ liệu từ chối yêu cầu khác nguồn (CSRF) và yêu cầu chưa đăng nhập", async ({ request }) => {
-  const anonymous = await request.get("/api/import/students");
+  const anonymous = await request.get("/api/import/syllabus");
   expect(anonymous.status()).toBe(401);
-  const crossSite = await request.post("/api/import/students", {
+  const crossSite = await request.post("/api/import/syllabus", {
     headers: { origin: "https://evil.example" },
     multipart: { file: { name: "a.xlsx", mimeType: "application/octet-stream", buffer: Buffer.from("x") } },
   });
@@ -121,8 +141,16 @@ test("Admin: đổi mật khẩu → bắt buộc thiết lập 2FA → quản l
   await page.getByRole("link", { name: "‹ Trước" }).click();
   await expect(page).toHaveURL(/\/admin\/students$/);
 
-  // Thêm học viên: lỗi xác thực hiển thị theo trường, sau đó lưu thành công.
-  await page.getByRole("button", { name: "Thêm" }).click();
+  // QL Học viên chỉ để xem và sửa: không còn nút Thêm và Nhập từ Excel; trang và API nhập Excel học viên đã gỡ.
+  await expect(page.getByRole("button", { name: "Thêm" })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Nhập từ Excel" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /^Sửa / }).first()).toBeVisible();
+  await expectNotFound(page, "/admin/students/import");
+  expect((await page.request.get("/api/import/students")).status()).toBe(404);
+
+  // Học viên mới nhập ở Ghi danh: lỗi xác thực hiển thị theo trường, sau đó lưu thành công (chưa xếp lớp → Chờ lớp).
+  await page.goto("/admin/enrollments");
+  await page.getByRole("button", { name: "Thêm học viên mới" }).click();
   await page.getByLabel("Mã HV").fill("HV 999");
   await page.getByLabel("Họ tên").fill("Trần Thử Nghiệm <script>alert(1)</script>");
   await page.getByRole("button", { name: "Lưu" }).click();
@@ -130,30 +158,25 @@ test("Admin: đổi mật khẩu → bắt buộc thiết lập 2FA → quản l
   await page.screenshot({ path: "test-results/shots/student-form-error-360.png" });
   await page.getByLabel("Mã HV").fill("HV999");
   await page.getByRole("button", { name: "Lưu" }).click();
-  await expect(page.getByText("Đã lưu.")).toBeVisible();
-  // Nội dung người dùng nhập hiển thị dạng văn bản, không chạy như HTML. (HV999 xếp cuối nên nằm ở trang 2.)
+  await expect(page.getByText("Đã thêm học viên.")).toBeVisible();
+  // Nội dung người dùng nhập hiển thị dạng văn bản, không chạy như HTML: ở mục Chờ lớp và ở QL Học viên (HV999 xếp cuối nên nằm ở trang 2).
+  await expect(page.locator('[data-waiting="HV999"]')).toContainText("Trần Thử Nghiệm <script>alert(1)</script>");
   await page.goto("/admin/students?page=2");
   await expect(visibleText(page, "Trần Thử Nghiệm <script>alert(1)</script>")).toBeVisible();
   await expectNoHorizontalScroll(page);
 
-  // Nhập Excel: xem trước báo lỗi từng dòng, chỉ ghi dòng hợp lệ.
-  await page.goto("/admin/students/import");
-  await page.getByLabel("Tệp Excel").setInputFiles({
-    name: "hoc-vien.xlsx",
-    mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    buffer: await studentWorkbook([
-      ["HV800", "Đinh Nhập Excel", "01/02/2015", "Nữ", 4, "", "0903334445", ""],
-      ["HV001", "Trùng Mã", "", "", "", "", "", ""],
-    ]),
-  });
-  await page.getByRole("button", { name: "Xem trước" }).click();
-  await expect(page.getByText("Mã HV: đã tồn tại trong hệ thống")).toBeVisible();
-  await expectNoHorizontalScroll(page);
-  await page.screenshot({ path: "test-results/shots/import-preview-360.png", fullPage: true });
-  await page.getByRole("button", { name: "Nhập 1 dòng hợp lệ" }).click();
-  await expect(page.getByText("Đã nhập 1 học viên.")).toBeVisible();
+  // Thêm một học viên nữa kèm thông tin cá nhân, chưa xếp lớp.
+  await page.goto("/admin/enrollments");
+  await page.getByRole("button", { name: "Thêm học viên mới" }).click();
+  await page.getByLabel("Mã HV").fill("HV800");
+  await page.getByLabel("Họ tên").fill("Đinh Nhập Excel");
+  await page.locator("#f-schoolGrade").fill("4");
+  await page.locator("#f-phone").fill("0903334445");
+  await page.getByRole("button", { name: "Lưu" }).click();
+  await expect(page.getByText("Đã thêm học viên.")).toBeVisible();
   await page.goto("/admin/students?q=HV800");
   await expect(visibleText(page, "Đinh Nhập Excel")).toBeVisible();
+  await expect(visibleText(page, "0903334445")).toBeVisible();
 
   // Các trang quản trị còn lại hiển thị được và không tràn ngang ở 360px.
   for (const [path, heading] of [

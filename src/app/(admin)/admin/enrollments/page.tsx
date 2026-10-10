@@ -19,7 +19,7 @@ import {
   leaveEnrollmentAction,
   placeStudentAction,
 } from "@/server/actions/admin";
-import { can as actorCan } from "@/server/guard";
+import { seesStudentPrivate } from "@/server/guard";
 import { listClasses, listEnrollments, weeklyRoster } from "@/server/services/classes";
 import { activeClassIdsOf, listMakeupNeeds, listMakeupTargets } from "@/server/services/makeups";
 import { listStudents, listWaitingStudents, suggestStudentCode } from "@/server/services/students";
@@ -36,11 +36,12 @@ export default async function EnrollmentsPage({ searchParams }: PageProps<"/admi
   const current = classes.find((c) => c.id === requested) ?? null;
 
   // Chưa chọn lớp: tổng quan các lớp đang học theo buổi trong tuần. Đã chọn lớp: danh sách ghi danh chi tiết của lớp đó.
-  // Nhận học viên mới cần thêm quyền Thêm của menu Học viên.
-  const canCreate = can("add") && actorCan(actor, "students", "add");
+  // Ghi danh là nơi nhập học viên mới: chỉ cần quyền Thêm của menu này.
+  const canCreate = can("add");
   const [enrollments, students, roster, waiting, needs, targets, suggestedCode] = await Promise.all([
     current ? listEnrollments(actor, current.id) : [],
-    can("add") ? listStudents(actor) : [],
+    // Danh sách học viên có sẵn chỉ dùng ở trang chi tiết của một lớp (nút Ghi danh học viên).
+    current && can("add") ? listStudents(actor) : [],
     current ? null : weeklyRoster(actor),
     current ? [] : listWaitingStudents(actor),
     current ? [] : listMakeupNeeds(actor),
@@ -50,7 +51,7 @@ export default async function EnrollmentsPage({ searchParams }: PageProps<"/admi
   const makeupClassIds = await activeClassIdsOf([...new Set(needs.map((n) => n.studentId))]);
   // Form học viên mới: như form Học viên, bỏ ô Trạng thái (học viên mới luôn "Đang học").
   const newStudentFields = canCreate
-    ? studentFields({ admin: role === "admin", suggestedCode }).filter((f) => f.name !== "status")
+    ? studentFields({ privateInfo: seesStudentPrivate(actor), suggestedCode }).filter((f) => f.name !== "status")
     : undefined;
   // Lớp đang mở còn chỗ, để chọn khi nhận học viên mới hoặc xếp lớp cho em đang chờ.
   const openClasses = classes
@@ -187,15 +188,10 @@ export default async function EnrollmentsPage({ searchParams }: PageProps<"/admi
       )}
 
       {roster && (
-        <RosterEnroll
-          students={enrollable.map((s) => ({ value: s.id, label: `${s.code} – ${s.fullName}` }))}
-          activeByClass={Object.fromEntries(roster.blocks.map((b) => [b.classId, b.students.map((s) => s.id)]))}
-          today={today}
-          newStudentFields={newStudentFields}
-        >
+        <RosterEnroll today={today} newStudentFields={newStudentFields ?? []}>
           <p className="text-sm text-muted-foreground">
             Các lớp đang học theo buổi trong tuần (theo Thời khóa biểu tuần này). Bấm tên lớp để xem lịch sử ghi danh, cho rời lớp.
-            {can("add") && " Bấm một hàng “Thêm … học viên” để thêm học viên vào lớp."}
+            {can("add") && " Bấm một hàng “Thêm … học viên” để nhập học viên mới vào lớp; em đã có trong hệ thống thì xếp ở mục Chờ lớp hoặc ở danh sách chi tiết của lớp."}
           </p>
           {roster.blocks.length === 0 ? (
             <p className="rounded-2xl border border-dashed p-6 text-center text-sm text-muted-foreground">Chưa có lớp đang mở nào có buổi học trong tuần hoặc lịch mẫu.</p>

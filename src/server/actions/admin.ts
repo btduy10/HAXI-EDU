@@ -24,7 +24,6 @@ import {
   sendCredentialsInput,
   roomInput,
   roomUpdate,
-  studentCreateInput,
   studentUpdate,
   teacherInput,
   teacherUpdate,
@@ -60,7 +59,6 @@ export const updateTeacherAction = async (input: unknown) =>
 export const deleteTeacherAction = async (input: unknown) =>
   runAction(idOnly, input, (a, d) => catalog.deleteTeacher(a, d.id), ADMIN);
 
-export const createStudentAction = async (input: unknown) => runAction(studentCreateInput, input, (a, d) => students.createStudent(a, d), ADMIN);
 export const updateStudentAction = async (input: unknown) =>
   runAction(studentUpdate, input, (a, d) => students.updateStudent(a, d.id, d.data), ADMIN);
 export const deleteStudentAction = async (input: unknown) =>

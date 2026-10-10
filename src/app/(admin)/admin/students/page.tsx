@@ -5,9 +5,9 @@ import { LinkButton } from "@/components/link-button";
 import { Input } from "@/components/ui/input";
 import { LABELS, formatDate } from "@/lib/format";
 import { studentFields } from "@/lib/student-fields";
-import { createStudentAction, deleteStudentAction, updateStudentAction } from "@/server/actions/admin";
+import { deleteStudentAction, updateStudentAction } from "@/server/actions/admin";
+import { seesStudentPrivate } from "@/server/guard";
 import { listStudentsPageWithStars } from "@/server/services/student-history";
-import { suggestStudentCode } from "@/server/services/students";
 import { requireMenu } from "@/server/session";
 
 export const metadata: Metadata = { title: "QL Học viên" };
@@ -15,9 +15,10 @@ export const metadata: Metadata = { title: "QL Học viên" };
 export default async function StudentsPage({ searchParams }: PageProps<"/admin/students">) {
   const { actor, role, can } = await requireMenu("students");
   const admin = role === "admin";
-  // Ngoài Admin: không hiện và không nhập thông tin riêng tư của học viên. Form thêm mới điền sẵn mã tự cấp kế tiếp.
-  const formFields = studentFields({ admin, suggestedCode: can("add") ? await suggestStudentCode() : undefined });
-  const columns = ["Mã HV", "Họ tên", ...(admin ? ["Ngày sinh"] : []), "Khối", ...(admin ? ["Phụ huynh", "Điện thoại"] : []), "Sao", "Trạng thái"];
+  // Trang này để xem và sửa; học viên mới nhập ở Ghi danh. Thông tin cá nhân chỉ hiện với người được phép xem.
+  const privateInfo = seesStudentPrivate(actor);
+  const formFields = studentFields({ privateInfo });
+  const columns = ["Mã HV", "Họ tên", ...(privateInfo ? ["Ngày sinh"] : []), "Khối", ...(privateInfo ? ["Phụ huynh", "Điện thoại"] : []), "Sao", "Trạng thái"];
   const raw = (await searchParams).q;
   const q = (Array.isArray(raw) ? raw[0] : raw)?.slice(0, 100) ?? "";
   const rawPage = (await searchParams).page;
@@ -36,19 +37,12 @@ export default async function StudentsPage({ searchParams }: PageProps<"/admin/s
 
   return (
     <div className="grid gap-4">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-        <form className="flex flex-1 gap-2" role="search">
-          <Input name="q" defaultValue={q} placeholder="Tìm theo tên hoặc mã…" aria-label="Tìm học viên" className="h-10" />
-          <Button type="submit" variant="outline" className="h-10">
-            Tìm
-          </Button>
-        </form>
-        {admin && (
-          <LinkButton variant="outline" className="h-10" href="/admin/students/import">
-            Nhập từ Excel
-          </LinkButton>
-        )}
-      </div>
+      <form className="flex gap-2" role="search">
+        <Input name="q" defaultValue={q} placeholder="Tìm theo tên hoặc mã…" aria-label="Tìm học viên" className="h-10" />
+        <Button type="submit" variant="outline" className="h-10">
+          Tìm
+        </Button>
+      </form>
       <CrudSection
         title="Học viên"
         numbered
@@ -98,9 +92,9 @@ export default async function StudentsPage({ searchParams }: PageProps<"/admin/s
           cells: [
             s.code,
             s.fullName,
-            ...(admin ? [formatDate(s.birthDate)] : []),
+            ...(privateInfo ? [formatDate(s.birthDate)] : []),
             s.schoolGrade ? String(s.schoolGrade) : "",
-            ...(admin ? [s.guardianName ?? "", s.phone ?? ""] : []),
+            ...(privateInfo ? [s.guardianName ?? "", s.phone ?? ""] : []),
             String(s.stars),
             LABELS.studentStatus[s.status],
           ],
@@ -117,8 +111,6 @@ export default async function StudentsPage({ searchParams }: PageProps<"/admin/s
           },
         }))}
         fields={formFields}
-        editFields={studentFields({ admin })}
-        createAction={can("add") ? createStudentAction : undefined}
         updateAction={can("edit") ? updateStudentAction : undefined}
         deleteAction={admin ? deleteStudentAction : undefined}
         detailLabel="Hồ sơ"

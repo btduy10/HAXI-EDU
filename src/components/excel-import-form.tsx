@@ -15,13 +15,6 @@ type ApiResult = { ok: true; data: Preview } | { ok: false; error: string };
 
 // Mỗi loại dữ liệu nhập: nơi gửi tệp, cách tóm tắt một dòng ở phần xem trước, câu báo khi nhập xong.
 const KINDS = {
-  students: {
-    title: "Nhập học viên từ Excel",
-    endpoint: "/api/import/students",
-    backHref: "/admin/students",
-    describe: (row: Row) => `${row.code || "(thiếu mã)"} – ${row.fullName || "(thiếu tên)"}`,
-    done: (data: Preview) => `Đã nhập ${data.inserted ?? 0} học viên.`,
-  },
   syllabus: {
     title: "Nhập Syllabus từ Excel",
     endpoint: "/api/import/syllabus",

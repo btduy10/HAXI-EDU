@@ -49,6 +49,12 @@ export function assertSignedIn(actor: Actor) {
   if (!actor.userId) throw unauthenticated();
 }
 
+/**
+ * Được xem và sửa thông tin cá nhân của học viên (ngày sinh, giới tính, phụ huynh, điện thoại, ghi chú):
+ * Admin, hoặc vai trò được tick "Thông tin cá nhân học viên" trong Cấu hình. Tối thiểu hóa dữ liệu của trẻ em.
+ */
+export const seesStudentPrivate = (actor: Actor) => isAdmin(actor) || permsOf(actor)?.studentPrivate === true;
+
 /** Admin, hoặc vai trò được cấu hình phạm vi "Tất cả lớp". */
 export const seesAllClasses = (actor: Actor) => permsOf(actor)?.scope !== "own";
 

@@ -1,18 +1,8 @@
 import ExcelJS from "exceljs";
-import { db } from "@/db";
-import { students } from "@/db/schema";
-import {
-  IMPORT_COLUMNS,
-  IMPORT_MAX_BYTES,
-  IMPORT_MAX_ROWS,
-  type ImportKey,
-  type ImportRowResult,
-  type RawImportRow,
-  validateImportRows,
-} from "@/domain/student-import";
-import { audit } from "../audit";
-import { AppError, translateDbError } from "../errors";
-import { type Actor, assertAdmin } from "../guard";
+import { IMPORT_MAX_BYTES, IMPORT_MAX_ROWS } from "@/domain/excel-import";
+import { AppError } from "../errors";
+
+// Đọc tệp Excel tải lên (dùng cho nhập Syllabus).
 
 export type ImportUpload = { name: string; size: number; bytes: Uint8Array };
 
@@ -80,58 +70,4 @@ export async function parseWorkbook<K extends string>(
   if (rows.length === 0) throw new AppError("VALIDATION", "Tệp không có dòng dữ liệu nào.");
   if (rows.length > IMPORT_MAX_ROWS) throw new AppError("VALIDATION", `Mỗi lần nhập tối đa ${IMPORT_MAX_ROWS} dòng.`);
   return rows;
-}
-
-export const parseStudentWorkbook = (bytes: Uint8Array): Promise<RawImportRow[]> =>
-  parseWorkbook<ImportKey>(bytes, IMPORT_COLUMNS, ["code", "fullName"], 'Dòng tiêu đề phải có cột "Mã HV" và "Họ tên". Hãy dùng tệp mẫu.');
-
-export type ImportPreview = { rows: ImportRowResult[]; validCount: number; errorCount: number };
-
-export async function previewStudentImport(actor: Actor, file: ImportUpload): Promise<ImportPreview> {
-  assertAdmin(actor);
-  assertXlsxUpload(file);
-  const raw = await parseStudentWorkbook(file.bytes);
-  const existing = await db.select({ code: students.code }).from(students);
-  const rows = validateImportRows(raw, new Set(existing.map((s) => s.code.toUpperCase())));
-  const validCount = rows.filter((r) => r.data).length;
-  return { rows, validCount, errorCount: rows.length - validCount };
-}
-
-/** Chỉ ghi các dòng hợp lệ; dòng lỗi bị bỏ qua và trả về để hiển thị. */
-export async function commitStudentImport(actor: Actor, file: ImportUpload): Promise<ImportPreview & { inserted: number }> {
-  const preview = await previewStudentImport(actor, file);
-  const valid = preview.rows.flatMap((r) => (r.data ? [r.data] : []));
-  if (valid.length === 0) throw new AppError("VALIDATION", "Không có dòng hợp lệ nào để nhập.");
-  try {
-    await db.transaction(async (tx) => {
-      const inserted = await tx.insert(students).values(valid).returning({ id: students.id });
-      await audit(tx, {
-        userId: actor.userId,
-        action: "import",
-        tableName: "students",
-        newValue: { count: inserted.length },
-      });
-    });
-  } catch (e) {
-    throw translateDbError(e);
-  }
-  return { ...preview, inserted: valid.length };
-}
-
-export async function buildStudentTemplate(): Promise<Uint8Array> {
-  const workbook = new ExcelJS.Workbook();
-  const sheet = workbook.addWorksheet("Học viên");
-  sheet.columns = IMPORT_COLUMNS.map((c) => ({ header: c.header, key: c.key, width: 20 }));
-  sheet.getRow(1).font = { bold: true };
-  sheet.addRow({
-    code: "HV101",
-    fullName: "Nguyễn Văn Mẫu",
-    birthDate: "15/08/2015",
-    gender: "Nam",
-    schoolGrade: 5,
-    guardianName: "Nguyễn Văn Bố",
-    phone: "0901234567",
-    note: "",
-  });
-  return new Uint8Array(await workbook.xlsx.writeBuffer());
 }

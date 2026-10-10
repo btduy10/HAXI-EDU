@@ -70,7 +70,7 @@ export function PermissionMatrix({
     const taken = new Set(Object.values(config).map((r) => r.label));
     let label = base;
     for (let n = 2; taken.has(label); n++) label = `${base} ${n}`;
-    setConfig((prev) => ({ ...prev, [key]: { label, scope: NO_PERMISSIONS.scope, menus: structuredClone(NO_PERMISSIONS.menus) } }));
+    setConfig((prev) => ({ ...prev, [key]: { label, scope: NO_PERMISSIONS.scope, menus: structuredClone(NO_PERMISSIONS.menus), studentPrivate: false } }));
     setRole(key);
   }
 
@@ -159,6 +159,23 @@ export function PermissionMatrix({
           )}{" "}
           Gán vai trò ở cột Vai trò trong Admin → Tài khoản.
         </p>
+
+        <label className="flex items-start gap-2 text-sm">
+          <input
+            type="checkbox"
+            className="mt-0.5 size-5 shrink-0 accent-primary"
+            checked={current.studentPrivate === true}
+            onChange={(event) => patchRole({ studentPrivate: event.target.checked })}
+            aria-label={`${current.label}: Thông tin cá nhân học viên`}
+          />
+          <span>
+            <span className="font-medium">Thông tin cá nhân học viên</span>
+            <span className="block text-xs text-muted-foreground">
+              Xem và sửa ngày sinh, giới tính, phụ huynh, điện thoại, ghi chú của học viên (ở QL Học viên và form học viên mới của Ghi danh). Không tick thì
+              các ô này không hiện.
+            </span>
+          </span>
+        </label>
 
         <div className="overflow-x-auto">
           <table className="w-full text-sm">

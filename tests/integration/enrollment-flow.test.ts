@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/db";
 import { attendances, classes, enrollments, makeupAssignments, sessions, starCriteria, students } from "@/db/schema";
 import { DEFAULT_PERMISSIONS, type RolePermissions } from "@/lib/permissions";
-import { newEnrollmentInput, studentCreateInput } from "@/lib/validation/entities";
+import { newEnrollmentInput } from "@/lib/validation/entities";
 import type { Actor } from "@/server/guard";
 import * as attendanceSvc from "@/server/services/attendance";
 import * as classSvc from "@/server/services/classes";
@@ -91,7 +91,7 @@ beforeEach(async () => {
 
 describe("mã học viên tự cấp", () => {
   it("để trống mã thì cấp mã kế tiếp của năm; mã nhập tay được giữ; mã gợi ý trên form là mã kế tiếp", async () => {
-    const create = (values: Record<string, unknown>) => studentSvc.createStudent(f.admin, studentCreateInput.parse({ schoolGrade: "", ...values }), NOW);
+    const create = (values: Record<string, unknown>) => classSvc.enrollNewStudent(f.admin, newStudent({ classId: "none", ...values }), NOW);
     expect((await create({ code: "", fullName: "Em Một" })).code).toBe("HX2601");
     expect((await create({ fullName: "Em Hai" })).code).toBe("HX2602");
     expect((await create({ code: "HX2610", fullName: "Em Mười" })).code).toBe("HX2610");
@@ -103,7 +103,7 @@ describe("mã học viên tự cấp", () => {
 
   it("hai người thêm cùng lúc không nhận trùng mã tự cấp", async () => {
     const codes = await Promise.all(
-      ["Một", "Hai", "Ba"].map((name) => studentSvc.createStudent(f.admin, studentCreateInput.parse({ fullName: name, schoolGrade: "" }), NOW).then((s) => s.code)),
+      ["Một", "Hai", "Ba"].map((name) => classSvc.enrollNewStudent(f.admin, newStudent({ classId: "none", fullName: name }), NOW).then((s) => s.code)),
     );
     expect(codes.sort()).toEqual(["HX2601", "HX2602", "HX2603"]);
   });
@@ -133,21 +133,32 @@ describe("ghi danh học viên mới", () => {
     expect(await studentCount()).toBe(before + 1);
   });
 
-  it("cần quyền Thêm của cả menu Học viên và Ghi danh; ngoài Admin không ghi được thông tin riêng tư", async () => {
+  it("chỉ cần quyền Thêm của menu Ghi danh; không được tick thông tin cá nhân thì không ghi được các ô đó", async () => {
     const input = () => newStudent({ classId: f.classB.id, joinedAt: TODAY, phone: "0901234567", guardianName: "Phụ huynh", note: "ghi chú" });
     await expect(classSvc.enrollNewStudent(f.actorA, input(), NOW)).rejects.toMatchObject({ code: "FORBIDDEN" });
+    // Quyền ở menu QL Học viên không đủ để nhập học viên, kể cả khi không chọn lớp.
     await expect(classSvc.enrollNewStudent(withMenus(f.actorA, { students: ALL }), input(), NOW)).rejects.toMatchObject({ code: "FORBIDDEN" });
-    await expect(classSvc.enrollNewStudent(withMenus(f.actorA, { enrollments: ALL }), input(), NOW)).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(classSvc.enrollNewStudent(withMenus(f.actorA, { students: ALL }), newStudent({ classId: "none" }), NOW)).rejects.toMatchObject({
+      code: "FORBIDDEN",
+    });
+    await expect(
+      classSvc.enrollNewStudent(withMenus(f.actorA, { enrollments: { view: true, add: false, edit: true } }), input(), NOW),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
     // Phạm vi "lớp của mình": không ghi danh được vào lớp của người khác, và không tạo dở học viên.
     const before = await studentCount();
-    await expect(classSvc.enrollNewStudent(withMenus(f.actorA, { students: ALL, enrollments: ALL }, "own"), input(), NOW)).rejects.toMatchObject({
-      code: "NOT_FOUND",
-    });
+    await expect(classSvc.enrollNewStudent(withMenus(f.actorA, { enrollments: ALL }, "own"), input(), NOW)).rejects.toMatchObject({ code: "NOT_FOUND" });
     expect(await studentCount()).toBe(before);
 
-    const made = await classSvc.enrollNewStudent(withMenus(f.actorA, { students: ALL, enrollments: ALL }), input(), NOW);
+    const clerk = withMenus(f.actorA, { enrollments: ALL });
+    const made = await classSvc.enrollNewStudent(clerk, input(), NOW);
     const [row] = await db.select().from(students).where(eq(students.id, made.studentId));
-    expect(row).toMatchObject({ phone: null, guardianName: null, note: null });
+    expect(row).toMatchObject({ fullName: "Học viên mới", phone: null, guardianName: null, note: null });
+
+    // Được tick "Thông tin cá nhân học viên" thì các ô đó được lưu.
+    const trusted: Actor = { ...clerk, perms: { ...clerk.perms!, studentPrivate: true } };
+    const second = await classSvc.enrollNewStudent(trusted, newStudent({ classId: "none", phone: "0901234567", guardianName: "Phụ huynh" }), NOW);
+    const [kept] = await db.select().from(students).where(eq(students.id, second.studentId));
+    expect(kept).toMatchObject({ phone: "0901234567", guardianName: "Phụ huynh" });
   });
 });
 

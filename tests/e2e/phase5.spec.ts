@@ -300,28 +300,32 @@ test("Ghi danh: tổng quan theo buổi trong tuần (buổi - giờ, tên lớp
     await expect(block.getByText("0/2")).toBeVisible();
     await expectNoHorizontalScroll(page);
 
-    // Bấm một hàng trống → chọn học viên → hàng đó có tên và khối.
-    const enroll = async (expectRow: number) => {
+    // Bấm một hàng trống → nhập học viên mới (không còn lựa chọn "Học viên có sẵn") → hàng đó có tên và khối.
+    const enroll = async (expectRow: number, fullName: string) => {
       await addButtons.first().click();
-      await expect(page.getByRole("dialog")).toContainText("Ghi danh vào GD-E2E");
-      const option = page.locator("#f-studentId option").nth(1);
-      const [, fullName] = ((await option.textContent()) ?? "").split(" – ");
-      await page.locator("#f-studentId").selectOption({ index: 1 });
+      const dialog = page.getByRole("dialog");
+      await expect(dialog).toContainText("Ghi danh vào GD-E2E");
+      await expect(dialog.getByText("Học viên có sẵn")).toHaveCount(0);
+      await expect(dialog.getByRole("tab")).toHaveCount(0);
+      await expect(page.locator("#f-studentId")).toHaveCount(0);
+      await expect(page.locator("#f-code")).toHaveValue(/^HX\d{4,}$/);
+      await page.locator("#f-fullName").fill(fullName);
+      await page.locator("#f-schoolGrade").fill("5");
       await expect(page.locator("#f-joinedAt")).toHaveValue(day);
       await page.getByRole("button", { name: "Lưu" }).click();
       await expect(page.getByText("Đã ghi danh.")).toBeVisible();
-      await expect(block.locator("tbody tr").nth(expectRow)).toContainText(fullName!);
+      await expect(block.locator("tbody tr").nth(expectRow)).toContainText(fullName);
       await expect(page.getByText("Đã ghi danh.")).toHaveCount(0);
-      return fullName!;
+      return fullName;
     };
-    const first = await enroll(0);
+    const first = await enroll(0, "Thử Ghi Danh Một");
     await expect(block.getByText("1/2")).toBeVisible();
     await expect(addButtons).toHaveText(["Thêm 1 học viên"]);
-    // Cùng lớp ở buổi kia cũng có học viên này; em đã ghi danh không còn trong danh sách chọn.
+    // Cùng lớp ở buổi kia cũng có học viên này.
     await expect(blocks.nth(1).locator("tbody tr").first()).toContainText(first);
     const [grade] = await db`select s.school_grade from students s join enrollments e on e.student_id = s.id where e.class_id = ${rosterClassId}`;
     if (grade!.school_grade) await expect(block.locator("tbody tr").first().locator("td").last()).toHaveText(String(grade!.school_grade));
-    const second = await enroll(1);
+    const second = await enroll(1, "Thử Ghi Danh Hai");
     expect(second).not.toBe(first);
 
     // Đủ sĩ số tối đa: vẫn 8 hàng nhưng hàng trống không bấm được nữa.
@@ -352,6 +356,7 @@ test("Ghi danh: tổng quan theo buổi trong tuần (buổi - giờ, tên lớp
     // Dọn lớp thử để không ảnh hưởng số liệu học phí, báo cáo ở các test sau.
     await db`delete from enrollments where class_id = ${rosterClassId}`;
     await db`delete from classes where id = ${rosterClassId}`;
+    await db`delete from students where full_name like 'Thử Ghi Danh %'`;
     await db.end();
   }
 });
@@ -411,9 +416,8 @@ test("Ghi danh: học viên mới với mã tự điền, danh sách chờ lớp
     await expect(block.locator("tbody tr").first()).toContainText(WAITING);
     await expect(page.getByText("Đã ghi danh.")).toHaveCount(0);
 
-    // Hàng trống → "Học viên mới": nhập thông tin và ghi danh ngay, mã tự điền là mã kế tiếp.
+    // Hàng trống: nhập thông tin học viên mới và ghi danh ngay, mã tự điền là mã kế tiếp.
     await block.getByRole("button", { name: /Thêm 1 học viên/ }).click();
-    await page.getByRole("tab", { name: "Học viên mới" }).click();
     await expect(page.locator("#f-code")).not.toHaveValue(firstCode);
     await expect(page.locator("#f-code")).toHaveValue(/^HX\d{4,}$/);
     await page.locator("#f-fullName").fill(WALK_IN);

@@ -1,89 +1,43 @@
 "use client";
 
 import { createContext, useContext, useState } from "react";
-import { type Field, type FieldOption, FormDialog } from "@/components/form-dialog";
-import { cn } from "@/lib/utils";
-import { enrollNewStudentAction, enrollStudentAction } from "@/server/actions/admin";
+import { type Field, FormDialog } from "@/components/form-dialog";
+import { enrollNewStudentAction } from "@/server/actions/admin";
 
 type Target = { classId: string; classCode: string; startDate: string };
-type Mode = "existing" | "new";
 
 const EnrollContext = createContext<((target: Target) => void) | null>(null);
 
 /**
- * Bọc quanh bảng tổng quan Ghi danh: giữ một hộp thoại "ghi danh" dùng chung,
- * các hàng trống chỉ cần gọi mở với lớp của mình. Hộp thoại có hai kiểu: chọn học viên có sẵn, hoặc nhập học viên mới.
+ * Bọc quanh bảng tổng quan Ghi danh: giữ một hộp thoại "ghi danh" dùng chung, các hàng trống chỉ cần gọi mở với lớp của mình.
+ * Hộp thoại nhập học viên mới rồi ghi danh ngay vào lớp; học viên đã có trong hệ thống thì xếp ở mục Chờ lớp
+ * hoặc ở danh sách chi tiết của lớp.
  */
 export function RosterEnroll({
-  students,
-  activeByClass,
   today,
   newStudentFields,
   children,
 }: {
-  /** Học viên có thể ghi danh (chưa nghỉ hẳn). */
-  students: FieldOption[];
-  /** Học viên đang học của từng lớp: không cho chọn lại. */
-  activeByClass: Record<string, string[]>;
   today: string;
-  /** Các ô của form học viên mới; không truyền (thiếu quyền Thêm học viên) thì chỉ ghi danh được học viên có sẵn. */
-  newStudentFields?: Field[];
+  /** Các ô của form học viên mới (theo quyền xem thông tin cá nhân của người dùng). */
+  newStudentFields: Field[];
   children: React.ReactNode;
 }) {
   const [target, setTarget] = useState<Target | null>(null);
-  const [mode, setMode] = useState<Mode>("existing");
-  const taken = new Set(target ? activeByClass[target.classId] : []);
-  const joinedAt: Field = { name: "joinedAt", label: "Ngày vào lớp", type: "date", required: true };
-  const tabs: { key: Mode; label: string }[] = [
-    { key: "existing", label: "Học viên có sẵn" },
-    { key: "new", label: "Học viên mới" },
-  ];
 
   return (
     <EnrollContext.Provider value={setTarget}>
       {children}
       {target && (
         <FormDialog
-          // Đổi kiểu nhập thì dựng lại form với bộ ô nhập tương ứng.
-          key={mode}
           open
-          onOpenChange={(open) => {
-            if (open) return;
-            setTarget(null);
-            setMode("existing");
-          }}
+          onOpenChange={(open) => !open && setTarget(null)}
           title={`Ghi danh vào ${target.classCode}`}
-          header={
-            newStudentFields && (
-              <div role="tablist" aria-label="Kiểu ghi danh" className="grid grid-cols-2 gap-1 rounded-xl border p-1">
-                {tabs.map((tab) => (
-                  <button
-                    key={tab.key}
-                    type="button"
-                    role="tab"
-                    aria-selected={mode === tab.key}
-                    onClick={() => setMode(tab.key)}
-                    className={cn(
-                      "h-10 rounded-lg text-sm font-medium transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
-                      mode === tab.key ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-secondary hover:text-secondary-foreground",
-                    )}
-                  >
-                    {tab.label}
-                  </button>
-                ))}
-              </div>
-            )
-          }
-          fields={
-            mode === "new" && newStudentFields
-              ? [...newStudentFields, joinedAt]
-              : [{ name: "studentId", label: "Học viên", type: "select", required: true, options: students.filter((s) => !taken.has(s.value)) }, joinedAt]
-          }
+          description="Nhập thông tin học viên mới; em được ghi danh ngay vào lớp này."
+          fields={[...newStudentFields, { name: "joinedAt", label: "Ngày vào lớp", type: "date", required: true }]}
           initial={{ joinedAt: today < target.startDate ? target.startDate : today }}
           successMessage="Đã ghi danh."
-          onSubmit={(values) =>
-            mode === "new" ? enrollNewStudentAction({ ...values, classId: target.classId }) : enrollStudentAction(target.classId, values)
-          }
+          onSubmit={(values) => enrollNewStudentAction({ ...values, classId: target.classId })}
         />
       )}
     </EnrollContext.Provider>
