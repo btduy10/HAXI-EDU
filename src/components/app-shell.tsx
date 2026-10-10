@@ -68,7 +68,7 @@ const NAV: { admin: NavEntry[]; teacher: NavItem[] } = {
         { href: "/admin/audit", label: "Nhật ký", icon: ScrollTextIcon },
       ],
     },
-    { href: "/admin/students", label: "Học viên", icon: GraduationCapIcon },
+    { href: "/admin/students", label: "QL Học viên", icon: GraduationCapIcon },
     { href: "/admin/enrollments", label: "Ghi danh", icon: ClipboardListIcon },
     { href: "/admin/classes", label: "Lớp học", icon: SchoolIcon },
     { href: "/admin/timetable", label: "Thời khóa biểu", icon: CalendarDaysIcon },

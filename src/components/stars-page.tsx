@@ -58,7 +58,7 @@ export async function StarsPage({
             {board.students.map((s) => (
               <li key={s.studentId} className="flex items-center justify-between gap-2 glass-solid rounded-xl border px-3 py-2 text-sm">
                 <span className="min-w-0 break-words">
-                  {s.fullName} <span className="text-muted-foreground">({s.code})</span>
+                  {s.fullName} <span className="text-muted-foreground">({s.code}{s.makeup && " · Học bù"})</span>
                 </span>
                 <span className="shrink-0 font-semibold tabular-nums">
                   {s.sessionStars > 0 ? `+${s.sessionStars}` : s.sessionStars} sao buổi này · tổng {s.progress.total}
@@ -75,7 +75,7 @@ export async function StarsPage({
           students={board.students.map((s) => ({
             studentId: s.studentId,
             code: s.code,
-            fullName: s.fullName,
+            fullName: s.makeup ? `${s.fullName} (Học bù)` : s.fullName,
             sessionStars: s.sessionStars,
             progress: { total: s.progress.total, level: s.progress.level, avatar: s.progress.avatar },
           }))}

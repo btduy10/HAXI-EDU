@@ -3,13 +3,26 @@ import Link from "next/link";
 import { ConfirmButton, FormDialogButton } from "@/components/action-buttons";
 import { AutoSubmitSelect } from "@/components/auto-submit-select";
 import { BackLink } from "@/components/back-link";
+import { AssignMakeupButton, MakeupPlanner } from "@/components/makeup-planner";
 import { AddStudentButton, RosterEnroll } from "@/components/roster-enroll";
 import { Badge } from "@/components/ui/badge";
+import { MAKEUP_AHEAD_DAYS, MAKEUP_LOOKBACK_DAYS, MAKEUP_STATE_LABELS, canAssignMakeup } from "@/domain/makeup";
 import { ROSTER_ROWS, rosterTime } from "@/domain/roster";
+import { WEEKDAY_SHORT, isoWeekday } from "@/lib/dates";
 import { LABELS, formatDate, todayIso } from "@/lib/format";
-import { deleteEnrollmentAction, enrollStudentAction, leaveEnrollmentAction } from "@/server/actions/admin";
+import { studentFields } from "@/lib/student-fields";
+import {
+  cancelMakeupAction,
+  deleteEnrollmentAction,
+  enrollNewStudentAction,
+  enrollStudentAction,
+  leaveEnrollmentAction,
+  placeStudentAction,
+} from "@/server/actions/admin";
+import { can as actorCan } from "@/server/guard";
 import { listClasses, listEnrollments, weeklyRoster } from "@/server/services/classes";
-import { listStudents } from "@/server/services/students";
+import { activeClassIdsOf, listMakeupNeeds, listMakeupTargets } from "@/server/services/makeups";
+import { listStudents, listWaitingStudents, suggestStudentCode } from "@/server/services/students";
 import { requireMenu } from "@/server/session";
 
 export const metadata: Metadata = { title: "Ghi danh" };
@@ -23,11 +36,27 @@ export default async function EnrollmentsPage({ searchParams }: PageProps<"/admi
   const current = classes.find((c) => c.id === requested) ?? null;
 
   // Chưa chọn lớp: tổng quan các lớp đang học theo buổi trong tuần. Đã chọn lớp: danh sách ghi danh chi tiết của lớp đó.
-  const [enrollments, students, roster] = await Promise.all([
+  // Nhận học viên mới cần thêm quyền Thêm của menu Học viên.
+  const canCreate = can("add") && actorCan(actor, "students", "add");
+  const [enrollments, students, roster, waiting, needs, targets, suggestedCode] = await Promise.all([
     current ? listEnrollments(actor, current.id) : [],
     can("add") ? listStudents(actor) : [],
     current ? null : weeklyRoster(actor),
+    current ? [] : listWaitingStudents(actor),
+    current ? [] : listMakeupNeeds(actor),
+    current || !can("add") ? [] : listMakeupTargets(actor),
+    canCreate ? suggestStudentCode() : undefined,
   ]);
+  const makeupClassIds = await activeClassIdsOf([...new Set(needs.map((n) => n.studentId))]);
+  // Form học viên mới: như form Học viên, bỏ ô Trạng thái (học viên mới luôn "Đang học").
+  const newStudentFields = canCreate
+    ? studentFields({ admin: role === "admin", suggestedCode }).filter((f) => f.name !== "status")
+    : undefined;
+  // Lớp đang mở còn chỗ, để chọn khi nhận học viên mới hoặc xếp lớp cho em đang chờ.
+  const openClasses = classes
+    .filter((c) => c.status === "open" && c.studentCount < c.maxSize)
+    .map((c) => ({ value: c.id, label: `${c.code} – ${c.name} (còn ${c.maxSize - c.studentCount} chỗ)` }));
+  const sessionLabel = (date: string, startTime: string) => `${WEEKDAY_SHORT[isoWeekday(date)]} ${formatDate(date)} · ${rosterTime(startTime)}`;
   const activeIds = new Set(enrollments.filter((e) => e.status === "active").map((e) => e.studentId));
   const enrollable = students.filter((s) => s.status !== "left");
   const candidates = enrollable.filter((s) => !activeIds.has(s.id));
@@ -37,7 +66,31 @@ export default async function EnrollmentsPage({ searchParams }: PageProps<"/admi
     <div className="grid gap-4">
       <div className="grid gap-2">
         {current && <BackLink href="/admin/enrollments">Tổng quan ghi danh</BackLink>}
-        <h1 className="text-xl font-semibold sm:text-2xl">Ghi danh</h1>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h1 className="text-xl font-semibold sm:text-2xl">Ghi danh</h1>
+          {!current && newStudentFields && (
+            <FormDialogButton
+              label="Thêm học viên mới"
+              title="Thêm học viên mới"
+              description="Chọn lớp còn chỗ để ghi danh ngay, hoặc “Chưa xếp lớp” để đưa em vào danh sách chờ lớp."
+              fields={[
+                {
+                  name: "classId",
+                  label: "Lớp",
+                  type: "select",
+                  required: true,
+                  defaultValue: "none",
+                  options: [{ value: "none", label: "Chưa xếp lớp (vào danh sách chờ)" }, ...openClasses],
+                },
+                { name: "joinedAt", label: "Ngày vào lớp", type: "date", hint: "Bỏ qua nếu chưa xếp lớp." },
+                ...newStudentFields,
+              ]}
+              initial={{ joinedAt: today }}
+              action={enrollNewStudentAction}
+              successMessage="Đã thêm học viên."
+            />
+          )}
+        </div>
       </div>
       <form>
         {/* Chọn lớp là hiện danh sách ngay. Màn hình rộng: ô chọn chỉ chiếm nửa chiều ngang. */}
@@ -138,6 +191,7 @@ export default async function EnrollmentsPage({ searchParams }: PageProps<"/admi
           students={enrollable.map((s) => ({ value: s.id, label: `${s.code} – ${s.fullName}` }))}
           activeByClass={Object.fromEntries(roster.blocks.map((b) => [b.classId, b.students.map((s) => s.id)]))}
           today={today}
+          newStudentFields={newStudentFields}
         >
           <p className="text-sm text-muted-foreground">
             Các lớp đang học theo buổi trong tuần (theo Thời khóa biểu tuần này). Bấm tên lớp để xem lịch sử ghi danh, cho rời lớp.
@@ -235,6 +289,114 @@ export default async function EnrollmentsPage({ searchParams }: PageProps<"/admi
             </p>
           )}
         </RosterEnroll>
+      )}
+
+      {!current && waiting.length > 0 && (
+        <section className="grid gap-2" aria-labelledby="waiting-title">
+          <h2 id="waiting-title" className="text-lg font-semibold">
+            Chờ lớp <span className="text-sm font-normal text-muted-foreground">({waiting.length})</span>
+          </h2>
+          <p className="text-sm text-muted-foreground">Học viên đang học nhưng chưa thuộc lớp đang mở nào.</p>
+          <ul className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+            {waiting.map((s) => (
+              <li key={s.id} data-waiting={s.code} className="flex flex-wrap items-center justify-between gap-2 glass-solid rounded-xl border p-3 text-sm">
+                <div className="min-w-0">
+                  <p className="font-medium break-words">
+                    <span className="tabular-nums">{s.code}</span> <span className="font-normal text-muted-foreground">–</span> {s.fullName}
+                  </p>
+                  <p className="text-muted-foreground">
+                    {s.schoolGrade ? `Khối ${s.schoolGrade} · ` : ""}thêm ngày {formatDate(todayIso(s.createdAt))}
+                  </p>
+                </div>
+                {can("add") && (
+                  <FormDialogButton
+                    label="Xếp lớp"
+                    variant="outline"
+                    title={`Xếp lớp cho ${s.fullName}`}
+                    description={openClasses.length === 0 ? "Chưa có lớp đang mở nào còn chỗ." : undefined}
+                    fields={[
+                      { name: "classId", label: "Lớp", type: "select", required: true, options: openClasses },
+                      { name: "joinedAt", label: "Ngày vào lớp", type: "date", required: true },
+                    ]}
+                    initial={{ joinedAt: today }}
+                    fixed={{ studentId: s.id }}
+                    action={placeStudentAction}
+                    successMessage="Đã ghi danh."
+                  />
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {!current && needs.length > 0 && (
+        <MakeupPlanner
+          activeClassIds={makeupClassIds}
+          targets={targets.map((t) => ({
+            id: t.id,
+            classId: t.classId,
+            label: `${sessionLabel(t.date, t.startTime)} · ${t.classCode} – ${t.className}${t.teacherName ? ` · ${t.teacherName}` : ""} · ${t.headcount}/${t.maxSize}`,
+          }))}
+        >
+          <section className="grid gap-2" aria-labelledby="makeup-title">
+            <h2 id="makeup-title" className="text-lg font-semibold">
+              Cần học bù <span className="text-sm font-normal text-muted-foreground">({needs.length})</span>
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              Các buổi học viên vắng trong {MAKEUP_LOOKBACK_DAYS} ngày gần đây chưa được học bù. Xếp bù là cho em học ghép vào một buổi sắp tới
+              (trong {MAKEUP_AHEAD_DAYS} ngày) của lớp khác.
+            </p>
+            <ul className="grid gap-2 lg:grid-cols-2">
+              {needs.map((n) => {
+                const absentLabel = `${sessionLabel(n.date, n.startTime)} · ${n.classCode}`;
+                return (
+                  <li
+                    key={`${n.absentSessionId}|${n.studentId}`}
+                    data-makeup={n.studentCode}
+                    className="flex flex-wrap items-center justify-between gap-2 glass-solid rounded-xl border p-3 text-sm"
+                  >
+                    <div className="min-w-0">
+                      <p className="font-medium break-words">
+                        <span className="tabular-nums">{n.studentCode}</span> <span className="font-normal text-muted-foreground">–</span> {n.studentName}
+                      </p>
+                      <p className="text-muted-foreground">
+                        {LABELS.attendanceStatus[n.status]} {absentLabel}
+                        {n.lesson && ` · ${n.lesson}`}
+                      </p>
+                      {n.assignmentId && n.makeupDate && n.makeupStartTime && (
+                        <p className="text-muted-foreground">
+                          Buổi bù: {sessionLabel(n.makeupDate, n.makeupStartTime)} · {n.makeupClassCode}
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge variant={n.state === "scheduled" ? "secondary" : "outline"}>{MAKEUP_STATE_LABELS[n.state]}</Badge>
+                      {canAssignMakeup(n.state) && can("add") && (
+                        <AssignMakeupButton
+                          label={n.state === "pending" ? "Xếp bù" : "Xếp lại"}
+                          absentSessionId={n.absentSessionId}
+                          studentId={n.studentId}
+                          studentName={n.studentName}
+                          absentLabel={absentLabel}
+                        />
+                      )}
+                      {n.state === "scheduled" && n.assignmentId && can("edit") && (
+                        <ConfirmButton
+                          label="Hủy xếp bù"
+                          confirmText={`Hủy lượt xếp học bù của ${n.studentName}? Buổi vắng quay lại trạng thái chưa xếp bù.`}
+                          action={cancelMakeupAction}
+                          input={{ id: n.assignmentId }}
+                          successMessage="Đã hủy xếp bù."
+                        />
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        </MakeupPlanner>
       )}
     </div>
   );

@@ -77,6 +77,7 @@ export function FormDialog({
   onOpenChange,
   title,
   description,
+  header,
   fields,
   initial,
   submitLabel = "Lưu",
@@ -87,6 +88,8 @@ export function FormDialog({
   onOpenChange: (open: boolean) => void;
   title: string;
   description?: string;
+  /** Phần hiển thị phía trên các ô nhập (vd. nút chọn kiểu nhập). */
+  header?: React.ReactNode;
   fields: Field[];
   initial?: Record<string, string>;
   submitLabel?: string;
@@ -142,6 +145,7 @@ export function FormDialog({
           <DialogTitle>{title}</DialogTitle>
           {description && <DialogDescription>{description}</DialogDescription>}
         </DialogHeader>
+        {header}
         <form onSubmit={handleSubmit} className="grid gap-3" noValidate>
           {error && (
             <Alert variant="destructive">

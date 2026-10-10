@@ -329,6 +329,33 @@ export const attendances = pgTable(
   ],
 );
 
+// Học bù: học viên vắng một buổi được xếp học ghép vào một buổi có sẵn khác (cùng lớp hoặc lớp khác).
+// Em có tên trong bảng điểm danh và ghi sao của buổi học bù; không tính vào sĩ số lớp đó.
+export const makeupAssignments = pgTable(
+  "makeup_assignments",
+  {
+    id: id(),
+    absentSessionId: uuid("absent_session_id")
+      .notNull()
+      .references(() => sessions.id, { onDelete: "cascade" }),
+    makeupSessionId: uuid("makeup_session_id")
+      .notNull()
+      .references(() => sessions.id, { onDelete: "cascade" }),
+    studentId: uuid("student_id")
+      .notNull()
+      .references(() => students.id, { onDelete: "cascade" }),
+    createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    // Mỗi buổi vắng của một học viên chỉ xếp bù một lần; một em không học bù hai lần trong cùng một buổi.
+    uniqueIndex("makeup_assignments_absent_uniq").on(t.absentSessionId, t.studentId),
+    uniqueIndex("makeup_assignments_makeup_uniq").on(t.makeupSessionId, t.studentId),
+    index("makeup_assignments_student_idx").on(t.studentId),
+    check("makeup_assignments_distinct_chk", sql`${t.absentSessionId} <> ${t.makeupSessionId}`),
+  ],
+);
+
 export const starCriteria = pgTable("star_criteria", {
   id: id(),
   name: text("name").notNull(),

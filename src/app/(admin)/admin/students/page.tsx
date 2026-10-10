@@ -1,39 +1,27 @@
 import type { Metadata } from "next";
 import { CrudSection } from "@/components/crud-section";
-import type { Field } from "@/components/form-dialog";
 import { Button } from "@/components/ui/button";
 import { LinkButton } from "@/components/link-button";
 import { Input } from "@/components/ui/input";
-import { LABELS, formatDate, toOptions } from "@/lib/format";
+import { LABELS, formatDate } from "@/lib/format";
+import { studentFields } from "@/lib/student-fields";
 import { createStudentAction, deleteStudentAction, updateStudentAction } from "@/server/actions/admin";
-import { listStudentsPage } from "@/server/services/students";
+import { listStudentsPageWithStars } from "@/server/services/student-history";
+import { suggestStudentCode } from "@/server/services/students";
 import { requireMenu } from "@/server/session";
 
-export const metadata: Metadata = { title: "Học viên" };
-
-const fields: Field[] = [
-  { name: "code", label: "Mã HV", required: true },
-  { name: "fullName", label: "Họ tên", required: true },
-  { name: "birthDate", label: "Ngày sinh", type: "date" },
-  { name: "gender", label: "Giới tính", type: "select", options: toOptions(LABELS.gender) },
-  { name: "schoolGrade", label: "Khối lớp (1–12)", type: "number" },
-  { name: "guardianName", label: "Phụ huynh" },
-  { name: "phone", label: "Điện thoại liên hệ" },
-  { name: "status", label: "Trạng thái", type: "select", required: true, options: toOptions(LABELS.studentStatus), defaultValue: "active" },
-  { name: "note", label: "Ghi chú", type: "textarea" },
-];
+export const metadata: Metadata = { title: "QL Học viên" };
 
 export default async function StudentsPage({ searchParams }: PageProps<"/admin/students">) {
   const { actor, role, can } = await requireMenu("students");
   const admin = role === "admin";
-  // Ngoài Admin: không hiện và không nhập thông tin riêng tư của học viên.
-  const PRIVATE = ["birthDate", "gender", "guardianName", "phone", "note"];
-  const formFields = admin ? fields : fields.filter((f) => !PRIVATE.includes(f.name));
-  const columns = ["Mã HV", "Họ tên", ...(admin ? ["Ngày sinh"] : []), "Khối", ...(admin ? ["Phụ huynh", "Điện thoại"] : []), "Trạng thái"];
+  // Ngoài Admin: không hiện và không nhập thông tin riêng tư của học viên. Form thêm mới điền sẵn mã tự cấp kế tiếp.
+  const formFields = studentFields({ admin, suggestedCode: can("add") ? await suggestStudentCode() : undefined });
+  const columns = ["Mã HV", "Họ tên", ...(admin ? ["Ngày sinh"] : []), "Khối", ...(admin ? ["Phụ huynh", "Điện thoại"] : []), "Sao", "Trạng thái"];
   const raw = (await searchParams).q;
   const q = (Array.isArray(raw) ? raw[0] : raw)?.slice(0, 100) ?? "";
   const rawPage = (await searchParams).page;
-  const { rows: students, total, page, pageCount, pageSize } = await listStudentsPage(
+  const { rows: students, total, page, pageCount, pageSize } = await listStudentsPageWithStars(
     actor,
     q,
     Number(Array.isArray(rawPage) ? rawPage[0] : rawPage),
@@ -64,7 +52,7 @@ export default async function StudentsPage({ searchParams }: PageProps<"/admin/s
       <CrudSection
         title="Học viên"
         numbered
-        centered={["Khối"]}
+        centered={["Khối", "Sao"]}
         startIndex={(page - 1) * pageSize}
         total={total}
         footer={
@@ -113,6 +101,7 @@ export default async function StudentsPage({ searchParams }: PageProps<"/admin/s
             ...(admin ? [formatDate(s.birthDate)] : []),
             s.schoolGrade ? String(s.schoolGrade) : "",
             ...(admin ? [s.guardianName ?? "", s.phone ?? ""] : []),
+            String(s.stars),
             LABELS.studentStatus[s.status],
           ],
           values: {
@@ -128,10 +117,11 @@ export default async function StudentsPage({ searchParams }: PageProps<"/admin/s
           },
         }))}
         fields={formFields}
+        editFields={studentFields({ admin })}
         createAction={can("add") ? createStudentAction : undefined}
         updateAction={can("edit") ? updateStudentAction : undefined}
         deleteAction={admin ? deleteStudentAction : undefined}
-        detailLabel="Sao & avatar"
+        detailLabel="Hồ sơ"
         emptyText={q ? "Không tìm thấy học viên phù hợp." : "Chưa có học viên."}
       />
     </div>

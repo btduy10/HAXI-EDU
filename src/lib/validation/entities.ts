@@ -49,6 +49,34 @@ export const studentInput = z.object({
   note: optText(500),
 });
 
+/** Thêm học viên: để trống mã thì máy chủ tự cấp mã kế tiếp (HX + năm + số thứ tự). */
+export const studentCreateInput = studentInput.extend({
+  code: z
+    .string()
+    .nullish()
+    .transform((value, ctx) => {
+      if (!value?.trim()) return null;
+      const parsed = code.safeParse(value);
+      if (parsed.success) return parsed.data;
+      ctx.addIssue({ code: "custom", message: parsed.error.issues[0]?.message ?? "Mã không hợp lệ" });
+      return z.NEVER;
+    }),
+});
+
+/**
+ * Học viên mới nhập ở trang Ghi danh: thông tin học viên kèm lớp muốn vào.
+ * `classId` trống hoặc "none" = chưa xếp lớp (em vào danh sách chờ lớp).
+ */
+export const newEnrollmentInput = studentCreateInput
+  .extend({
+    classId: z
+      .union([id, z.literal(""), z.literal("none")])
+      .nullish()
+      .transform((v) => (v && v !== "none" ? v : null)),
+    joinedAt: optIsoDate,
+  })
+  .refine((v) => !v.classId || v.joinedAt, { path: ["joinedAt"], message: "Bắt buộc nhập" });
+
 export const courseInput = z.object({
   name: reqText(100),
   description: optText(500),
@@ -154,6 +182,9 @@ export const enrollInput = z.object({
   studentId: id,
   joinedAt: isoDate,
 });
+
+/** Xếp một buổi vắng của học viên vào học bù ở một buổi có sẵn. */
+export const makeupAssignInput = z.object({ absentSessionId: id, studentId: id, makeupSessionId: id });
 
 export const leaveInput = z.object({
   id,

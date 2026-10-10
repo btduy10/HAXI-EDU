@@ -4,6 +4,7 @@ import type { z } from "zod";
 import { db, type DbOrTx, type Tx } from "@/db";
 import {
   attendances,
+  makeupAssignments,
   avatars,
   classes,
   courseSummaries,
@@ -468,6 +469,17 @@ export async function assertStudentAccess(actor: Actor, studentId: string, tx: D
           .where(and(eq(enrollments.studentId, studentId), eq(enrollments.status, "active"), inArray(enrollments.classId, mine)))
           .limit(1);
   if (own) return;
+  // Học viên lớp khác được xếp học bù vào một buổi của lớp mình.
+  const [guest] =
+    mine.length === 0
+      ? []
+      : await tx
+          .select({ id: makeupAssignments.id })
+          .from(makeupAssignments)
+          .innerJoin(sessions, eq(sessions.id, makeupAssignments.makeupSessionId))
+          .where(and(eq(makeupAssignments.studentId, studentId), inArray(sessions.classId, mine), ne(sessions.status, "cancelled")))
+          .limit(1);
+  if (guest) return;
   const [covering] = await tx
     .select({ id: sessions.id })
     .from(sessions)

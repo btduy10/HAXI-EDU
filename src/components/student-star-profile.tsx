@@ -3,6 +3,7 @@ import { ConfirmButton, FormDialogButton } from "@/components/action-buttons";
 import { AvatarBadge, LevelProgress } from "@/components/avatar";
 import { AvatarPicker } from "@/components/avatar-picker";
 import { Badge } from "@/components/ui/badge";
+import { MAKEUP_STATE_LABELS } from "@/domain/makeup";
 import { LABELS, formatDate, formatDateTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { cancelRedemptionAction, redeemGiftAction } from "@/server/actions/rewards";
@@ -12,15 +13,16 @@ import { orNotFound } from "@/server/page";
 import { listGiftedAvatars } from "@/server/services/avatars";
 import { getRedemptionInfo } from "@/server/services/redemptions";
 import { getStudentStarProfile } from "@/server/services/stars";
+import { getStudentLearningHistory } from "@/server/services/student-history";
 
-/** Hồ sơ sao & avatar của một học viên, dùng chung cho Admin và GV (service kiểm tra quyền). */
+/** Hồ sơ học viên: sao & avatar, quà, chương trình đã học và lịch sử buổi học; dùng chung cho Admin và GV (service kiểm tra quyền). */
 export async function StudentStarProfile({ actor, studentId, backHref }: { actor: Actor; studentId: string; backHref: string }) {
   const profile = await orNotFound(getStudentStarProfile(actor, studentId));
   const { student, progress } = profile;
   // getStudentStarProfile đã kiểm tra quyền xem học viên này.
-  const redemption = await getRedemptionInfo(actor, studentId);
+  const [redemption, history] = await Promise.all([getRedemptionInfo(actor, studentId), getStudentLearningHistory(actor, studentId)]);
   const admin = actor.role === "admin";
-  const attended = profile.attendance.filter((a) => a.status === "present" || a.status === "late" || a.status === "left_early").length;
+  const attended = history.sessions.filter((a) => a.attended).length;
   const giftable =
     actor.role === "admin"
       ? (await listGiftedAvatars(actor)).gifted.filter((g) => !progress.giftedAvatarIds.includes(g.id))
@@ -151,28 +153,62 @@ export async function StudentStarProfile({ actor, studentId, backHref }: { actor
         )}
       </section>
 
-      <section className="grid gap-2">
-        <h2 className="font-medium">
-          Buổi đã học{" "}
+      <section className="grid gap-2" aria-labelledby="programs-title">
+        <h2 id="programs-title" className="font-medium">
+          Chương trình đã học
+        </h2>
+        {history.programs.length === 0 ? (
+          <p className="rounded-2xl border border-dashed p-4 text-center text-sm text-muted-foreground">Chưa ghi danh lớp nào.</p>
+        ) : (
+          <ul className="grid gap-1.5">
+            {history.programs.map((p) => (
+              <li key={p.enrollmentId} className="flex flex-wrap items-center justify-between gap-2 glass-solid rounded-xl border px-3 py-2 text-sm">
+                <span className="min-w-0">
+                  <span className="font-medium break-words">{p.courseName}</span>
+                  <span className="block text-xs text-muted-foreground">
+                    Lớp {p.classCode} – {p.className} · vào lớp {formatDate(p.joinedAt)}
+                    {p.leftAt && ` · rời lớp ${formatDate(p.leftAt)}`}
+                  </span>
+                </span>
+                <span className="flex items-center gap-2">
+                  <span className="tabular-nums text-muted-foreground" aria-label={`Có mặt ${p.attended} trên ${p.taught} buổi đã dạy`}>
+                    {p.attended}/{p.taught} buổi
+                  </span>
+                  <Badge variant={p.status === "active" && p.classStatus === "open" ? "secondary" : "outline"}>
+                    {p.status === "left" ? LABELS.enrollmentStatus.left : p.classStatus === "closed" ? "Đã học xong" : LABELS.enrollmentStatus.active}
+                  </Badge>
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section className="grid gap-2" aria-labelledby="sessions-title">
+        <h2 id="sessions-title" className="font-medium">
+          Lịch sử buổi học{" "}
           <span className="text-sm font-normal text-muted-foreground">
-            (có mặt {attended}/{profile.attendance.length} buổi đã điểm danh)
+            (có mặt {attended}/{history.sessions.length} buổi đã điểm danh)
           </span>
         </h2>
-        {profile.attendance.length === 0 ? (
+        {history.sessions.length === 0 ? (
           <p className="rounded-2xl border border-dashed p-4 text-center text-sm text-muted-foreground">Chưa có buổi nào được điểm danh.</p>
         ) : (
           <ul className="grid gap-1.5">
-            {profile.attendance.map((a) => (
+            {history.sessions.map((a) => (
               <li key={a.sessionId} className="flex flex-wrap items-center justify-between gap-2 glass-solid rounded-xl border px-3 py-2 text-sm">
                 <span className="min-w-0">
-                  {formatDate(a.date)} <span className="text-muted-foreground">· {a.classCode}</span>
+                  {formatDate(a.date)} <span className="text-muted-foreground">· {a.classCode} · {a.courseName}</span>
+                  <span className={cn("block break-words", a.lesson ? "font-medium" : "text-xs text-muted-foreground")}>{a.lesson || "Chưa ghi tên bài"}</span>
                 </span>
-                <span className="flex items-center gap-2">
-                  {a.stars !== 0 && (
+                <span className="flex flex-wrap items-center justify-end gap-2">
+                  {a.stars !== null && a.stars !== 0 && (
                     <span className={cn("font-semibold tabular-nums", a.stars > 0 ? "text-emerald-600" : "text-red-600")}>
                       {a.stars > 0 ? `+${a.stars}` : a.stars} sao
                     </span>
                   )}
+                  {a.isMakeup && <Badge variant="secondary">Học bù</Badge>}
+                  {a.makeup && a.makeup !== "pending" && <Badge variant="outline">{MAKEUP_STATE_LABELS[a.makeup]}</Badge>}
                   <Badge variant={a.status === "absent" || a.status === "excused" ? "outline" : "secondary"}>{LABELS.attendanceStatus[a.status]}</Badge>
                 </span>
               </li>

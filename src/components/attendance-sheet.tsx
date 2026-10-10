@@ -12,7 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 
 type Status = "present" | "late" | "left_early" | "excused" | "absent";
-type Row = { studentId: string; code: string; fullName: string; status: Status; note: string };
+type Row = { studentId: string; code: string; fullName: string; status: Status; note: string; /** Học viên lớp khác học bù ở buổi này. */ makeup?: boolean };
 type Lesson = { subjectCode: string; period: number; title: string };
 
 /** Giá trị của lựa chọn "Khác (tự nhập)" trong ô chọn nội dung buổi học. */
@@ -102,6 +102,7 @@ export function AttendanceSheet({
             <div className="flex items-center justify-between gap-2">
               <p className="min-w-0 font-medium break-words">
                 {row.fullName} <span className="text-sm font-normal text-muted-foreground">{row.code}</span>
+                {row.makeup && <span className="ml-1.5 rounded-md bg-secondary px-1.5 py-0.5 text-xs font-medium text-secondary-foreground">Học bù</span>}
               </p>
               {!readOnly && (
                 <Button

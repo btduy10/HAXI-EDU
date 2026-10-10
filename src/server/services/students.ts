@@ -1,11 +1,14 @@
-import { and, asc, count, eq, ilike, inArray, or, sql } from "drizzle-orm";
+import { and, asc, count, eq, ilike, inArray, like, or, sql } from "drizzle-orm";
 import type { z } from "zod";
-import { db } from "@/db";
-import { enrollments, students } from "@/db/schema";
-import type { studentInput } from "@/lib/validation/entities";
-import { notFound } from "../errors";
-import { type Actor, allowedClassIds, assertCan, assertClassAccess, isAdmin } from "../guard";
-import { createRow, deleteRow, updateRow } from "./crud";
+import { db, type DbOrTx, type Tx } from "@/db";
+import { classes, enrollments, students } from "@/db/schema";
+import { nextStudentCode, studentCodeYearPrefix } from "@/domain/student-code";
+import { todayIso } from "@/lib/format";
+import type { studentCreateInput, studentInput } from "@/lib/validation/entities";
+import { audit } from "../audit";
+import { notFound, translateDbError } from "../errors";
+import { type Actor, allowedClassIds, assertCan, assertClassAccess, isAdmin, seesAllClasses } from "../guard";
+import { deleteRow, updateRow } from "./crud";
 
 type StudentRow = typeof students.$inferSelect;
 
@@ -64,10 +67,60 @@ export async function getStudent(actor: Actor, id: string) {
   return forActor(actor, [row])[0]!;
 }
 
-/** Ngoài Admin, thông tin riêng tư (ngày sinh, giới tính, phụ huynh, điện thoại, ghi chú) không được ghi qua form. */
-export async function createStudent(actor: Actor, data: z.output<typeof studentInput>) {
+/** Mã học viên tự cấp kế tiếp của năm hiện tại (HX2601, HX2602, …), để điền sẵn vào form thêm mới. */
+export async function suggestStudentCode(tx: DbOrTx = db, now: Date = new Date()): Promise<string> {
+  const year = Number(todayIso(now).slice(0, 4));
+  const rows = await tx.select({ code: students.code }).from(students).where(like(students.code, `${studentCodeYearPrefix(year)}%`));
+  return nextStudentCode(rows.map((r) => r.code), year);
+}
+
+/**
+ * Thêm học viên trong một giao dịch có sẵn (người gọi đã kiểm tra quyền Thêm của menu Học viên).
+ * Để trống mã thì tự cấp mã kế tiếp; ngoài Admin, thông tin riêng tư không được ghi qua form.
+ */
+export async function insertStudent(tx: Tx, actor: Actor, data: z.output<typeof studentCreateInput>, now: Date = new Date()): Promise<StudentRow> {
   const values = isAdmin(actor) ? data : { ...data, birthDate: null, gender: null, guardianName: null, phone: null, note: null };
-  return forActor(actor, [await createRow(actor, students, "students", values, "students")])[0]!;
+  let code = values.code;
+  if (!code) {
+    // Hai người thêm cùng lúc không nhận trùng một mã tự cấp.
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtext('student_code'))`);
+    code = await suggestStudentCode(tx, now);
+  }
+  const [row] = await tx.insert(students).values({ ...values, code }).returning();
+  await audit(tx, { userId: actor.userId, action: "create", tableName: "students", recordId: row!.id, newValue: row });
+  return row!;
+}
+
+export async function createStudent(actor: Actor, data: z.output<typeof studentCreateInput>, now: Date = new Date()) {
+  assertCan(actor, "students", "add");
+  try {
+    return forActor(actor, [await db.transaction((tx) => insertStudent(tx, actor, data, now))])[0]!;
+  } catch (e) {
+    throw translateDbError(e);
+  }
+}
+
+/**
+ * Danh sách chờ lớp: học viên đang học mà chưa có ghi danh hiệu lực ở lớp đang mở nào.
+ * Chỉ người thấy mọi lớp mới có danh sách này (phạm vi "lớp của mình" không thấy học viên chưa thuộc lớp nào).
+ */
+export async function listWaitingStudents(actor: Actor) {
+  assertCan(actor, "enrollments", "view");
+  if (!seesAllClasses(actor)) return [];
+  return db
+    .select({ id: students.id, code: students.code, fullName: students.fullName, schoolGrade: students.schoolGrade, createdAt: students.createdAt })
+    .from(students)
+    .where(
+      and(
+        eq(students.status, "active"),
+        sql`not exists (
+          select 1 from ${enrollments}
+          inner join ${classes} on ${classes.id} = ${enrollments.classId}
+          where ${enrollments.studentId} = ${students.id} and ${enrollments.status} = 'active' and ${classes.status} = 'open'
+        )`,
+      ),
+    )
+    .orderBy(asc(students.createdAt), asc(students.code));
 }
 
 export async function updateStudent(actor: Actor, id: string, data: z.output<typeof studentInput>) {

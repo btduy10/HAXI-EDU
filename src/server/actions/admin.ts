@@ -15,14 +15,16 @@ import {
   enrollInput,
   holidayInput,
   leaveInput,
+  newEnrollmentInput,
   lockInput,
+  makeupAssignInput,
   purchaseInput,
   purchaseUpdate,
   resetPasswordInput,
   sendCredentialsInput,
   roomInput,
   roomUpdate,
-  studentInput,
+  studentCreateInput,
   studentUpdate,
   teacherInput,
   teacherUpdate,
@@ -46,6 +48,7 @@ import * as teacherRates from "../services/teacher-rates";
 import * as timesheet from "../services/timesheet";
 import * as tuition from "../services/tuition";
 import * as classes from "../services/classes";
+import * as makeups from "../services/makeups";
 import * as students from "../services/students";
 
 // Mỗi action chỉ là vỏ: phiên + Zod ở runAction, phân quyền nằm trong service.
@@ -57,7 +60,7 @@ export const updateTeacherAction = async (input: unknown) =>
 export const deleteTeacherAction = async (input: unknown) =>
   runAction(idOnly, input, (a, d) => catalog.deleteTeacher(a, d.id), ADMIN);
 
-export const createStudentAction = async (input: unknown) => runAction(studentInput, input, students.createStudent, ADMIN);
+export const createStudentAction = async (input: unknown) => runAction(studentCreateInput, input, (a, d) => students.createStudent(a, d), ADMIN);
 export const updateStudentAction = async (input: unknown) =>
   runAction(studentUpdate, input, (a, d) => students.updateStudent(a, d.id, d.data), ADMIN);
 export const deleteStudentAction = async (input: unknown) =>
@@ -128,6 +131,13 @@ export const unassignTeacherAction = async (input: unknown) =>
 
 export const enrollStudentAction = async (classId: unknown, input: unknown) =>
   runAction(enrollInput, withClassId(classId, input), classes.enrollStudent, ADMIN);
+/** Xếp lớp cho học viên đang chờ: lớp do người dùng chọn trong form. */
+export const placeStudentAction = async (input: unknown) => runAction(enrollInput, input, classes.enrollStudent, ADMIN);
+/** Học viên mới nhập ở Ghi danh: tạo học viên rồi ghi danh (hoặc để chờ lớp) trong một giao dịch. */
+export const enrollNewStudentAction = async (input: unknown) =>
+  runAction(newEnrollmentInput, input, (a, d) => classes.enrollNewStudent(a, d), ADMIN);
+export const assignMakeupAction = async (input: unknown) => runAction(makeupAssignInput, input, (a, d) => makeups.assignMakeup(a, d), ADMIN);
+export const cancelMakeupAction = async (input: unknown) => runAction(idOnly, input, (a, d) => makeups.cancelMakeup(a, d.id), ADMIN);
 export const leaveEnrollmentAction = async (input: unknown) => runAction(leaveInput, input, classes.leaveEnrollment, ADMIN);
 export const deleteEnrollmentAction = async (input: unknown) =>
   runAction(idOnly, input, (a, d) => classes.deleteEnrollment(a, d.id), ADMIN);

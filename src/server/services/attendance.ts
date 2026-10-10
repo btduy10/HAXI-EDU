@@ -1,7 +1,7 @@
 import { and, asc, desc, eq, isNull, lt, or, sql } from "drizzle-orm";
 import type { z } from "zod";
 import { db, type DbOrTx } from "@/db";
-import { attendances, classes, enrollments, sessionStudents, sessions, students } from "@/db/schema";
+import { attendances, classes, enrollments, makeupAssignments, sessionStudents, sessions, students } from "@/db/schema";
 import { isAttendanceLocked, isEnrolledOn } from "@/domain/schedule";
 import { todayIso } from "@/lib/format";
 import type { attendanceInput } from "@/lib/validation/schedule";
@@ -15,11 +15,27 @@ const UNLOCK_HOURS = 24;
 
 type SessionCore = Pick<typeof sessions.$inferSelect, "id" | "classId" | "date" | "kind">;
 
+export type RosterRow = { studentId: string; code: string; fullName: string; /** Học viên lớp khác được xếp học bù vào buổi này. */ makeup: boolean };
+
 /**
- * Danh sách điểm danh của buổi: học viên có ghi danh hiệu lực TẠI NGÀY HỌC;
- * buổi bù chỉ gồm học viên được chọn.
+ * Danh sách điểm danh của buổi: học viên có ghi danh hiệu lực TẠI NGÀY HỌC (buổi bù riêng chỉ gồm học viên được chọn),
+ * cộng các em được xếp học bù vào buổi này (xếp sau cùng, đánh dấu `makeup`).
  */
-export async function sessionRoster(tx: DbOrTx, session: SessionCore) {
+export async function sessionRoster(tx: DbOrTx, session: SessionCore): Promise<RosterRow[]> {
+  const [own, guests] = await Promise.all([
+    ownRoster(tx, session),
+    tx
+      .select({ studentId: students.id, code: students.code, fullName: students.fullName })
+      .from(makeupAssignments)
+      .innerJoin(students, eq(students.id, makeupAssignments.studentId))
+      .where(eq(makeupAssignments.makeupSessionId, session.id))
+      .orderBy(asc(students.fullName)),
+  ]);
+  const ids = new Set(own.map((r) => r.studentId));
+  return [...own.map((r) => ({ ...r, makeup: false })), ...guests.filter((g) => !ids.has(g.studentId)).map((g) => ({ ...g, makeup: true }))];
+}
+
+async function ownRoster(tx: DbOrTx, session: SessionCore) {
   if (session.kind === "makeup") {
     return tx
       .select({ studentId: students.id, code: students.code, fullName: students.fullName })

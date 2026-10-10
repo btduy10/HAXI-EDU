@@ -283,7 +283,7 @@ test("Phân quyền: Admin mở menu Học viên cho Giáo viên trực; Giáo v
   await expect(box("Giáo viên trực: Xem Khóa học")).toBeChecked();
   await box("Giáo viên trực: Xem Khóa học").uncheck();
   await expect(box("Giáo viên trực: Sửa Khóa học")).not.toBeChecked();
-  await box("Giáo viên trực: Xem Học viên").check();
+  await box("Giáo viên trực: Xem QL Học viên").check();
   await expectNoHorizontalScroll(page);
   await page.screenshot({ path: "test-results/shots/permissions-360.png", fullPage: true });
   await page.getByRole("button", { name: "Lưu phân quyền" }).click();
@@ -372,7 +372,7 @@ test("Phân quyền: Admin mở menu Học viên cho Giáo viên trực; Giáo v
     await page.getByRole("button", { name: "Mở menu" }).click();
     await expect(menu).toBeVisible({ timeout: 1000 });
   }).toPass();
-  for (const name of ["Tổng quan", "Thời khóa biểu", "Lớp học", "Học viên", "Điểm danh"]) {
+  for (const name of ["Tổng quan", "Thời khóa biểu", "Lớp học", "QL Học viên", "Điểm danh"]) {
     await expect(menu.getByRole("link", { name, exact: true })).toBeVisible();
   }
   for (const name of ["Tài khoản", "Cấu hình", "Nhật ký", "Giáo viên", "Chấm công"]) {

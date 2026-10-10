@@ -1,7 +1,7 @@
 import { and, asc, between, count, desc, eq, gte, inArray, lt, ne, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import type { z } from "zod";
-import { db } from "@/db";
+import { db, type Tx } from "@/db";
 import {
   attendances,
   classTeachers,
@@ -23,12 +23,13 @@ import {
 import { ROSTER_NO_TEACHER_SHADE, rosterSessionLabel, rosterSessionOrder, rosterTeacherShade, shiftOfTime } from "@/domain/roster";
 import { addDays, isoWeekday, startOfWeek } from "@/lib/dates";
 import { todayIso } from "@/lib/format";
-import type { classInput, classTeacherInput, classTeacherUpdate, enrollInput, leaveInput } from "@/lib/validation/entities";
+import type { classInput, classTeacherInput, classTeacherUpdate, enrollInput, leaveInput, newEnrollmentInput } from "@/lib/validation/entities";
 import { audit } from "../audit";
 import { AppError, notFound, translateDbError } from "../errors";
 import { type Actor, allowedClassIds, assertAdmin, assertCan, assertCanAny, assertClassAccess, assertNotTimetableOnly } from "../guard";
 import { createRow, deleteRow, updateRow } from "./crud";
 import { purgeStudentStarLogs } from "./stars";
+import { insertStudent } from "./students";
 
 const activeCount = sql<number>`(
   select count(*)::int from ${enrollments}
@@ -362,36 +363,62 @@ export async function listEnrollments(actor: Actor, classId: string) {
     .orderBy(asc(students.code), desc(enrollments.joinedAt));
 }
 
+/** Ghi danh trong một giao dịch có sẵn (người gọi đã kiểm tra quyền và phạm vi lớp). */
+async function enrollInTx(tx: Tx, actor: Actor, data: z.output<typeof enrollInput>) {
+  // Khóa dòng lớp để hai thao tác ghi danh đồng thời không vượt sĩ số.
+  const [cls] = await tx.select().from(classes).where(eq(classes.id, data.classId)).for("update").limit(1);
+  if (!cls) throw notFound("lớp học");
+  if (cls.status !== "open") throw new AppError("CONFLICT", "Lớp đã đóng, không thể ghi danh.");
+  await assertNotTimetableOnly(cls.id, tx);
+  const [student] = await tx.select().from(students).where(eq(students.id, data.studentId)).limit(1);
+  if (!student) throw notFound("học viên");
+  if (student.status === "left") throw new AppError("CONFLICT", "Học viên đã nghỉ hẳn, không thể ghi danh.");
+  const [current] = await tx
+    .select({ n: count() })
+    .from(enrollments)
+    .where(and(eq(enrollments.classId, data.classId), eq(enrollments.status, "active")));
+  if ((current?.n ?? 0) >= cls.maxSize) {
+    throw new AppError("CONFLICT", `Lớp đã đủ sĩ số tối đa (${cls.maxSize}).`);
+  }
+  const [row] = await tx.insert(enrollments).values({ ...data, status: "active" }).returning();
+  await audit(tx, { userId: actor.userId, action: "create", tableName: "enrollments", recordId: row!.id, newValue: row });
+  return row!;
+}
+
 export async function enrollStudent(actor: Actor, data: z.output<typeof enrollInput>) {
   assertCan(actor, "enrollments", "add");
   await assertClassAccess(actor, data.classId);
   try {
-    return await db.transaction(async (tx) => {
-      // Khóa dòng lớp để hai thao tác ghi danh đồng thời không vượt sĩ số.
-      const [cls] = await tx.select().from(classes).where(eq(classes.id, data.classId)).for("update").limit(1);
-      if (!cls) throw notFound("lớp học");
-      if (cls.status !== "open") throw new AppError("CONFLICT", "Lớp đã đóng, không thể ghi danh.");
-      await assertNotTimetableOnly(cls.id, tx);
-      const [student] = await tx.select().from(students).where(eq(students.id, data.studentId)).limit(1);
-      if (!student) throw notFound("học viên");
-      if (student.status === "left") throw new AppError("CONFLICT", "Học viên đã nghỉ hẳn, không thể ghi danh.");
-      const [current] = await tx
-        .select({ n: count() })
-        .from(enrollments)
-        .where(and(eq(enrollments.classId, data.classId), eq(enrollments.status, "active")));
-      if ((current?.n ?? 0) >= cls.maxSize) {
-        throw new AppError("CONFLICT", `Lớp đã đủ sĩ số tối đa (${cls.maxSize}).`);
-      }
-      const [row] = await tx.insert(enrollments).values({ ...data, status: "active" }).returning();
-      await audit(tx, { userId: actor.userId, action: "create", tableName: "enrollments", recordId: row!.id, newValue: row });
-      return row!;
-    });
+    return await db.transaction((tx) => enrollInTx(tx, actor, data));
   } catch (e) {
     const err = translateDbError(e);
     if (err instanceof AppError && err.code === "CONFLICT" && err.message.startsWith("Dữ liệu bị trùng")) {
       throw new AppError("CONFLICT", "Học viên đã ghi danh lớp này.");
     }
     throw err;
+  }
+}
+
+/**
+ * Nhận học viên mới ở trang Ghi danh: tạo học viên và ghi danh vào lớp trong cùng một giao dịch
+ * (lớp đủ chỗ, đã đóng… thì không tạo dở học viên). Không chọn lớp thì chỉ tạo học viên, em nằm ở danh sách chờ lớp.
+ * Cần quyền Thêm của menu Học viên, và của menu Ghi danh nếu có chọn lớp.
+ */
+export async function enrollNewStudent(actor: Actor, data: z.output<typeof newEnrollmentInput>, now: Date = new Date()) {
+  assertCan(actor, "students", "add");
+  const { classId, joinedAt, ...student } = data;
+  if (classId) {
+    assertCan(actor, "enrollments", "add");
+    await assertClassAccess(actor, classId);
+  }
+  try {
+    return await db.transaction(async (tx) => {
+      const created = await insertStudent(tx, actor, student, now);
+      const enrollment = classId ? await enrollInTx(tx, actor, { classId, studentId: created.id, joinedAt: joinedAt! }) : null;
+      return { studentId: created.id, code: created.code, enrollmentId: enrollment?.id ?? null };
+    });
+  } catch (e) {
+    throw translateDbError(e);
   }
 }
 
