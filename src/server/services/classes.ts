@@ -20,7 +20,7 @@ import {
   timesheetEntries,
   tuitionReceipts,
 } from "@/db/schema";
-import { rosterSessionLabel, rosterSessionOrder, shiftOfTime } from "@/domain/roster";
+import { rosterSessionLabel, rosterSessionOrder, rosterSessionShade, shiftOfTime } from "@/domain/roster";
 import { addDays, isoWeekday, startOfWeek } from "@/lib/dates";
 import { todayIso } from "@/lib/format";
 import type { classInput, classTeacherInput, classTeacherUpdate, enrollInput, leaveInput } from "@/lib/validation/entities";
@@ -297,6 +297,7 @@ export async function weeklyRoster(actor: Actor, today: string = todayIso()) {
         key,
         label: rosterSessionLabel(slot.slotName, slot.weekday),
         order: rosterSessionOrder(slot.slotName, slot.weekday),
+        shade: rosterSessionShade(slot.slotName, slot.weekday),
         startTime: slot.startTime,
         endTime: slot.endTime,
         teacherName: slot.teacher,

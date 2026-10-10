@@ -271,7 +271,7 @@ test("Ghi danh: tổng quan theo buổi trong tuần (buổi - giờ, tên lớp
   try {
     await page.goto("/admin/enrollments");
     await expect(page.getByRole("heading", { name: "Ghi danh", exact: true })).toBeVisible();
-    // Lớp học 2 buổi/tuần hiện ở cả hai buổi, buổi Tối đứng trước buổi Sáng cuối tuần.
+    // Lớp học 2 buổi/tuần hiện ở cả hai buổi, theo thứ tự ngày trong tuần (Thứ 2 trước Thứ 7).
     const blocks = page.locator('[data-roster="GD-E2E"]');
     await expect(blocks).toHaveCount(2);
     // Tiêu đề: hàng trên "Buổi - giờ", hàng dưới "Tên lớp - Tên GV" (lớp thử chưa có giáo viên nên chỉ có tên lớp).
@@ -286,6 +286,10 @@ test("Ghi danh: tổng quan theo buổi trong tuần (buổi - giờ, tên lớp
 
     const block = blocks.nth(0);
     await expect(block.getByRole("columnheader")).toHaveText(["STT", "Họ tên HS", "Lớp"]);
+    // Cả hàng tiêu đề canh giữa; mỗi buổi một màu nền tiêu đề riêng.
+    for (const name of ["STT", "Họ tên HS", "Lớp"]) await expect(block.getByRole("columnheader", { name })).toHaveCSS("text-align", "center");
+    const headerColor = (index: number) => blocks.nth(index).locator("header").evaluate((el) => getComputedStyle(el).backgroundColor);
+    expect(await headerColor(0)).not.toBe(await headerColor(1));
     await expect(block.locator("tbody tr")).toHaveCount(8);
     // Lớp tối đa 2 học viên: hai chỗ trống được đánh số, các hàng còn lại để trống; không còn dấu +.
     const addButtons = block.getByRole("button", { name: /Thêm \d+ học viên/ });

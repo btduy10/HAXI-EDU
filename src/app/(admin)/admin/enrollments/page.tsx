@@ -152,19 +152,25 @@ export default async function EnrollmentsPage({ searchParams }: PageProps<"/admi
                 // Số chỗ còn lại theo sĩ số tối đa: mỗi chỗ một hàng "Thêm n học viên".
                 const free = block.maxSize - block.students.length;
                 return (
-                  <section key={block.key} data-roster={block.classCode} className="glass-solid min-w-0 overflow-hidden rounded-2xl border text-sm">
-                    <header className="grid gap-0.5 border-b bg-muted/60 px-3 py-2">
+                  <section
+                    key={block.key}
+                    data-roster={block.classCode}
+                    // Mỗi buổi một màu: viền trên và nền tiêu đề; các lớp cùng buổi dùng chung màu.
+                    style={{ borderTopColor: block.shade.accent }}
+                    className="glass-solid min-w-0 overflow-hidden rounded-2xl border border-t-4 text-sm"
+                  >
+                    <header style={{ backgroundColor: block.shade.header }} className="grid gap-0.5 border-b px-3 py-2">
                       <div className="flex items-baseline justify-between gap-2">
                         <h2 className="font-semibold">
                           {block.label} - {rosterTime(block.startTime)} - {rosterTime(block.endTime)}
                         </h2>
-                        <span className="text-muted-foreground tabular-nums" aria-label={`Sĩ số ${block.students.length} trên ${block.maxSize}`}>
+                        <span className="text-foreground/80 tabular-nums" aria-label={`Sĩ số ${block.students.length} trên ${block.maxSize}`}>
                           {block.students.length}/{block.maxSize}
                         </span>
                       </div>
                       <Link
                         href={`/admin/enrollments?classId=${block.classId}`}
-                        className="w-fit max-w-full truncate rounded text-primary underline-offset-2 outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/50"
+                        className="w-fit max-w-full truncate rounded font-medium underline-offset-2 outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/50"
                       >
                         {block.className}
                         {block.teacherName && ` - ${block.teacherName}`}
@@ -174,7 +180,7 @@ export default async function EnrollmentsPage({ searchParams }: PageProps<"/admi
                       <thead>
                         <tr className="text-xs text-muted-foreground">
                           <th className="w-10 px-1 py-1.5 text-center font-medium">STT</th>
-                          <th className="px-2 py-1.5 text-left font-medium">Họ tên HS</th>
+                          <th className="px-2 py-1.5 text-center font-medium">Họ tên HS</th>
                           <th className="w-12 px-1 py-1.5 text-center font-medium">Lớp</th>
                         </tr>
                       </thead>
