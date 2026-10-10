@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { BackLink } from "@/components/back-link";
-import { StudentProgressCard } from "@/components/avatar";
+import { StudentStarCard } from "@/components/student-star-card";
 import { CrudSection } from "@/components/crud-section";
 import type { Field } from "@/components/form-dialog";
 import { Badge } from "@/components/ui/badge";
@@ -14,7 +14,7 @@ import { orNotFound, uuidParam } from "@/server/page";
 import { listRooms, listTeachers, listTimeSlots } from "@/server/services/catalog";
 import { getClass, listClassTeachers } from "@/server/services/classes";
 import { classScheduleOverview, listTemplates, nextSessionDate } from "@/server/services/sessions";
-import { listClassProgress } from "@/server/services/stars";
+import { listClassStars } from "@/server/services/stars";
 import { requireMenu } from "@/server/session";
 
 export const metadata: Metadata = { title: "Chi tiết lớp" };
@@ -30,7 +30,7 @@ export default async function ClassDetailPage({ params }: PageProps<"/admin/clas
   const [assigned, teachers, students, templates, slots, rooms] = await Promise.all([
     listClassTeachers(actor, classId),
     listTeachers(actor),
-    tracksStudents ? listClassProgress(actor, classId) : [],
+    tracksStudents ? listClassStars(actor, classId) : [],
     listTemplates(actor, classId),
     listTimeSlots(actor),
     listRooms(actor),
@@ -261,7 +261,7 @@ export default async function ClassDetailPage({ params }: PageProps<"/admin/clas
             <ul className="grid gap-2 sm:grid-cols-2">
               {students.map((s) => (
                 <li key={s.id}>
-                  <StudentProgressCard fullName={s.fullName} code={s.code} progress={s.progress} href={can("view", "students") ? `/admin/students/${s.id}` : undefined} />
+                  <StudentStarCard fullName={s.fullName} code={s.code} total={s.total} href={can("view", "students") ? `/admin/students/${s.id}` : undefined} />
                 </li>
               ))}
             </ul>

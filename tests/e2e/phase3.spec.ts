@@ -27,10 +27,9 @@ test.beforeAll(async () => {
   otherSessionId = other!.id;
   studentId = student!.id;
   otherStudentId = otherStudent!.id;
-  // Đưa tổng sao của học viên về đúng 19 (sát mốc 20 của cấp 2) để kịch bản lên/tụt cấp ổn định.
+  // Đưa tổng sao của học viên về đúng 19 để các con số trong kịch bản ổn định.
   const [{ total }] = (await db`select coalesce(sum(stars), 0)::int as total from star_logs where student_id = ${studentId}`) as unknown as [{ total: number }];
   if (total !== 19) await db`insert into star_logs (student_id, stars, note) values (${studentId}, ${19 - total}, 'Điều chỉnh cho kiểm thử')`;
-  await db`update students set current_avatar_id = (select id from avatars where name = 'Pico') where id = ${studentId}`;
   await db.end();
 });
 
@@ -41,7 +40,7 @@ async function award(page: Page, names: string[] | "all", criteria: RegExp) {
   await page.getByRole("dialog").getByRole("button", { name: criteria }).click();
 }
 
-test("GV ghi sao trên điện thoại: cả lớp, lên cấp, đổi avatar, tụt cấp tự đổi avatar, giới hạn trừ, hoàn tác", async ({ page }) => {
+test("GV ghi sao trên điện thoại: một em, cả lớp, giới hạn trừ, hoàn tác; không còn avatar và cấp bậc", async ({ page }) => {
   await login(page, "gv.lan", NEW_PASSWORD);
   await expect(page).toHaveURL(/\/teacher\/dashboard$/);
   await page.goto(`/teacher/sessions/${sessionId}/attendance`);
@@ -49,29 +48,37 @@ test("GV ghi sao trên điện thoại: cả lớp, lên cấp, đổi avatar, t
   await expect(page).toHaveURL(new RegExp(`/teacher/sessions/${sessionId}/stars$`));
   await expect(page.getByRole("checkbox")).toHaveCount(8);
   await expectNoHorizontalScroll(page);
+  const row = page.getByRole("checkbox", { name: `Chọn ${STUDENT}` });
+  // Mỗi em chỉ còn tên, mã và tổng sao: không có hình avatar, không có cấp.
+  await expect(row).toContainText("19");
+  await expect(row).not.toContainText("Cấp");
+  await expect(page.getByRole("img", { name: /^Avatar / })).toHaveCount(0);
 
-  // Lên cấp: 19 + 1 = 20 sao → chúc mừng.
+  // 19 + 1 = 20 sao: chỉ báo đã ghi sao, không còn thông báo lên cấp.
   await award(page, [STUDENT], /Phát biểu xây dựng bài/);
-  await expect(page.getByText(`Chúc mừng! ${STUDENT} đã lên cấp Kỹ sư tập sự.`)).toBeVisible();
-  await expect(page.getByRole("checkbox", { name: `Chọn ${STUDENT}` })).toContainText("Cấp 2");
-  await page.screenshot({ path: "test-results/shots/stars-levelup-360.png", fullPage: true });
+  await expect(page.getByText("Đã ghi +1 sao (Phát biểu xây dựng bài) cho 1 học viên.")).toBeVisible();
+  await expect(row).toContainText("20");
+  await expect(page.getByText(/Chúc mừng|lên cấp/)).toHaveCount(0);
+  await page.screenshot({ path: "test-results/shots/stars-360.png", fullPage: true });
 
-  // Đổi sang avatar cấp 2 vừa mở; avatar cấp cao hơn vẫn khóa.
+  // Hồ sơ học viên: còn sao, quà, chương trình, lịch sử; không còn mục Avatar, cấp và thanh tiến độ.
   await page.goto(`/teacher/students/${studentId}`);
   await expect(page.getByRole("heading", { name: new RegExp(STUDENT) })).toBeVisible();
-  await expect(page.getByRole("button", { name: /Vua Robot, đang khóa, cần 200 sao/ })).toBeDisabled();
-  await page.getByRole("button", { name: "Bánh Răng" }).click();
-  await expect(page.getByText('Đã đổi avatar thành "Bánh Răng".')).toBeVisible();
-  await expect(page.getByRole("button", { name: "Bánh Răng" })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByText("Tổng sao tích lũy")).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Lịch sử ghi sao/ })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Avatar" })).toHaveCount(0);
+  await expect(page.getByRole("img", { name: /^Avatar / })).toHaveCount(0);
+  await expect(page.getByRole("progressbar")).toHaveCount(0);
+  await expect(page.getByText(/Cấp \d/)).toHaveCount(0);
   await expectNoHorizontalScroll(page);
-  await page.screenshot({ path: "test-results/shots/student-avatars-360.png", fullPage: true });
+  await page.screenshot({ path: "test-results/shots/student-profile-360.png", fullPage: true });
 
-  // Tụt cấp: 20 − 1 = 19 → về cấp 1, avatar cấp 2 bị khóa nên tự đổi.
+  // 20 − 1 = 19: không còn thông báo tụt cấp.
   await page.goto(`/teacher/sessions/${sessionId}/stars`);
   await award(page, [STUDENT], /Mất trật tự/);
-  await expect(page.getByText(new RegExp(`${STUDENT} tụt từ cấp Kỹ sư tập sự xuống Tân binh\\. Avatar đang dùng bị khóa nên đã tự đổi sang "Bu Lông"`))).toBeVisible();
-  await expect(page.getByRole("checkbox", { name: `Chọn ${STUDENT}` })).toContainText("Cấp 1");
-  await page.screenshot({ path: "test-results/shots/stars-leveldown-360.png" });
+  await expect(page.getByText(/Đã ghi -1 sao/)).toBeVisible();
+  await expect(row).toContainText("19");
+  await expect(page.getByText(/tụt từ cấp|Avatar/)).toHaveCount(0);
 
   // Giới hạn trừ 3 sao/buổi: đã trừ 1, trừ thêm 2 được, trừ thêm 2 nữa bị chặn.
   await award(page, [STUDENT], /Không giữ gìn thiết bị/);
@@ -96,69 +103,71 @@ test("GV ghi sao trên điện thoại: cả lớp, lên cấp, đổi avatar, t
   await db.end();
   expect(total).toBe(19 + 1 - 1 - 2 + 2 + 3);
 
-  // Danh sách lớp có avatar, cấp, tổng sao và thanh tiến độ.
+  // Danh sách lớp: mỗi em một thẻ tên kèm tổng sao, không có avatar, cấp hay thanh tiến độ.
   await page.goto(`/teacher/classes/${classId}`);
-  await expect(page.getByRole("progressbar")).toHaveCount(8);
-  await expect(page.getByRole("img", { name: /^Avatar / })).toHaveCount(8);
-  await expect(page.getByRole("link", { name: new RegExp(STUDENT) })).toContainText("Cấp 2");
+  await expect(page.getByRole("link", { name: new RegExp(STUDENT) })).toContainText("22");
+  await expect(page.getByRole("progressbar")).toHaveCount(0);
+  await expect(page.getByRole("img", { name: /^Avatar / })).toHaveCount(0);
+  await expect(page.getByText(/Cấp \d/)).toHaveCount(0);
   await expectNoHorizontalScroll(page);
-  await page.screenshot({ path: "test-results/shots/class-progress-360.png", fullPage: true });
+  await page.screenshot({ path: "test-results/shots/class-stars-360.png", fullPage: true });
 });
 
-test("GV không ghi sao, không xem hồ sơ, không đổi avatar của học viên lớp khác", async ({ page }) => {
+test("GV không ghi sao, không xem hồ sơ của học viên lớp khác; trang Sao chỉ đọc", async ({ page }) => {
   await login(page, "gv.lan", NEW_PASSWORD);
   await expect(page).toHaveURL(/\/teacher\/dashboard$/);
   await expectNotFound(page, `/teacher/sessions/${otherSessionId}/stars`);
   await expectNotFound(page, `/teacher/students/${otherStudentId}`);
-  // GV xem được menu Sao & Avatar nhưng chỉ đọc: không có nút thêm/sửa/xóa cấu hình, không có mục tặng avatar.
+  // GV xem được menu Sao nhưng chỉ đọc: không có nút thêm/sửa/xóa tiêu chí.
   await expectNotFound(page, `/admin/sessions/${otherSessionId}/stars`);
   await page.goto("/admin/stars?tab=criteria");
   await expect(page.getByRole("heading", { name: /Tiêu chí sao/ })).toBeVisible();
   await expect(page.getByRole("button", { name: "Thêm" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: /^(Sửa|Xóa) / })).toHaveCount(0);
-  await expect(page.getByRole("link", { name: "Tặng avatar" })).toHaveCount(0);
-  await page.goto("/admin/stars?tab=avatars");
-  await expect(page.getByRole("button", { name: "Sửa" })).toHaveCount(0);
   await page.goto("/admin/stars?tab=ledger");
   await expect(page.getByText("RB-NC01")).toHaveCount(0);
   await expectNoHorizontalScroll(page);
 });
 
-test("Admin: tiêu chí, cấp bậc, kho avatar, tặng avatar, sổ cái", async ({ page }) => {
+test("Admin: trang Sao chỉ còn Tiêu chí và Sổ cái; hồ sơ học viên không còn Avatar; menu Lớp học → Ghi danh → QL Học viên", async ({ page }) => {
   await login(page, "admin", NEW_PASSWORD);
   await page.getByLabel("Mã xác thực").fill(totp(loadAdminSecret()));
   await page.getByRole("button", { name: "Xác nhận" }).click();
   await expect(page).toHaveURL(/\/admin\/dashboard$/);
 
+  // Thứ tự menu: Lớp học, Ghi danh, QL Học viên đứng liền nhau theo đúng thứ tự đó.
+  const menu = page.getByRole("dialog");
+  await expect(async () => {
+    await page.getByRole("button", { name: "Mở menu" }).click();
+    await expect(menu).toBeVisible({ timeout: 1000 });
+  }).toPass();
+  const labels = (await menu.getByRole("link").allTextContents()).map((label) => label.trim());
+  const at = (name: string) => labels.indexOf(name);
+  expect(at("Lớp học")).toBeGreaterThan(-1);
+  expect([at("Ghi danh") - at("Lớp học"), at("QL Học viên") - at("Ghi danh")]).toEqual([1, 1]);
+  expect(labels.filter((label) => /avatar/i.test(label))).toEqual([]);
+  await page.keyboard.press("Escape");
+
   await page.goto("/admin/stars");
+  await expect(page.getByRole("heading", { name: "Sao", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: /Tiêu chí sao/ })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Mục" }).getByRole("link")).toHaveText(["Tiêu chí", "Sổ cái"]);
   await expectNoHorizontalScroll(page);
+  await page.screenshot({ path: "test-results/shots/stars-admin-360.png", fullPage: true });
+  // Địa chỉ của các tab đã bỏ quay về tab mặc định.
+  for (const tab of ["levels", "avatars", "gifts"]) {
+    await page.goto(`/admin/stars?tab=${tab}`);
+    await expect(page.getByRole("heading", { name: /Tiêu chí sao/ })).toBeVisible();
+  }
+  // Hình avatar tĩnh không còn được phục vụ.
+  expect((await page.request.get("/avatars/pico.svg")).status()).not.toBe(200);
 
-  // Bảng cấp phải tăng dần: đặt mốc cấp 2 vượt cấp 3 bị từ chối.
-  await page.getByRole("link", { name: "Cấp bậc" }).click();
-  await page.getByRole("button", { name: "Sửa Kỹ sư tập sự" }).click();
-  await page.getByLabel("Số sao tối thiểu").fill("60");
-  await page.getByRole("button", { name: "Lưu" }).click();
-  await expect(page.locator('[data-slot="alert"]')).toContainText("Mốc sao của cấp sau phải lớn hơn cấp trước");
-  await page.getByRole("button", { name: "Hủy", exact: true }).click();
-  await expectNoHorizontalScroll(page);
-
-  await page.getByRole("link", { name: "Kho avatar" }).click();
-  await expect(page.getByRole("img", { name: /^Avatar / })).toHaveCount(15);
-  await expectNoHorizontalScroll(page);
-  await page.screenshot({ path: "test-results/shots/avatar-catalog-360.png", fullPage: true });
-  await page.setViewportSize({ width: 1280, height: 800 });
-  await page.screenshot({ path: "test-results/shots/avatar-catalog-1280.png", fullPage: true });
-  await page.setViewportSize({ width: 360, height: 740 });
-
-  // Tặng avatar riêng đầu tiên trong danh sách ("Bạn Tốt") rồi kiểm tra ở hồ sơ học viên.
-  await page.getByRole("link", { name: "Tặng avatar" }).click();
-  await page.getByRole("button", { name: "Tặng" }).first().click();
-  await page.getByLabel("Học viên").selectOption({ label: `HV008 – ${STUDENT}` });
-  await page.getByRole("dialog").getByRole("button", { name: "Tặng" }).click();
-  await expect(page.getByText("Đã tặng avatar.")).toBeVisible();
   await page.goto(`/admin/students/${studentId}`);
-  await expect(page.getByRole("button", { name: "Bạn Tốt" })).toContainText("Được tặng");
+  await expect(page.getByRole("heading", { name: new RegExp(STUDENT) })).toBeVisible();
+  await expect(page.getByText("Tổng sao tích lũy")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Avatar" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Tặng avatar" })).toHaveCount(0);
+  await expect(page.getByRole("img", { name: /^Avatar / })).toHaveCount(0);
   await expectNoHorizontalScroll(page);
 
   await page.goto("/admin/stars?tab=ledger");

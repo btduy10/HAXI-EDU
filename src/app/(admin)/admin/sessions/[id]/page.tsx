@@ -172,7 +172,7 @@ export default async function SessionDetailPage({ params }: PageProps<"/admin/se
             variant="destructive"
             confirmText={
               session.attendanceCount > 0 || session.starLogCount > 0
-                ? `Xóa hẳn buổi học này? Sẽ xóa luôn ${session.attendanceCount} lượt điểm danh và ${session.starLogCount} lần ghi sao của buổi; cấp và avatar của học viên được tính lại. Không hoàn tác được.`
+                ? `Xóa hẳn buổi học này? Sẽ xóa luôn ${session.attendanceCount} lượt điểm danh và ${session.starLogCount} lần ghi sao của buổi. Không hoàn tác được.`
                 : "Xóa hẳn buổi học này khỏi thời khóa biểu? Không hoàn tác được."
             }
             action={deleteSessionAction}

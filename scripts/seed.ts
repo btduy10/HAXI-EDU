@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
 
 // Khởi tạo CSDL trống. Chạy: npm run db:seed
-// Mặc định chỉ tạo tài khoản admin và cấu hình nền (cấp bậc, tiêu chí sao, kho avatar, cấu hình) để Admin nhập dữ liệu thật.
+// Mặc định chỉ tạo tài khoản admin và cấu hình nền (tiêu chí sao, cấu hình) để Admin nhập dữ liệu thật.
 // SEED_DEMO_DATA=true (máy phát triển, kiểm thử tự động) tạo thêm dữ liệu mẫu: giáo viên, lớp, học viên, buổi học, sao, quà
 // và hai tài khoản gv.lan, gv.minh.
 // Từ chối chạy nếu CSDL đã có tài khoản để không ghi đè dữ liệu thật.
@@ -18,11 +18,8 @@ async function main() {
   const { hashPassword } = await import("../src/server/password");
 
   const [{ n }] = (await db.execute(sql`select count(*)::int as n from "user"`)) as unknown as [{ n: number }];
-  const { ensureAvatarCatalog } = await import("../src/server/services/avatars");
   if (n > 0) {
-    // CSDL đã có dữ liệu: chỉ bổ sung kho avatar mặc định nếu còn thiếu.
-    const added = await ensureAvatarCatalog(db);
-    console.log(`CSDL đã có tài khoản — bỏ qua seed. Đã bổ sung ${added} avatar mặc định.`);
+    console.log("CSDL đã có tài khoản — bỏ qua seed.");
     await closeDb();
     return;
   }
@@ -67,14 +64,6 @@ async function main() {
       });
       await tx.insert(s.account).values({ id: randomUUID(), accountId: id, providerId: "credential", userId: id, password: passwordHash });
     }
-
-    await tx.insert(s.levels).values([
-      { levelNo: 1, name: "Tân binh", minStars: 0, frameColor: "#b08d57" },
-      { levelNo: 2, name: "Kỹ sư tập sự", minStars: 20, frameColor: "#cd7f32" },
-      { levelNo: 3, name: "Kỹ sư", minStars: 50, frameColor: "#c0c0c0" },
-      { levelNo: 4, name: "Chuyên gia", minStars: 100, frameColor: "#ffd700" },
-      { levelNo: 5, name: "Bậc thầy", minStars: 200, frameColor: "#e5b80b" },
-    ]);
 
     await tx.insert(s.starCriteria).values([
       { name: "Hoàn thành nhiệm vụ", stars: 3, type: "reward" },
@@ -183,7 +172,6 @@ async function main() {
     }
   });
 
-  await ensureAvatarCatalog(db);
   if (demo) {
     // Sinh buổi học bằng chính service của ứng dụng, rồi điểm danh sẵn các buổi đã quá hạn khóa.
     const { generateSessions } = await import("../src/server/services/sessions");
@@ -209,7 +197,7 @@ async function main() {
       await db.update(s.sessions).set({ status: "done", content: "Bài học theo giáo trình" }).where(sql`${s.sessions.id} = ${session.id}`);
     }
 
-    // Vài lần ghi sao ở các buổi đã dạy để học viên có cấp và avatar khác nhau.
+    // Vài lần ghi sao ở các buổi đã dạy để học viên có số sao khác nhau.
     const { awardStars } = await import("../src/server/services/stars");
     const criteria = await db.select().from(s.starCriteria);
     const byName = (name: string) => criteria.find((c) => c.name === name)!.id;

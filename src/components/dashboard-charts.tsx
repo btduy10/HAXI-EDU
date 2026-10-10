@@ -3,9 +3,8 @@ import { addDays } from "@/lib/dates";
 import { formatDate } from "@/lib/format";
 import type { DashboardCharts as Data } from "@/server/services/dashboard";
 
-/** Bốn biểu đồ của trang Tổng quan. Phạm vi số liệu (toàn trung tâm hay lớp của GV) do service quyết định. */
+/** Ba biểu đồ của trang Tổng quan. Phạm vi số liệu (toàn trung tâm hay lớp của GV) do service quyết định. */
 export function DashboardCharts({ data, scopeLabel }: { data: Data; scopeLabel: string }) {
-  const totalStudents = data.levels.reduce((sum, l) => sum + l.students, 0);
   return (
     <div className="stagger grid grid-cols-1 gap-4 lg:grid-cols-2">
       <ChartCard title="Điểm danh 30 ngày qua" subtitle={`Cơ cấu các lượt điểm danh · ${scopeLabel}`}>
@@ -40,17 +39,6 @@ export function DashboardCharts({ data, scopeLabel }: { data: Data; scopeLabel: 
         />
       </ChartCard>
 
-      <ChartCard title="Học viên theo cấp bậc" subtitle={`${totalStudents} học viên đang học · ${scopeLabel}`}>
-        <BarList
-          emptyText="Chưa cấu hình cấp bậc."
-          data={data.levels.map((l) => ({
-            key: String(l.levelNo),
-            label: `Cấp ${l.levelNo} · ${l.name}`,
-            value: l.students,
-            detail: totalStudents > 0 ? `${Math.round((l.students / totalStudents) * 100)}% học viên` : undefined,
-          }))}
-        />
-      </ChartCard>
     </div>
   );
 }

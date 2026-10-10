@@ -1,8 +1,8 @@
 # HAXI Robotics — Hệ thống quản lý Trung tâm Robotics
 
-Ứng dụng web cho trung tâm dạy Robotics: quản lý giáo viên, học viên, lớp, thời khóa biểu, điểm danh, chấm sao, avatar game hóa và tổng kết tặng quà cuối khóa. Hai loại tài khoản: **Quản trị (Admin)** và **Giáo viên (GV)**. Học viên và phụ huynh không có tài khoản.
+Ứng dụng web cho trung tâm dạy Robotics: quản lý giáo viên, học viên, lớp, thời khóa biểu, điểm danh, chấm sao và tổng kết tặng quà cuối khóa. Hai loại tài khoản: **Quản trị (Admin)** và **Giáo viên (GV)**. Học viên và phụ huynh không có tài khoản.
 
-Cả 4 giai đoạn đã hoàn thành: nền tảng, TKB & điểm danh, sao & avatar, cuối khóa & báo cáo.
+Cả 4 giai đoạn đã hoàn thành: nền tảng, TKB & điểm danh, sao, cuối khóa & báo cáo.
 
 ## Công nghệ
 
@@ -31,7 +31,7 @@ Seed chỉ tạo sẵn tài khoản `admin`. Tài khoản giáo viên do Admin t
 
 Mật khẩu tạm là giá trị `SEED_DEFAULT_PASSWORD` trong `.env` (mặc định `Haxi@2026`). Lần đăng nhập đầu **bắt buộc đổi mật khẩu** (tối thiểu 8 ký tự, có chữ và số).
 
-Seed mặc định **không tạo dữ liệu mẫu**: chỉ có tài khoản `admin` và cấu hình nền (5 cấp bậc, tiêu chí sao, 15 avatar, cấu hình mặc định), để Admin nhập dữ liệu thật và dùng ngay. Với CSDL đã có tài khoản, chạy lại `npm run db:seed` chỉ bổ sung kho avatar còn thiếu.
+Seed mặc định **không tạo dữ liệu mẫu**: chỉ có tài khoản `admin` và cấu hình nền (tiêu chí sao, cấu hình mặc định), để Admin nhập dữ liệu thật và dùng ngay. Với CSDL đã có tài khoản, `npm run db:seed` bỏ qua, không ghi gì.
 
 Muốn có dữ liệu mẫu để thử trên máy (2 giáo viên và tài khoản `gv.lan`, `gv.minh`, 2 lớp đã sinh buổi học, 15 học viên, phòng, ca học, quà và mốc quà), đặt `SEED_DEMO_DATA=true` khi chạy seed trên CSDL trống. Kiểm thử tự động (Playwright) tự đặt biến này.
 
@@ -42,7 +42,7 @@ npm run db:reset                # chỉ đếm số dòng sẽ xóa, chưa xóa 
 npm run db:reset -- --confirm   # xóa thật, KHÔNG hoàn tác được — hãy sao lưu trước
 ```
 
-Lệnh xóa toàn bộ giáo viên, học viên, khóa học, lớp, phòng, ca học, ngày nghỉ, ghi danh, buổi học, điểm danh, sao, quà, tổng kết, nhật ký và mọi tài khoản không phải Quản trị. Giữ lại: tài khoản Quản trị (mật khẩu, 2FA), cấp bậc, kho avatar, tiêu chí sao, cấu hình và bảng phân quyền. Lệnh chạy trên CSDL trong `DATABASE_URL`; để dọn CSDL đang triển khai, đặt `$env:DATABASE_URL = "<chuỗi kết nối>"` trước khi chạy.
+Lệnh xóa toàn bộ giáo viên, học viên, khóa học, lớp, phòng, ca học, ngày nghỉ, ghi danh, buổi học, điểm danh, sao, quà, tổng kết, nhật ký và mọi tài khoản không phải Quản trị. Giữ lại: tài khoản Quản trị (mật khẩu, 2FA), tiêu chí sao, cấu hình và bảng phân quyền. Lệnh chạy trên CSDL trong `DATABASE_URL`; để dọn CSDL đang triển khai, đặt `$env:DATABASE_URL = "<chuỗi kết nối>"` trước khi chạy.
 
 ## Lệnh thường dùng
 
@@ -67,11 +67,10 @@ src/
   app/(teacher)/teacher Trang giáo viên
   app/api               Better Auth, nhập Excel, xuất Excel/PDF
   db/schema             Schema Drizzle (migration ở ./drizzle)
-  domain                Quy tắc nghiệp vụ thuần, không phụ thuộc CSDL (lịch, sao, cấp, avatar, tổng kết)
+  domain                Quy tắc nghiệp vụ thuần, không phụ thuộc CSDL (lịch, sao, tổng kết)
   server/services       Nghiệp vụ + PHÂN QUYỀN (nơi duy nhất quyết định ai được làm gì)
   server/actions        Server Action: chỉ là vỏ (phiên → Zod → service)
   lib/validation        Schema Zod
-public/avatars          15 avatar robot SVG (sinh bằng scripts/generate-avatars.mjs)
 scripts                 migrate, seed, sao lưu, hướng dẫn khôi phục
 tests/unit · tests/integration · tests/e2e
 ```
@@ -88,9 +87,9 @@ Nguyên tắc: mọi hàm trong `server/services` nhận `actor` lấy từ phi�
   - **Phạm vi lớp**: "Chỉ lớp của mình" (lớp được phân công; GV dạy thay có quyền trên đúng buổi mình dạy thay) hoặc "Tất cả lớp".
   - **Xem / Thêm / Sửa** theo từng menu. Tick Xem thì menu hiện trên thanh menu của vai trò đó và mở cùng trang Admin dùng, giới hạn trong phạm vi lớp.
   - Mặc định: Giáo viên điểm danh và chấm sao lớp mình; Giáo viên trực thấy mọi lớp và hỗ trợ điểm danh.
-  - Luôn chỉ Admin: xóa dữ liệu; Tài khoản, Nhật ký, Cấu hình; nhập Excel; mở khóa điểm danh; tiêu chí sao, cấp bậc, kho avatar, tặng avatar.
+  - Luôn chỉ Admin: xóa dữ liệu; Tài khoản, Nhật ký, Cấu hình; nhập Excel; mở khóa điểm danh; tiêu chí sao.
   - Ngoài Admin, không ai thấy hay ghi được ngày sinh, giới tính, phụ huynh, điện thoại, ghi chú của học viên.
-- Thứ tự menu quản trị: Tổng quan, **Giám đốc** (Khóa học, Phòng & Ca học, Giáo viên, Syllabus), **Admin** (Tài khoản, Cấu hình, Nhật ký), Học viên, Ghi danh, Lớp học, Thời khóa biểu, Điểm danh, **Sao & Quà** (Sao & Avatar, Quà & Tổng kết), Chấm công, Học phí, Báo cáo. Nhóm bấm để mở/đóng, tự mở khi đang ở trang thuộc nhóm; nhóm chỉ hiện khi vai trò được xem ít nhất một mục trong nhóm.
+- Thứ tự menu quản trị: Tổng quan, **Giám đốc** (Khóa học, Phòng & Ca học, Giáo viên, Syllabus), **Admin** (Tài khoản, Cấu hình, Nhật ký), Lớp học, Ghi danh, QL Học viên, Thời khóa biểu, Điểm danh, **Sao & Quà** (Sao, Quà & Tổng kết), Chấm công, Học phí, Báo cáo. Nhóm bấm để mở/đóng, tự mở khi đang ở trang thuộc nhóm; nhóm chỉ hiện khi vai trò được xem ít nhất một mục trong nhóm.
 - Quyền được kiểm tra ở máy chủ trong từng service (`can`/`assertCan` trong `src/server/guard.ts`); ẩn menu và nút chỉ là phần hiển thị.
 
 ### Danh mục (Admin)
@@ -123,7 +122,7 @@ Nguyên tắc: mọi hàm trong `server/services` nhận `actor` lấy từ phi�
 - **Lịch mẫu & sinh buổi:** mỗi lớp nhiều dòng lịch mỗi tuần: thứ, ca, phòng, GV chính, trợ giảng (nếu có). Số buổi của lớp không vượt số buổi của Khóa học (buổi hủy và buổi bù không tính). Thêm dòng lịch mẫu (hoặc đổi thứ) là các buổi sắp tới tự xếp lại theo thứ tự ngày cho đủ số buổi, trong thời gian của lớp; sửa dòng lịch mẫu thì các buổi sắp tới chưa điểm danh tự đổi theo (chỉ những phần chưa sửa tay; đổi thứ thì sinh lại). Buổi bị trùng lịch được bỏ qua và báo lại. Nút "Sinh buổi học từ lịch mẫu" xếp lại toàn bộ buổi chưa dạy của lớp (kể cả buổi xếp tay, đã sửa riêng) đúng thứ, ca, phòng, GV của lịch mẫu, từ ngày bắt đầu của lớp (buổi 1 luôn vào đúng ngày khai giảng, dùng ca/phòng/GV của dòng lịch mẫu có buổi sớm nhất), cho đủ số buổi khóa học (thiếu thì xếp tiếp các tuần sau và tự lùi ngày kết thúc của lớp tới buổi cuối); buổi đã điểm danh/ghi sao và buổi đã hủy giữ nguyên.
 - **Giờ riêng từng buổi:** giờ được sao chép từ ca lúc sinh; sửa một buổi không đổi ca gốc hay buổi khác, sửa ca không đổi buổi đã sinh.
 - **Trùng lịch:** hai buổi cùng ngày chỉ trùng khi **cùng Ca + Khung giờ** (cùng một dòng Ca học) mà có chung GV thực dạy (đã tính dạy thay), trợ giảng, hoặc cùng phòng. Khác khung giờ thì không trùng, kể cả khi giờ hai khung chồng nhau — giáo viên dạy nhiều ca, nhiều khung trong ngày là bình thường. Buổi bù giờ tự do (không gắn ca) so theo khoảng giờ thực tế. Trùng thì **chặn** (khi sinh buổi: bỏ qua và báo lại); vượt sức chứa phòng thì **cảnh báo** nhưng vẫn lưu. Một lớp không có hai dòng lịch mẫu cùng Thứ + Ca + Khung giờ (thêm/sửa bị chặn); dòng lặp có sẵn trong dữ liệu cũ được bỏ qua khi sinh buổi, không báo trùng với chính lớp đó.
-- **Điều chỉnh:** sửa riêng một buổi (giờ, phòng, GV chính, trợ giảng), dời buổi (giữ ngày gốc), hủy/khôi phục, GV dạy thay (lưu cả GV gốc và GV thay), buổi bù chỉ gồm học viên được chọn. Admin xóa hẳn được buổi xếp sai, kể cả buổi đã điểm danh/ghi sao: điểm danh và sao của buổi bị xóa theo, cấp và avatar được tính lại; lớp đã đóng thì không xóa.
+- **Điều chỉnh:** sửa riêng một buổi (giờ, phòng, GV chính, trợ giảng), dời buổi (giữ ngày gốc), hủy/khôi phục, GV dạy thay (lưu cả GV gốc và GV thay), buổi bù chỉ gồm học viên được chọn. Admin xóa hẳn được buổi xếp sai, kể cả buổi đã điểm danh/ghi sao: điểm danh và sao của buổi bị xóa theo; lớp đã đóng thì không xóa.
 - **Trợ giảng** thấy lớp ở "Lớp của tôi", có buổi trong TKB của mình và được điểm danh, ghi sao các buổi mình trợ giảng.
 - **Chấm công** (quyền Xem / Thêm / Sửa theo Cấu hình → Phân quyền; phạm vi "lớp của mình" chỉ thấy và thao tác công của chính mình): mỗi buổi đã điểm danh là một công cho người thực dạy và một công trợ giảng cho trợ giảng. Trang và tệp Excel (tổng hợp, từng giáo viên) có cột Mức lương và Thành tiền. Bảng Tổng công (Số buổi, Dạy thay, Trợ giảng…) xếp theo mã giáo viên; bảng Chi tiết buổi dạy xếp tăng dần theo ngày rồi giờ dạy, cột Thứ ghi gọn (Hai … Bảy, Chủ nhật), cột Lớp là tên lớp.
   - **Mức lương giáo viên/Nhân viên** (nút trước Chấm công bổ sung): đặt mức lương mỗi buổi theo từng lớp cho giáo viên, trợ giảng (chọn Giáo viên, Lớp dạy, nhập Mức lương); mỗi giáo viên một mức ở mỗi lớp. Thành tiền = số công đã dạy × mức lương của đúng giáo viên ở đúng lớp; công ở lớp chưa đặt mức lương được báo riêng, không cộng tiền. Đặt mức lương cần quyền Sửa và phạm vi "Tất cả lớp" (người chỉ thấy công của mình không tự đặt lương, chỉ thấy tiền của chính mình); xóa mức lương chỉ Admin.
@@ -136,15 +135,13 @@ Nguyên tắc: mọi hàm trong `server/services` nhận `actor` lấy từ phi�
 - **Điểm danh trên điện thoại:** danh sách chỉ gồm học viên đang ghi danh tại ngày học, mặc định "Có mặt", lưu cả lớp một lần.
 - **Khóa sửa điểm danh** sau N ngày (mặc định 7, sửa ở trang Cấu hình). Chỉ Admin mở khóa, mỗi lần 24 giờ.
 
-### Sao, cấp bậc và avatar
+### Sao
 
 - **Ghi sao theo buổi** cho từng em, một nhóm hoặc cả lớp. Số sao lấy từ tiêu chí ở máy chủ.
-- **Sổ cái chỉ thêm:** `star_logs` không sửa, không xóa (có trigger ở CSDL). Hoàn tác tạo bản ghi đảo dấu, mỗi lần ghi chỉ hoàn tác được một lần. Ngoại lệ chỉ dành cho Admin, đều có ghi Nhật ký và tính lại cấp, avatar: (1) xóa hẳn một dòng ghi danh nhập sai ở trang Ghi danh thì điểm danh và lịch sử sao của học viên ở lớp đó, trong thời gian ghi danh, bị xóa theo; (2) ở hồ sơ học viên, xóa hẳn từng lần ghi sao hoặc toàn bộ lịch sử sao (sao của lớp đã đóng được giữ).
-- **Hai loại tổng sao**, đều tính khi truy vấn bằng `GREATEST(0, SUM(stars))` và không lưu cứng: tổng toàn thời gian (lên cấp, mở avatar) và tổng theo lớp (xếp hạng, tặng quà).
-- **Cấp bậc** suy ra trực tiếp từ tổng toàn thời gian; trừ sao là tụt cấp ngay. Mỗi học viên bị trừ tối đa N sao/buổi (mặc định 3, sửa ở trang Cấu hình).
-- **Avatar:** 15 robot SVG (12 mở theo cấp, 3 tặng riêng). GV của lớp và Admin đổi avatar cho học viên. Avatar khóa hiển thị mờ kèm "Cần X sao".
-- **Tụt cấp** làm khóa avatar đang dùng thì hệ thống tự đổi sang avatar cao nhất còn mở và báo cho GV. Avatar tặng riêng không mất. Lên cấp hiện thông báo chúc mừng.
-- Thiết kế lại bộ avatar: sửa `scripts/generate-avatars.mjs` rồi chạy `node scripts/generate-avatars.mjs`. Hệ thống không cho tải SVG mới lên.
+- **Sổ cái chỉ thêm:** `star_logs` không sửa, không xóa (có trigger ở CSDL). Hoàn tác tạo bản ghi đảo dấu, mỗi lần ghi chỉ hoàn tác được một lần. Ngoại lệ chỉ dành cho Admin, đều có ghi Nhật ký: (1) xóa hẳn một dòng ghi danh nhập sai ở trang Ghi danh thì điểm danh và lịch sử sao của học viên ở lớp đó, trong thời gian ghi danh, bị xóa theo; (2) ở hồ sơ học viên, xóa hẳn từng lần ghi sao hoặc toàn bộ lịch sử sao (sao của lớp đã đóng được giữ).
+- **Hai loại tổng sao**, đều tính khi truy vấn bằng `GREATEST(0, SUM(stars))` và không lưu cứng: tổng toàn thời gian (tổng sao tích lũy của học viên, đổi quà) và tổng theo lớp (xếp hạng, tặng quà).
+- **Giới hạn trừ sao:** mỗi học viên bị trừ tối đa N sao/buổi (mặc định 3, sửa ở trang Cấu hình).
+- **Đã gỡ Avatar và Cấp bậc:** ứng dụng chỉ còn sao. Trang **Sao** còn hai tab Tiêu chí và Sổ cái; bảng Ghi sao, danh sách học viên của lớp và hồ sơ học viên chỉ hiện tên và tổng sao; không còn thông báo lên/tụt cấp. Các bảng `levels`, `avatars`, `student_avatar_gifts` và cột `students.current_avatar_id` vẫn nằm trong CSDL với dữ liệu cũ nhưng không còn mã nào đọc hay ghi; chỉ xóa bằng một migration riêng khi chủ hệ thống đồng ý.
 
 ### Cuối khóa và báo cáo
 
@@ -152,7 +149,7 @@ Nguyên tắc: mọi hàm trong `server/services` nhận `actor` lấy từ phi�
 - **Chuyên cần** = (có mặt + đi trễ + về sớm) ÷ số buổi đã dạy mà học viên thuộc danh sách; không kể buổi hủy và buổi chưa dạy.
 - **Xếp hạng** theo tổng sao của lớp, đồng hạng kiểu 1-2-2-4.
 - **Mốc quà** theo khóa học hoặc riêng cho lớp (lớp có mốc riêng thì không dùng mốc của khóa). Mỗi học viên nhận quà của mốc cao nhất đạt được.
-- **Đổi quà bằng sao trong khóa học:** ở hồ sơ học viên, người có quyền Sửa ở menu Quà & Tổng kết (theo Cấu hình → Phân quyền) đổi quà cho học viên bất cứ lúc nào em đủ sao theo Mốc quà của lớp đang học. Mỗi lần đổi trừ "sao còn lại" đúng bằng mốc sao và trừ 1 tồn kho; tổng sao tích lũy, cấp bậc và avatar không đổi. Chỉ Admin hủy được lần đổi ghi nhầm (trả lại sao và tồn kho).
+- **Đổi quà bằng sao trong khóa học:** ở hồ sơ học viên, người có quyền Sửa ở menu Quà & Tổng kết (theo Cấu hình → Phân quyền) đổi quà cho học viên bất cứ lúc nào em đủ sao theo Mốc quà của lớp đang học. Mỗi lần đổi trừ "sao còn lại" đúng bằng mốc sao và trừ 1 tồn kho; tổng sao tích lũy không đổi. Chỉ Admin hủy được lần đổi ghi nhầm (trả lại sao và tồn kho).
 - **Quy trình trao quà:** hệ thống đề xuất → Admin chọn và duyệt → ghi nhận đã trao (ngày, người trao, trừ tồn kho). Có bảng số lượng quà cần chuẩn bị so với tồn kho.
 - **Báo cáo** (menu Báo cáo; quyền Xem / Thêm / Sửa theo Cấu hình → Phân quyền **và** phạm vi "Tất cả lớp", mặc định chỉ Admin) là báo cáo tài chính của cả trung tâm, gồm bốn mục:
   - **Doanh thu:** xem theo Tuần (12 tuần tới tuần chứa ngày mốc), Tháng (12 tháng của năm) hoặc Năm (5 năm gần nhất); ba ô tổng Doanh thu – Chi – Lãi; biểu đồ cột của chỉ số đang chọn (Doanh thu / Chi / Lãi, kỳ lỗ vẽ dưới trục 0) và bảng từng kỳ. Doanh thu = phiếu thu học phí còn hiệu lực theo ngày thu; Chi = chi lương + mua sắm; Lãi = Doanh thu − Chi.
@@ -271,7 +268,7 @@ Khác biệt khi chạy trên Netlify:
 - **HTTPS:** bản production tự chuyển hướng HTTP → HTTPS. Triển khai sau reverse proxy có TLS và truyền `X-Forwarded-Proto`. Chỉ đặt `FORCE_HTTPS=false` khi thử `npm run build && npm start` trên máy.
 - **Dữ liệu vào:** mọi input qua Zod; chỉ truy vấn tham số hóa qua Drizzle; nội dung do người dùng nhập luôn hiển thị dạng văn bản; tệp Excel được kiểm tra đuôi, chữ ký tệp, dung lượng (2 MB) và số dòng (500).
 - **Email tài khoản:** chỉ Admin gửi được; nhật ký ghi hành động `account_credentials_sent` nhưng không ghi mật khẩu hay địa chỉ email; log ứng dụng không ghi địa chỉ nhận và nội dung thư.
-- **Nhật ký `audit_logs`:** đăng nhập, thay đổi tài khoản, điểm danh, sao, avatar, lịch học, đóng lớp, trao quà, cấu hình, xuất báo cáo và mọi thao tác tạo/sửa/xóa.
+- **Nhật ký `audit_logs`:** đăng nhập, thay đổi tài khoản, điểm danh, sao, lịch học, đóng lớp, trao quà, cấu hình, xuất báo cáo và mọi thao tác tạo/sửa/xóa.
 - **Dữ liệu trẻ em:** GV không nhận số điện thoại, tên phụ huynh, ghi chú của học viên. Log ứng dụng không ghi dữ liệu cá nhân. Tệp sao lưu và tệp xuất có dữ liệu cá nhân: lưu và chia sẻ cẩn thận.
 
 ### Rủi ro còn lại (đã biết)

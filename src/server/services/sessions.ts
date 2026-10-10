@@ -859,7 +859,7 @@ export async function restoreSession(actor: Actor, sessionId: string): Promise<S
 
 /**
  * Admin xóa hẳn một buổi (xếp sai, dữ liệu thử), kể cả buổi đã điểm danh/ghi sao: điểm danh và sao của buổi
- * bị xóa theo, cấp và avatar của học viên được tính lại. Lớp đã đóng (đã chốt tổng kết) thì không xóa được.
+ * bị xóa theo. Lớp đã đóng (đã chốt tổng kết) thì không xóa được.
  */
 export async function deleteSession(actor: Actor, sessionId: string): Promise<{ date: string; deletedAttendances: number; deletedStarLogs: number }> {
   assertAdmin(actor);

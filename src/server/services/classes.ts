@@ -452,7 +452,7 @@ export async function leaveEnrollment(actor: Actor, data: z.output<typeof leaveI
 
 /**
  * Xóa hẳn một dòng ghi danh nhập sai (chỉ Admin), kèm điểm danh và lịch sử sao của học viên ở các buổi
- * của lớp trong thời gian ghi danh đó; cấp và avatar của học viên được tính lại.
+ * của lớp trong thời gian ghi danh đó.
  */
 export async function deleteEnrollment(actor: Actor, id: string) {
   assertAdmin(actor);

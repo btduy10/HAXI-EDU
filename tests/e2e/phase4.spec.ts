@@ -274,7 +274,7 @@ test("Phân quyền: Admin mở menu Học viên cho Giáo viên trực; Giáo v
   const roleSelect = page.getByLabel("Vai trò", { exact: true });
   await expect(roleSelect.locator("option")).toHaveText(["Giáo viên (2 tài khoản)", "Giáo viên trực (0 tài khoản)"]);
   await expect(page.getByText(/Tài khoản mang vai trò này: .*gv\.lan .*gv\.minh \(Trần Văn Minh\)/)).toBeVisible();
-  await expect(box("Giáo viên: Thêm Sao & Avatar")).toBeChecked();
+  await expect(box("Giáo viên: Thêm Sao")).toBeChecked();
   await expect(box("Giáo viên trực: Xem Điểm danh")).toHaveCount(0);
   await roleSelect.selectOption("duty_teacher");
   await expect(page.getByText("Chưa có tài khoản nào mang vai trò này.")).toBeVisible();

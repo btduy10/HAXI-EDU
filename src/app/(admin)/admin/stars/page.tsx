@@ -1,36 +1,19 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ConfirmButton, FormDialogButton } from "@/components/action-buttons";
-import { AvatarBadge } from "@/components/avatar";
+import { ConfirmButton } from "@/components/action-buttons";
 import { CrudSection } from "@/components/crud-section";
 import type { Field } from "@/components/form-dialog";
-import { Badge } from "@/components/ui/badge";
 import { formatDate, formatDateTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import {
-  createCriteriaAction,
-  createLevelAction,
-  deleteCriteriaAction,
-  deleteLevelAction,
-  giftAvatarAction,
-  undoStarAction,
-  updateAvatarAction,
-  updateCriteriaAction,
-  updateLevelAction,
-} from "@/server/actions/stars";
-import { listAvatarCatalog, listGiftedAvatars } from "@/server/services/avatars";
-import { listCriteria, listRecentStarLogs, loadLevels } from "@/server/services/stars";
-import { listStudents } from "@/server/services/students";
+import { createCriteriaAction, deleteCriteriaAction, undoStarAction, updateCriteriaAction } from "@/server/actions/stars";
+import { listCriteria, listRecentStarLogs } from "@/server/services/stars";
 import type { Actor } from "@/server/guard";
 import { requireMenu } from "@/server/session";
 
-export const metadata: Metadata = { title: "Sao & Avatar" };
+export const metadata: Metadata = { title: "Sao" };
 
 const TABS = [
   { key: "criteria", label: "Tiêu chí" },
-  { key: "levels", label: "Cấp bậc" },
-  { key: "avatars", label: "Kho avatar" },
-  { key: "gifts", label: "Tặng avatar" },
   { key: "ledger", label: "Sổ cái" },
 ] as const;
 type TabKey = (typeof TABS)[number]["key"];
@@ -39,20 +22,19 @@ const ACTIVE_OPTIONS = [
   { value: "true", label: "Đang dùng" },
   { value: "false", label: "Ngừng dùng" },
 ];
-const NEUTRAL_FRAME = "#d4d4d8";
 
 export default async function StarsAdminPage({ searchParams }: PageProps<"/admin/stars">) {
   const { actor, role, can } = await requireMenu("stars");
-  // Tiêu chí, cấp bậc, kho avatar, tặng avatar: chỉ Admin chỉnh. Vai trò khác xem được và dùng sổ cái theo quyền.
+  // Tiêu chí sao chỉ Admin chỉnh. Vai trò khác xem được và dùng sổ cái theo quyền.
   const admin = role === "admin";
-  const tabs = TABS.filter((t) => admin || t.key !== "gifts");
+  const tabs = TABS;
   const raw = (await searchParams).tab;
   const requested = Array.isArray(raw) ? raw[0] : raw;
   const tab: TabKey = tabs.find((t) => t.key === requested)?.key ?? (admin ? "criteria" : "ledger");
 
   return (
     <div className="grid gap-4">
-      <h1 className="text-xl font-semibold sm:text-2xl">Sao, cấp bậc & avatar</h1>
+      <h1 className="text-xl font-semibold sm:text-2xl">Sao</h1>
       <nav aria-label="Mục" className="flex gap-1 overflow-x-auto glass-solid rounded-full border p-1 text-sm">
         {tabs.map((t) => (
           <Link
@@ -69,9 +51,6 @@ export default async function StarsAdminPage({ searchParams }: PageProps<"/admin
         ))}
       </nav>
       {tab === "criteria" && <CriteriaTab actor={actor} admin={admin} />}
-      {tab === "levels" && <LevelsTab admin={admin} />}
-      {tab === "avatars" && <AvatarsTab actor={actor} admin={admin} />}
-      {tab === "gifts" && admin && <GiftsTab actor={actor} />}
       {tab === "ledger" && <LedgerTab actor={actor} canUndo={can("edit")} />}
     </div>
   );
@@ -100,136 +79,6 @@ async function CriteriaTab({ actor, admin }: TabProps & { admin: boolean }) {
       updateAction={admin ? updateCriteriaAction : undefined}
       deleteAction={admin ? deleteCriteriaAction : undefined}
     />
-  );
-}
-
-async function LevelsTab({ admin }: { admin: boolean }) {
-  const levels = await loadLevels();
-  const fields: Field[] = [
-    { name: "levelNo", label: "Cấp số", type: "number", required: true, hint: "Không đổi được sau khi tạo." },
-    { name: "name", label: "Tên cấp", required: true },
-    { name: "minStars", label: "Số sao tối thiểu", type: "number", required: true },
-    { name: "frameColor", label: "Màu khung viền (#RRGGBB)", required: true, defaultValue: "#ffd700" },
-  ];
-  return (
-    <div className="grid gap-3">
-      <p className="text-sm text-muted-foreground">
-        Cấp của học viên suy ra trực tiếp từ tổng sao toàn thời gian. Đổi mốc sao sẽ đổi cấp ngay và có thể khóa avatar đang dùng.
-      </p>
-      <div className="flex flex-wrap gap-3">
-        {levels.map((l) => (
-          <span key={l.id} className="flex items-center gap-2 text-sm">
-            <AvatarBadge avatar={null} frameColor={l.frameColor} size={20} /> {l.name}
-          </span>
-        ))}
-      </div>
-      <CrudSection
-        title="Cấp bậc"
-        columns={admin ? ["Tên cấp", "Cấp số", "Từ số sao", "Màu khung"] : ["Tên cấp", "Cấp số", "Từ số sao"]}
-        rows={levels.map((l) => ({
-          id: l.id,
-          cells: [l.name, String(l.levelNo), String(l.minStars), ...(admin ? [l.frameColor] : [])],
-          values: { levelNo: String(l.levelNo), name: l.name, minStars: String(l.minStars), frameColor: l.frameColor },
-        }))}
-        fields={fields}
-        createAction={admin ? createLevelAction : undefined}
-        updateAction={admin ? updateLevelAction : undefined}
-        deleteAction={admin ? deleteLevelAction : undefined}
-      />
-    </div>
-  );
-}
-
-async function AvatarsTab({ actor, admin }: TabProps & { admin: boolean }) {
-  const [avatars, levels] = await Promise.all([listAvatarCatalog(actor), loadLevels()]);
-  const levelOptions = levels.map((l) => ({ value: l.id, label: `Cấp ${l.levelNo} · ${l.name} (${l.minStars} sao)` }));
-  const colorOf = (levelId: string | null) => levels.find((l) => l.id === levelId)?.frameColor ?? NEUTRAL_FRAME;
-  return (
-    <section className="grid gap-3">
-      <h2 className="text-lg font-semibold">
-        Kho avatar <span className="text-sm font-normal text-muted-foreground">({avatars.length})</span>
-      </h2>
-      <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
-        {avatars.map((a) => (
-          <li key={a.id} className={cn("flex flex-col items-center gap-2 glass-solid rounded-xl border p-3 text-center text-sm", !a.active && "bg-muted/40")}>
-            <AvatarBadge avatar={a} frameColor={colorOf(a.requiredLevelId)} size={56} locked={!a.active} className="mt-1" />
-            <span className="font-medium">{a.name}</span>
-            <span className="text-xs text-muted-foreground">
-              {a.unlockType === "gifted" ? "Tặng riêng" : `Cấp ${a.requiredLevelNo} · cần ${a.requiredMinStars} sao`}
-            </span>
-            {!a.active && <Badge variant="outline">Ngừng dùng</Badge>}
-            {admin && <FormDialogButton
-              label="Sửa"
-              variant="outline"
-              className="h-9 w-full"
-              title={`Sửa avatar ${a.name}`}
-              fields={[
-                { name: "name", label: "Tên", required: true },
-                ...(a.unlockType === "by_level"
-                  ? ([{ name: "requiredLevelId", label: "Cấp yêu cầu", type: "select", required: true, options: levelOptions }] as Field[])
-                  : []),
-                { name: "active", label: "Trạng thái", type: "select", required: true, options: ACTIVE_OPTIONS },
-              ]}
-              initial={{ name: a.name, requiredLevelId: a.requiredLevelId ?? "", active: String(a.active) }}
-              action={updateAvatarAction.bind(null, a.id)}
-            />}
-          </li>
-        ))}
-      </ul>
-    </section>
-  );
-}
-
-async function GiftsTab({ actor }: TabProps) {
-  const [{ gifted, given }, students] = await Promise.all([listGiftedAvatars(actor), listStudents(actor)]);
-  return (
-    <section className="grid gap-3">
-      <p className="text-sm text-muted-foreground">Avatar tặng riêng không phụ thuộc cấp và không mất khi học viên tụt cấp.</p>
-      {gifted.map((g) => {
-        const recipients = given.filter((x) => x.avatarId === g.id);
-        return (
-          <div key={g.id} className="grid gap-2 glass-solid rounded-xl border p-3">
-            <div className="flex items-center gap-3">
-              <AvatarBadge avatar={g} frameColor={NEUTRAL_FRAME} size={48} />
-              <div className="min-w-0 flex-1">
-                <p className="font-medium">{g.name}</p>
-                <p className="text-sm text-muted-foreground">Đã tặng {recipients.length} học viên</p>
-              </div>
-              <FormDialogButton
-                label="Tặng"
-                title={`Tặng avatar ${g.name}`}
-                fields={[
-                  {
-                    name: "studentId",
-                    label: "Học viên",
-                    type: "select",
-                    required: true,
-                    options: students
-                      .filter((s) => s.status !== "left" && !recipients.some((r) => r.studentCode === s.code))
-                      .map((s) => ({ value: s.id, label: `${s.code} – ${s.fullName}` })),
-                  },
-                ]}
-                fixed={{ avatarId: g.id }}
-                action={giftAvatarAction}
-                submitLabel="Tặng"
-                successMessage="Đã tặng avatar."
-              />
-            </div>
-            {recipients.length > 0 && (
-              <ul className="flex flex-wrap gap-1 text-sm">
-                {recipients.map((r) => (
-                  <li key={r.id}>
-                    <Badge variant="secondary" className="h-auto py-0.5">
-                      {r.studentName} · {formatDate(r.giftedAt.toISOString())}
-                    </Badge>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        );
-      })}
-    </section>
   );
 }
 

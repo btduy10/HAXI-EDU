@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { id, intIn, optId, optText, reqText } from "./common";
+import { id, intIn, optText, reqText } from "./common";
 
 export const criteriaInput = z
   .object({
@@ -15,25 +15,6 @@ export const criteriaInput = z
 
 export const criteriaUpdate = z.object({ id, data: criteriaInput });
 
-export const levelInput = z.object({
-  levelNo: intIn(1, 20),
-  name: reqText(50),
-  minStars: intIn(0, 100000),
-  frameColor: z.string().regex(/^#[0-9a-fA-F]{6}$/, "Màu dạng #RRGGBB"),
-});
-export const levelUpdate = z.object({ id, data: levelInput });
-
-export const avatarUpdate = z.object({
-  id,
-  data: z.object({
-    name: reqText(50),
-    requiredLevelId: optId.optional().transform((v) => v ?? null),
-    active: z
-      .union([z.boolean(), z.enum(["true", "false"])])
-      .transform((v) => v === true || v === "true"),
-  }),
-});
-
 export const awardInput = z.object({
   sessionId: id,
   criteriaId: id,
@@ -43,5 +24,3 @@ export const awardInput = z.object({
 
 export const undoInput = z.object({ logId: id });
 export const deleteStarLogsInput = z.object({ studentId: id, logId: id.optional() });
-export const setAvatarInput = z.object({ studentId: id, avatarId: id });
-export const giftAvatarInput = z.object({ studentId: id, avatarId: id });

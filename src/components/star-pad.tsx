@@ -3,8 +3,6 @@
 import { StarIcon, Undo2Icon } from "lucide-react";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
-import { AvatarBadge } from "@/components/avatar";
-import { showLevelChanges } from "@/components/form-dialog";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -16,11 +14,8 @@ type Student = {
   code: string;
   fullName: string;
   sessionStars: number;
-  progress: {
-    total: number;
-    level: { levelNo: number; name: string; frameColor: string };
-    avatar: { name: string; svgPath: string } | null;
-  };
+  /** Tổng sao tích lũy. */
+  total: number;
 };
 type Criteria = { id: string; name: string; stars: number };
 type Log = {
@@ -67,7 +62,6 @@ export function StarPad({
       const result = await awardStarsAction({ sessionId, criteriaId: c.id, studentIds: [...selected], note });
       if (!result.ok) return void toast.error(result.error, { duration: 8000 });
       toast.success(`Đã ghi ${signed(c.stars)} sao (${c.name}) cho ${result.data.count} học viên.`);
-      showLevelChanges(result.data);
       setPicking(false);
       setSelected(new Set());
       setNote("");
@@ -80,7 +74,6 @@ export function StarPad({
       const result = await undoStarAction({ logId: log.id });
       if (!result.ok) return void toast.error(result.error);
       toast.success("Đã hoàn tác.");
-      showLevelChanges(result.data);
     });
   }
 
@@ -113,17 +106,14 @@ export function StarPad({
                   checked ? "border-primary bg-primary/10 ring-2 ring-primary" : "hover:bg-muted",
                 )}
               >
-                <AvatarBadge avatar={s.progress.avatar} frameColor={s.progress.level.frameColor} size={40} />
                 <span className="grid min-w-0 flex-1">
                   <span className="font-medium break-words">{s.fullName}</span>
-                  <span className="text-xs text-muted-foreground">
-                    Cấp {s.progress.level.levelNo} · {s.progress.level.name}
-                  </span>
+                  <span className="text-xs text-muted-foreground">{s.code}</span>
                 </span>
                 <span className="grid shrink-0 justify-items-end text-sm">
                   <span className="inline-flex items-center gap-0.5 font-semibold tabular-nums text-amber-600">
                     <StarIcon className="size-3.5 fill-current" aria-hidden />
-                    {s.progress.total}
+                    {s.total}
                   </span>
                   {s.sessionStars !== 0 && (
                     <span className={cn("text-xs tabular-nums", s.sessionStars > 0 ? "text-emerald-600" : "text-red-600")}>

@@ -39,7 +39,7 @@ export default async function AuditPage({ searchParams }: PageProps<"/admin/audi
       <div>
         <h1 className="text-xl font-semibold sm:text-2xl">Nhật ký</h1>
         <p className="text-sm text-muted-foreground">
-          Ghi lại đăng nhập, thay đổi tài khoản, điểm danh, sao, avatar, lịch học, xuất báo cáo và mọi thao tác tạo/sửa/xóa. {result.total} bản ghi.
+          Ghi lại đăng nhập, thay đổi tài khoản, điểm danh, sao, lịch học, xuất báo cáo và mọi thao tác tạo/sửa/xóa. {result.total} bản ghi.
         </p>
       </div>
       <form className="grid gap-2 sm:grid-cols-5">

@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "@/db";
-import { account, attendances, auditLogs, classes as classesTable, levels, session, sessions, starLogs, students, teachers, user } from "@/db/schema";
+import { account, attendances, auditLogs, classes as classesTable, session, sessions, starLogs, students, teachers, user } from "@/db/schema";
 import type { MailMessage } from "@/server/mailer";
 import { verifyPassword } from "@/server/password";
 import * as accounts from "@/server/services/accounts";
@@ -64,7 +64,6 @@ describe("ghi danh", () => {
       { sessionId: held!.id, studentId: a2.studentId, status: "present" },
       { sessionId: other!.id, studentId: a1.studentId, status: "present" }, // lớp khác: không đụng tới
     ]);
-    await db.insert(levels).values({ levelNo: 1, name: "Tân binh", minStars: 0, frameColor: "#b08d57" });
     const [given] = await db.insert(starLogs).values({ sessionId: held!.id, studentId: a1.studentId, stars: 3 }).returning();
     await db.insert(starLogs).values([
       { sessionId: held!.id, studentId: a1.studentId, stars: -3, reversesLogId: given!.id }, // bản ghi hoàn tác

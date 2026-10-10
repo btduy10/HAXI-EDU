@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
 import { BackLink } from "@/components/back-link";
-import { StudentProgressCard } from "@/components/avatar";
+import { StudentStarCard } from "@/components/student-star-card";
 import { Badge } from "@/components/ui/badge";
 import { LABELS, formatDate } from "@/lib/format";
 import { orNotFound, uuidParam } from "@/server/page";
 import { getClass, listClassTeachers } from "@/server/services/classes";
-import { listClassProgress } from "@/server/services/stars";
+import { listClassStars } from "@/server/services/stars";
 import { requirePageUser } from "@/server/session";
 
 export const metadata: Metadata = { title: "Lớp của tôi" };
@@ -15,7 +15,7 @@ export default async function TeacherClassPage({ params }: PageProps<"/teacher/c
   const classId = uuidParam((await params).id);
   // getClass kiểm tra quyền sở hữu lớp; lớp của GV khác trả 404.
   const cls = await orNotFound(getClass(actor, classId));
-  const [teachers, students] = await Promise.all([listClassTeachers(actor, classId), listClassProgress(actor, classId)]);
+  const [teachers, students] = await Promise.all([listClassTeachers(actor, classId), listClassStars(actor, classId)]);
 
   return (
     <div className="grid gap-4">
@@ -48,7 +48,7 @@ export default async function TeacherClassPage({ params }: PageProps<"/teacher/c
           <ul className="grid gap-2 sm:grid-cols-2">
             {students.map((s) => (
               <li key={s.id}>
-                <StudentProgressCard fullName={s.fullName} code={s.code} progress={s.progress} href={`/teacher/students/${s.id}`} />
+                <StudentStarCard fullName={s.fullName} code={s.code} total={s.total} href={`/teacher/students/${s.id}`} />
               </li>
             ))}
           </ul>

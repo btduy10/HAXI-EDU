@@ -1,7 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/db";
-import { attendances, classes, enrollments, levels, makeupAssignments, sessions, starCriteria, students } from "@/db/schema";
+import { attendances, classes, enrollments, makeupAssignments, sessions, starCriteria, students } from "@/db/schema";
 import { DEFAULT_PERMISSIONS, type RolePermissions } from "@/lib/permissions";
 import { newEnrollmentInput, studentCreateInput } from "@/lib/validation/entities";
 import type { Actor } from "@/server/guard";
@@ -57,7 +57,6 @@ const recordTarget = (statusOfGuest: "present" | "absent", actor: Actor = f.acto
 beforeEach(async () => {
   await resetDb();
   f = await seedFixture();
-  await db.insert(levels).values({ levelNo: 1, name: "Tân binh", minStars: 0, frameColor: "#b08d57" });
   const [criteria] = await db.insert(starCriteria).values({ name: "+3", stars: 3, type: "reward" }).returning();
   plusThree = criteria!.id;
   const session = (classId: string, date: string, teacherId: string, extra: Partial<typeof sessions.$inferInsert> = {}) => ({
@@ -329,10 +328,10 @@ describe("QL Học viên: chương trình đã học, lịch sử buổi học, 
     expect((await historySvc.getStudentLearningHistory(f.admin, a1())).sessions[1]!.stars).toBe(3);
   });
 
-  it("danh sách học viên kèm tổng sao tích lũy và cấp", async () => {
+  it("danh sách học viên kèm tổng sao tích lũy", async () => {
     await starSvc.awardStars(f.admin, { sessionId: absent.id, criteriaId: plusThree, studentIds: [a2()], note: null }, NOW);
     const { rows } = await historySvc.listStudentsPageWithStars(f.admin, undefined, 1);
-    expect(rows.map((s) => `${s.code}:${s.stars}:${s.levelNo}`)).toEqual(["A1:0:1", "A2:3:1", "B1:0:1", "B2:0:1", "X1:0:1", "X2:0:1"]);
+    expect(rows.map((s) => `${s.code}:${s.stars}`)).toEqual(["A1:0", "A2:3", "B1:0", "B2:0", "X1:0", "X2:0"]);
     // Ngoài Admin vẫn không nhận thông tin riêng tư.
     const own = await historySvc.listStudentsPageWithStars(withMenus(f.actorA, { students: ALL }, "own"), undefined, 1);
     expect(own.rows.map((s) => `${s.code}:${s.phone}`)).toEqual(["A1:null", "A2:null"]);

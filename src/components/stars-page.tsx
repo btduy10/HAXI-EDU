@@ -61,7 +61,7 @@ export async function StarsPage({
                   {s.fullName} <span className="text-muted-foreground">({s.code}{s.makeup && " · Học bù"})</span>
                 </span>
                 <span className="shrink-0 font-semibold tabular-nums">
-                  {s.sessionStars > 0 ? `+${s.sessionStars}` : s.sessionStars} sao buổi này · tổng {s.progress.total}
+                  {s.sessionStars > 0 ? `+${s.sessionStars}` : s.sessionStars} sao buổi này · tổng {s.total}
                 </span>
               </li>
             ))}
@@ -77,7 +77,7 @@ export async function StarsPage({
             code: s.code,
             fullName: s.makeup ? `${s.fullName} (Học bù)` : s.fullName,
             sessionStars: s.sessionStars,
-            progress: { total: s.progress.total, level: s.progress.level, avatar: s.progress.avatar },
+            total: s.total,
           }))}
           logs={board.logs.map((l) => ({
             id: l.id,

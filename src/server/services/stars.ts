@@ -5,23 +5,20 @@ import { db, type DbOrTx, type Tx } from "@/db";
 import {
   attendances,
   makeupAssignments,
-  avatars,
   classes,
   courseSummaries,
   enrollments,
   giftHandovers,
   gifts,
-  levels,
   sessions,
   starCriteria,
   starLogs,
-  studentAvatarGifts,
   students,
   user,
 } from "@/db/schema";
-import { type AvatarRule, type Level, type Progress, canDeduct, progressFor, resolveAvatar, validateLevels } from "@/domain/stars";
+import { canDeduct, clampTotal } from "@/domain/stars";
 import { todayIso } from "@/lib/format";
-import type { awardInput, criteriaInput, levelInput } from "@/lib/validation/stars";
+import type { awardInput, criteriaInput } from "@/lib/validation/stars";
 import { audit } from "../audit";
 import { AppError, notFound } from "../errors";
 import { type Actor, allowedClassIds, assertAdmin, assertCan, assertClassOpen, assertNotTimetableOnly, assertSessionAccess, isAdmin, isTimetableOnly, seesAllClasses } from "../guard";
@@ -30,30 +27,7 @@ import { sessionRoster } from "./attendance";
 import { createRow, deleteRow, updateRow } from "./crud";
 import { listClassStudents } from "./students";
 
-// ---------- Dữ liệu nền: cấp bậc, avatar, tổng sao ----------
-
-export async function loadLevels(tx: DbOrTx = db): Promise<Level[]> {
-  return tx.select().from(levels).orderBy(asc(levels.levelNo));
-}
-
-export type AvatarInfo = AvatarRule & { svgPath: string; requiredLevelId: string | null; requiredMinStars: number | null };
-
-export async function loadAvatars(tx: DbOrTx = db): Promise<AvatarInfo[]> {
-  return tx
-    .select({
-      id: avatars.id,
-      name: avatars.name,
-      svgPath: avatars.svgPath,
-      unlockType: avatars.unlockType,
-      active: avatars.active,
-      requiredLevelId: avatars.requiredLevelId,
-      requiredLevelNo: levels.levelNo,
-      requiredMinStars: levels.minStars,
-    })
-    .from(avatars)
-    .leftJoin(levels, eq(levels.id, avatars.requiredLevelId))
-    .orderBy(asc(avatars.unlockType), asc(levels.levelNo), asc(avatars.name));
-}
+// ---------- Tổng sao ----------
 
 /** Tổng sao THÔ toàn thời gian theo học viên (chưa chặn dưới 0); tính khi truy vấn, không lưu cứng. */
 async function rawSums(tx: DbOrTx, studentIds: string[]): Promise<Map<string, number>> {
@@ -68,110 +42,18 @@ async function rawSums(tx: DbOrTx, studentIds: string[]): Promise<Map<string, nu
   return out;
 }
 
-async function giftedByStudent(tx: DbOrTx, studentIds: string[]): Promise<Map<string, Set<string>>> {
-  const out = new Map<string, Set<string>>(studentIds.map((id) => [id, new Set()]));
-  if (studentIds.length === 0) return out;
-  const rows = await tx.select().from(studentAvatarGifts).where(inArray(studentAvatarGifts.studentId, studentIds));
-  for (const row of rows) out.get(row.studentId)?.add(row.avatarId);
-  return out;
-}
-
-export type StudentProgress = Progress & {
-  avatar: { id: string; name: string; svgPath: string } | null;
-  giftedAvatarIds: string[];
-};
-
-/** Tổng sao, cấp, tiến độ và avatar đang dùng của nhiều học viên (không kiểm tra quyền — dùng nội bộ). */
-export async function progressOf(tx: DbOrTx, studentIds: string[]): Promise<Map<string, StudentProgress>> {
-  const out = new Map<string, StudentProgress>();
-  if (studentIds.length === 0) return out;
-  const [levelList, avatarList, sums, gifts, current] = await Promise.all([
-    loadLevels(tx),
-    loadAvatars(tx),
-    rawSums(tx, studentIds),
-    giftedByStudent(tx, studentIds),
-    tx.select({ id: students.id, currentAvatarId: students.currentAvatarId }).from(students).where(inArray(students.id, studentIds)),
-  ]);
-  for (const s of current) {
-    const progress = progressFor(sums.get(s.id) ?? 0, levelList);
-    const gifted = gifts.get(s.id) ?? new Set<string>();
-    const { avatarId } = resolveAvatar(s.currentAvatarId, avatarList, progress.level.levelNo, gifted);
-    const avatar = avatarList.find((a) => a.id === avatarId);
-    out.set(s.id, {
-      ...progress,
-      avatar: avatar ? { id: avatar.id, name: avatar.name, svgPath: avatar.svgPath } : null,
-      giftedAvatarIds: [...gifted],
-    });
-  }
-  return out;
-}
-
-// ---------- Thông báo lên/tụt cấp + tự đổi avatar ----------
-
-export type LevelChange = {
-  studentId: string;
-  fullName: string;
-  direction: "up" | "down";
-  fromLevel: string;
-  toLevel: string;
-  /** Tên avatar mới nếu avatar đang dùng bị khóa và hệ thống tự đổi. */
-  avatarSwitchedTo: string | null;
-};
-
-/**
- * Gọi trong CÙNG transaction sau mọi thay đổi tổng sao: so cấp trước/sau, và nếu avatar đang dùng
- * bị khóa thì tự đổi sang avatar cao nhất còn mở. Trả về danh sách thay đổi để báo cho GV.
- */
-async function syncAfterChange(tx: Tx, actor: Actor, studentIds: string[], before: Map<string, number>): Promise<LevelChange[]> {
-  const [levelList, avatarList, after, gifts, rows] = await Promise.all([
-    loadLevels(tx),
-    loadAvatars(tx),
-    rawSums(tx, studentIds),
-    giftedByStudent(tx, studentIds),
-    tx.select({ id: students.id, fullName: students.fullName, currentAvatarId: students.currentAvatarId }).from(students).where(inArray(students.id, studentIds)),
-  ]);
-  const changes: LevelChange[] = [];
-  for (const s of rows) {
-    const from = progressFor(before.get(s.id) ?? 0, levelList).level;
-    const to = progressFor(after.get(s.id) ?? 0, levelList).level;
-    const resolved = resolveAvatar(s.currentAvatarId, avatarList, to.levelNo, gifts.get(s.id) ?? new Set());
-    let switchedTo: string | null = null;
-    if (resolved.switched) {
-      await tx.update(students).set({ currentAvatarId: resolved.avatarId, updatedAt: new Date() }).where(eq(students.id, s.id));
-      // Lần gán avatar đầu tiên (trước đó chưa có) không phải là "bị khóa" nên không cần báo.
-      if (s.currentAvatarId) {
-        switchedTo = avatarList.find((a) => a.id === resolved.avatarId)?.name ?? null;
-        await audit(tx, {
-          userId: actor.userId,
-          action: "avatar_auto_switched",
-          tableName: "students",
-          recordId: s.id,
-          oldValue: { currentAvatarId: s.currentAvatarId },
-          newValue: { currentAvatarId: resolved.avatarId, level: to.levelNo },
-        });
-      }
-    }
-    if (from.levelNo !== to.levelNo || switchedTo) {
-      changes.push({
-        studentId: s.id,
-        fullName: s.fullName,
-        direction: to.levelNo >= from.levelNo ? "up" : "down",
-        fromLevel: from.name,
-        toLevel: to.name,
-        avatarSwitchedTo: switchedTo,
-      });
-    }
-  }
-  return changes;
+/** Tổng sao tích lũy (không âm) của nhiều học viên; không kiểm tra quyền — dùng nội bộ. */
+export async function starTotalsOf(tx: DbOrTx, studentIds: string[]): Promise<Map<string, number>> {
+  const sums = await rawSums(tx, studentIds);
+  return new Map([...sums].map(([id, sum]) => [id, clampTotal(sum)]));
 }
 
 // ---------- Ngoại lệ của sổ cái chỉ-thêm: Admin xóa hẳn lịch sử sao ----------
 
-/** Xóa các dòng sao theo id (kèm bản ghi hoàn tác trỏ tới chúng), rồi tính lại cấp và avatar. Trả về số dòng đã xóa. */
+/** Xóa các dòng sao theo id (kèm bản ghi hoàn tác trỏ tới chúng). Trả về số dòng đã xóa. */
 async function purgeLogs(tx: Tx, actor: Actor, studentId: string, ids: string[]): Promise<number> {
   assertAdmin(actor);
   if (ids.length === 0) return 0;
-  const before = await rawSums(tx, [studentId]);
   // Trigger ở CSDL chỉ cho DELETE khi cờ này bật; cờ chỉ có hiệu lực trong giao dịch hiện tại và được tắt ngay sau khi xóa.
   await tx.execute(sql`select set_config('haxi.star_logs_admin_delete', 'on', true)`);
   const removed = await tx
@@ -179,7 +61,6 @@ async function purgeLogs(tx: Tx, actor: Actor, studentId: string, ids: string[])
     .where(and(eq(starLogs.studentId, studentId), or(inArray(starLogs.id, ids), inArray(starLogs.reversesLogId, ids))))
     .returning({ id: starLogs.id });
   await tx.execute(sql`select set_config('haxi.star_logs_admin_delete', 'off', true)`);
-  await syncAfterChange(tx, actor, [studentId], before);
   return removed.length;
 }
 
@@ -194,7 +75,7 @@ export async function purgeStudentStarLogs(tx: Tx, actor: Actor, studentId: stri
   return purgeLogs(tx, actor, studentId, targets.map((t) => t.id));
 }
 
-/** Dùng khi Admin xóa hẳn một buổi học: xóa mọi lần ghi sao của buổi, tính lại cấp/avatar từng học viên. Trả về số dòng đã xóa. */
+/** Dùng khi Admin xóa hẳn một buổi học: xóa mọi lần ghi sao của buổi. Trả về số dòng đã xóa. */
 export async function purgeSessionStarLogs(tx: Tx, actor: Actor, sessionId: string): Promise<number> {
   assertAdmin(actor);
   const rows = await tx.select({ id: starLogs.id, studentId: starLogs.studentId }).from(starLogs).where(eq(starLogs.sessionId, sessionId));
@@ -240,13 +121,6 @@ export async function deleteStudentStarLogs(actor: Actor, data: { studentId: str
   });
 }
 
-/** Sau khi Admin sửa bảng cấp hoặc kho avatar: đồng bộ lại avatar của mọi học viên. */
-export async function resyncAllAvatars(tx: Tx, actor: Actor) {
-  const all = await tx.select({ id: students.id }).from(students);
-  const ids = all.map((s) => s.id);
-  await syncAfterChange(tx, actor, ids, await rawSums(tx, ids));
-}
-
 // ---------- Tiêu chí sao (Admin quản lý, GV dùng) ----------
 
 export async function listCriteria(actor: Actor, onlyActive = !isAdmin(actor)) {
@@ -262,58 +136,6 @@ export const createCriteria = (actor: Actor, data: z.output<typeof criteriaInput
 export const updateCriteria = (actor: Actor, id: string, data: z.output<typeof criteriaInput>) =>
   updateRow(actor, starCriteria, "star_criteria", id, data);
 export const deleteCriteria = (actor: Actor, id: string) => deleteRow(actor, starCriteria, "star_criteria", id);
-
-// ---------- Cấp bậc (Admin) ----------
-
-async function assertLevelsValid(tx: Tx) {
-  const problem = validateLevels(await loadLevels(tx));
-  if (problem) throw new AppError("VALIDATION", problem);
-}
-
-export async function createLevel(actor: Actor, data: z.output<typeof levelInput>) {
-  assertAdmin(actor);
-  return db.transaction(async (tx) => {
-    const [row] = await tx.insert(levels).values(data).onConflictDoNothing().returning();
-    if (!row) throw new AppError("CONFLICT", "Số thứ tự cấp đã tồn tại.", { levelNo: "Đã tồn tại" });
-    await assertLevelsValid(tx);
-    await audit(tx, { userId: actor.userId, action: "create", tableName: "levels", recordId: row.id, newValue: row });
-    await resyncAllAvatars(tx, actor);
-    return row;
-  });
-}
-
-export async function updateLevel(actor: Actor, id: string, data: z.output<typeof levelInput>) {
-  assertAdmin(actor);
-  return db.transaction(async (tx) => {
-    const [before] = await tx.select().from(levels).where(eq(levels.id, id)).limit(1);
-    if (!before) throw notFound("cấp bậc");
-    if (before.levelNo !== data.levelNo) throw new AppError("VALIDATION", "Không đổi được số thứ tự cấp.", { levelNo: "Không đổi được" });
-    const [row] = await tx.update(levels).set(data).where(eq(levels.id, id)).returning();
-    await assertLevelsValid(tx);
-    await audit(tx, { userId: actor.userId, action: "update", tableName: "levels", recordId: id, oldValue: before, newValue: row });
-    // Đổi mốc sao làm đổi cấp của học viên → avatar có thể bị khóa.
-    await resyncAllAvatars(tx, actor);
-    return row!;
-  });
-}
-
-/** Chỉ xóa được cấp cao nhất và khi không avatar nào yêu cầu cấp đó. */
-export async function deleteLevel(actor: Actor, id: string) {
-  assertAdmin(actor);
-  return db.transaction(async (tx) => {
-    const all = await loadLevels(tx);
-    const target = all.find((l) => l.id === id);
-    if (!target) throw notFound("cấp bậc");
-    if (target.levelNo !== Math.max(...all.map((l) => l.levelNo)) || all.length === 1) {
-      throw new AppError("CONFLICT", "Chỉ xóa được cấp cao nhất.");
-    }
-    const [used] = await tx.select({ id: avatars.id }).from(avatars).where(eq(avatars.requiredLevelId, id)).limit(1);
-    if (used) throw new AppError("CONFLICT", "Còn avatar yêu cầu cấp này. Hãy đổi cấp yêu cầu của avatar trước.");
-    await tx.delete(levels).where(eq(levels.id, id));
-    await audit(tx, { userId: actor.userId, action: "delete", tableName: "levels", recordId: id, oldValue: target });
-    await resyncAllAvatars(tx, actor);
-  });
-}
 
 // ---------- Ghi sao ----------
 
@@ -337,7 +159,7 @@ async function penaltyUsed(tx: Tx, sessionId: string, studentIds: string[]): Pro
   return new Map(rows.map((r) => [r.studentId, r.used]));
 }
 
-export type StarResult = { count: number; stars: number; levelChanges: LevelChange[] };
+export type StarResult = { count: number; stars: number };
 
 /**
  * Ghi sao theo một tiêu chí cho một em / một nhóm / cả lớp trong một transaction.
@@ -375,7 +197,6 @@ export async function awardStars(actor: Actor, input: z.output<typeof awardInput
       }
     }
 
-    const before = await rawSums(tx, studentIds);
     const inserted = await tx
       .insert(starLogs)
       .values(
@@ -399,7 +220,7 @@ export async function awardStars(actor: Actor, input: z.output<typeof awardInput
         newValue: { studentId: log.studentId, sessionId: session.id, criteriaId: criteria.id, stars: criteria.stars },
       });
     }
-    return { count: inserted.length, stars: criteria.stars, levelChanges: await syncAfterChange(tx, actor, studentIds, before) };
+    return { count: inserted.length, stars: criteria.stars };
   });
 }
 
@@ -422,7 +243,6 @@ export async function undoStarLog(actor: Actor, logId: string, now: Date = new D
     const [already] = await tx.select({ id: starLogs.id }).from(starLogs).where(eq(starLogs.reversesLogId, logId)).limit(1);
     if (already) throw new AppError("CONFLICT", "Lần ghi sao này đã được hoàn tác.");
 
-    const before = await rawSums(tx, [target.studentId]);
     const [reversal] = await tx
       .insert(starLogs)
       .values({
@@ -444,7 +264,7 @@ export async function undoStarLog(actor: Actor, logId: string, now: Date = new D
       oldValue: { stars: target.stars, studentId: target.studentId },
       newValue: { reversalId: reversal!.id, stars: -target.stars },
     });
-    return { count: 1, stars: -target.stars, levelChanges: await syncAfterChange(tx, actor, [target.studentId], before) };
+    return { count: 1, stars: -target.stars };
   });
 }
 
@@ -521,7 +341,7 @@ function logQuery() {
 
 export type StarLogRow = Awaited<ReturnType<typeof logQuery>>[number];
 
-/** Bảng ghi sao của một buổi: danh sách học viên kèm tiến độ, tiêu chí đang dùng và sổ cái của buổi. */
+/** Bảng ghi sao của một buổi: danh sách học viên kèm tổng sao, tiêu chí đang dùng và sổ cái của buổi. */
 export async function getSessionStarBoard(actor: Actor, sessionId: string) {
   assertCan(actor, "stars", "view");
   await assertSessionAccess(actor, sessionId);
@@ -530,8 +350,8 @@ export async function getSessionStarBoard(actor: Actor, sessionId: string) {
   if (!session || (await isTimetableOnly(session.classId))) throw notFound("buổi học");
   const roster = await sessionRoster(db, session);
   const ids = roster.map((r) => r.studentId);
-  const [progress, logs, criteria, settings] = await Promise.all([
-    progressOf(db, ids),
+  const [totals, logs, criteria, settings] = await Promise.all([
+    starTotalsOf(db, ids),
     logQuery().where(eq(starLogs.sessionId, sessionId)).orderBy(desc(starLogs.recordedAt), desc(starLogs.id)),
     listCriteria(actor, true),
     getSettings(),
@@ -542,29 +362,27 @@ export async function getSessionStarBoard(actor: Actor, sessionId: string) {
     maxDeduction: settings.max_deduction_per_session,
     criteria,
     logs,
-    students: roster.map((r) => ({ ...r, progress: progress.get(r.studentId)!, sessionStars: net.get(r.studentId) ?? 0 })),
+    students: roster.map((r) => ({ ...r, total: totals.get(r.studentId) ?? 0, sessionStars: net.get(r.studentId) ?? 0 })),
   };
 }
 
-/** Học viên đang học của lớp kèm avatar, cấp, tổng sao và tiến độ. */
-export async function listClassProgress(actor: Actor, classId: string) {
+/** Học viên đang học của lớp kèm tổng sao tích lũy. */
+export async function listClassStars(actor: Actor, classId: string) {
   // listClassStudents kiểm tra quyền theo lớp.
   const list = await listClassStudents(actor, classId);
-  const progress = await progressOf(db, list.map((s) => s.id));
-  return list.map((s) => ({ ...s, progress: progress.get(s.id)! }));
+  const totals = await starTotalsOf(db, list.map((s) => s.id));
+  return list.map((s) => ({ ...s, total: totals.get(s.id) ?? 0 }));
 }
 
-/** Hồ sơ sao của một học viên: tiến độ, avatar chọn được và lịch sử ghi sao. */
+/** Hồ sơ sao của một học viên: lịch sử ghi sao, điểm danh và quà tổng kết. */
 export async function getStudentStarProfile(actor: Actor, studentId: string) {
   await assertStudentAccess(actor, studentId);
   // Buổi học và quà chỉ lấy trong các lớp thuộc phạm vi của người xem (Admin, phạm vi "Tất cả lớp": mọi lớp).
   const allowed = await allowedClassIds(actor);
   const inScope = (column: typeof sessions.classId | typeof courseSummaries.classId) =>
     allowed === null ? undefined : allowed.length === 0 ? sql`false` : inArray(column, allowed);
-  const [[student], progress, avatarList, logs, attendance, giftRows] = await Promise.all([
+  const [[student], logs, attendance, giftRows] = await Promise.all([
     db.select({ id: students.id, code: students.code, fullName: students.fullName }).from(students).where(eq(students.id, studentId)).limit(1),
-    progressOf(db, [studentId]),
-    loadAvatars(),
     logQuery().where(eq(starLogs.studentId, studentId)).orderBy(desc(starLogs.recordedAt), desc(starLogs.id)).limit(100),
     db
       .select({
@@ -596,26 +414,7 @@ export async function getStudentStarProfile(actor: Actor, studentId: string) {
       .where(and(eq(courseSummaries.studentId, studentId), inScope(courseSummaries.classId)))
       .orderBy(desc(courseSummaries.finalizedAt)),
   ]);
-  const mine = progress.get(studentId)!;
-  const gifted = new Set(mine.giftedAvatarIds);
-  return {
-    student: student!,
-    progress: mine,
-    logs,
-    attendance,
-    gifts: giftRows,
-    avatars: avatarList
-      // Avatar tặng riêng chỉ hiện với học viên đã được tặng.
-      .filter((a) => a.active && (a.unlockType === "by_level" || gifted.has(a.id)))
-      .map((a) => ({
-        id: a.id,
-        name: a.name,
-        svgPath: a.svgPath,
-        gifted: gifted.has(a.id),
-        unlocked: gifted.has(a.id) || (a.requiredLevelNo !== null && a.requiredLevelNo <= mine.level.levelNo),
-        requiredMinStars: a.requiredMinStars,
-      })),
-  };
+  return { student: student!, logs, attendance, gifts: giftRows };
 }
 
 /** Sổ cái gần đây: toàn trung tâm, hoặc chỉ các lớp trong phạm vi của người xem. */

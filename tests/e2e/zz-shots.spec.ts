@@ -23,7 +23,7 @@ const ADMIN_PAGES: [name: string, url: string][] = [
   ["tkb-tuan", "/admin/timetable"],
   ["tkb-thang", "/admin/timetable?view=month"],
   ["diem-danh", "/admin/attendance"],
-  ["sao-avatar", "/admin/stars"],
+  ["sao", "/admin/stars"],
   ["qua-tong-ket", "/admin/rewards"],
   ["cham-cong", "/admin/timesheet"],
   ["hoc-phi", "/admin/tuition"],

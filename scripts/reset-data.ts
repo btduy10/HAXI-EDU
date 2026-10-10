@@ -5,7 +5,7 @@ import postgres from "postgres";
 // Chạy thử (chỉ đếm, không xóa):  npm run db:reset
 // Xóa thật:                        npm run db:reset -- --confirm
 //
-// GIỮ LẠI: tài khoản Quản trị (mật khẩu, 2FA, phiên đăng nhập), cấp bậc, kho avatar, tiêu chí sao, cấu hình và bảng phân quyền.
+// GIỮ LẠI: tài khoản Quản trị (mật khẩu, 2FA, phiên đăng nhập), tiêu chí sao, cấu hình và bảng phân quyền.
 // XÓA: mọi tài khoản không phải Quản trị và toàn bộ các bảng bên dưới.
 const WIPED_TABLES = [
   "purchases",
@@ -74,7 +74,7 @@ async function main() {
       await tx`delete from teachers`;
       await tx`insert into audit_logs (action, table_name) values ('data_reset', 'all')`;
     });
-    console.log("Đã xóa dữ liệu. Tài khoản Quản trị, cấp bậc, kho avatar, tiêu chí sao và cấu hình được giữ nguyên.");
+    console.log("Đã xóa dữ liệu. Tài khoản Quản trị, tiêu chí sao và cấu hình được giữ nguyên.");
   } finally {
     await sql.end();
   }

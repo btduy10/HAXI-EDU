@@ -17,16 +17,16 @@ export const ACTION_LABELS: Record<PermissionAction, string> = { view: "Xem", ad
 
 /** Các menu có thể mở cho Giáo viên / Giáo viên trực, theo đúng thứ tự trên thanh menu của Admin. */
 export const PERMISSION_MENUS = [
-  { key: "students", label: "QL Học viên", href: "/admin/students", actions: ["view", "add", "edit"], hint: "Không hiện số điện thoại, phụ huynh, ngày sinh, ghi chú." },
+  { key: "courses", label: "Khóa học", href: "/admin/courses", actions: ["view", "add", "edit"], hint: "" },
+  { key: "rooms", label: "Phòng & Ca học", href: "/admin/rooms-slots", actions: ["view", "add", "edit"], hint: "Gồm cả ngày nghỉ." },
   { key: "teachers", label: "Giáo viên", href: "/admin/teachers", actions: ["view", "add", "edit"], hint: "" },
   { key: "syllabus", label: "Syllabus", href: "/admin/syllabus", actions: ["view", "add", "edit"], hint: "Danh sách bài học của từng lớp. Xóa và nhập Excel chỉ Admin." },
-  { key: "courses", label: "Khóa học", href: "/admin/courses", actions: ["view", "add", "edit"], hint: "" },
   { key: "classes", label: "Lớp học", href: "/admin/classes", actions: ["view", "add", "edit"], hint: "Sửa gồm cả phân công giáo viên, lịch mẫu và sinh buổi học." },
-  { key: "rooms", label: "Phòng & Ca học", href: "/admin/rooms-slots", actions: ["view", "add", "edit"], hint: "Gồm cả ngày nghỉ." },
   { key: "enrollments", label: "Ghi danh", href: "/admin/enrollments", actions: ["view", "add", "edit"], hint: "Thêm = ghi danh; Sửa = cho rời lớp." },
+  { key: "students", label: "QL Học viên", href: "/admin/students", actions: ["view", "add", "edit"], hint: "Không hiện số điện thoại, phụ huynh, ngày sinh, ghi chú." },
   { key: "timetable", label: "Thời khóa biểu", href: "/admin/timetable", actions: ["view", "add", "edit"], hint: "Thêm = xếp buổi, buổi bù; Sửa = sửa, dời, hủy, khôi phục, dạy thay." },
   { key: "attendance", label: "Điểm danh", href: "/admin/attendance", actions: ["view", "add", "edit"], hint: "Thêm = điểm danh buổi chưa điểm danh; Sửa = sửa điểm danh đã lưu." },
-  { key: "stars", label: "Sao & Avatar", href: "/admin/stars", actions: ["view", "add", "edit"], hint: "Thêm = ghi sao; Sửa = hoàn tác sao, đổi avatar. Tiêu chí, cấp bậc, kho avatar chỉ Admin chỉnh." },
+  { key: "stars", label: "Sao", href: "/admin/stars", actions: ["view", "add", "edit"], hint: "Thêm = ghi sao; Sửa = hoàn tác sao. Tiêu chí sao chỉ Admin chỉnh." },
   { key: "rewards", label: "Quà & Tổng kết", href: "/admin/rewards", actions: ["view", "add", "edit"], hint: "Thêm = quà, mốc quà; Sửa = sửa quà, đóng lớp, duyệt và trao quà, đổi quà bằng sao cho học viên." },
   { key: "timesheet", label: "Chấm công", href: "/admin/timesheet", actions: ["view", "add", "edit"], hint: "Xem gồm cả mức lương, thành tiền. Thêm = chấm công bổ sung; Sửa = sửa ngày, ca, lớp của dòng công và đặt mức lương (đặt mức lương cần phạm vi “Tất cả lớp”). Xóa chỉ Admin. Phạm vi “lớp của mình” chỉ thấy và thao tác công của chính mình." },
   { key: "tuition", label: "Học phí", href: "/admin/tuition", actions: ["view", "add", "edit"], hint: "Thêm = lập phiếu thu; Sửa = đặt học phí lớp, giảm học phí. Hủy phiếu thu chỉ Admin." },

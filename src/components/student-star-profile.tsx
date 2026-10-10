@@ -1,46 +1,33 @@
 import { BackLink } from "@/components/back-link";
 import { ConfirmButton, FormDialogButton } from "@/components/action-buttons";
-import { AvatarBadge, LevelProgress } from "@/components/avatar";
-import { AvatarPicker } from "@/components/avatar-picker";
 import { Badge } from "@/components/ui/badge";
 import { MAKEUP_STATE_LABELS } from "@/domain/makeup";
 import { LABELS, formatDate, formatDateTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { cancelRedemptionAction, redeemGiftAction } from "@/server/actions/rewards";
-import { deleteStarLogsAction, giftAvatarAction } from "@/server/actions/stars";
+import { deleteStarLogsAction } from "@/server/actions/stars";
 import type { Actor } from "@/server/guard";
 import { orNotFound } from "@/server/page";
-import { listGiftedAvatars } from "@/server/services/avatars";
 import { getRedemptionInfo } from "@/server/services/redemptions";
 import { getStudentStarProfile } from "@/server/services/stars";
 import { getStudentLearningHistory } from "@/server/services/student-history";
 
-/** Hồ sơ học viên: sao & avatar, quà, chương trình đã học và lịch sử buổi học; dùng chung cho Admin và GV (service kiểm tra quyền). */
+/** Hồ sơ học viên: sao, quà, chương trình đã học và lịch sử buổi học; dùng chung cho Admin và GV (service kiểm tra quyền). */
 export async function StudentStarProfile({ actor, studentId, backHref }: { actor: Actor; studentId: string; backHref: string }) {
   const profile = await orNotFound(getStudentStarProfile(actor, studentId));
-  const { student, progress } = profile;
+  const { student } = profile;
   // getStudentStarProfile đã kiểm tra quyền xem học viên này.
   const [redemption, history] = await Promise.all([getRedemptionInfo(actor, studentId), getStudentLearningHistory(actor, studentId)]);
   const admin = actor.role === "admin";
   const attended = history.sessions.filter((a) => a.attended).length;
-  const giftable =
-    actor.role === "admin"
-      ? (await listGiftedAvatars(actor)).gifted.filter((g) => !progress.giftedAvatarIds.includes(g.id))
-      : [];
 
   return (
     <div className="mx-auto grid max-w-3xl gap-6">
       <div className="grid gap-3">
         <BackLink href={backHref}>Quay lại</BackLink>
-        <div className="flex items-center gap-4">
-          <AvatarBadge avatar={progress.avatar} frameColor={progress.level.frameColor} size={72} />
-          <div className="grid min-w-0 flex-1 gap-1">
-            <h1 className="text-xl font-semibold break-words">
-              {student.fullName} <span className="text-sm font-normal text-muted-foreground">{student.code}</span>
-            </h1>
-            <LevelProgress progress={progress} />
-          </div>
-        </div>
+        <h1 className="text-xl font-semibold break-words">
+          {student.fullName} <span className="text-sm font-normal text-muted-foreground">{student.code}</span>
+        </h1>
         <dl className="grid grid-cols-3 gap-2 text-center text-sm">
           {[
             { label: "Tổng sao tích lũy", value: redemption.total },
@@ -56,35 +43,13 @@ export async function StudentStarProfile({ actor, studentId, backHref }: { actor
       </div>
 
       <section className="grid gap-2">
-        <div className="flex items-center justify-between gap-2">
-          <h2 className="font-medium">Avatar</h2>
-          {giftable.length > 0 && (
-            <FormDialogButton
-              label="Tặng avatar"
-              variant="outline"
-              title={`Tặng avatar cho ${student.fullName}`}
-              description="Avatar tặng riêng không mất khi học viên tụt cấp."
-              fields={[
-                { name: "avatarId", label: "Avatar", type: "select", required: true, options: giftable.map((g) => ({ value: g.id, label: g.name })) },
-              ]}
-              fixed={{ studentId }}
-              action={giftAvatarAction}
-              submitLabel="Tặng"
-              successMessage="Đã tặng avatar."
-            />
-          )}
-        </div>
-        <AvatarPicker studentId={studentId} currentId={progress.avatar?.id ?? null} frameColor={progress.level.frameColor} avatars={profile.avatars} />
-      </section>
-
-      <section className="grid gap-2">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="font-medium">Quà</h2>
           {redemption.canRedeem && redemption.options.length > 0 && (
             <FormDialogButton
               label="Đổi quà"
               title={`Đổi quà cho ${student.fullName}`}
-              description={`Sao còn lại: ${redemption.balance}. Đổi quà trừ số sao theo mốc quà; tổng sao tích lũy và cấp bậc không đổi.`}
+              description={`Sao còn lại: ${redemption.balance}. Đổi quà trừ số sao theo mốc quà; tổng sao tích lũy không đổi.`}
               fields={[
                 {
                   name: "tierId",
@@ -228,7 +193,7 @@ export async function StudentStarProfile({ actor, studentId, backHref }: { actor
               label="Xóa hết"
               variant="destructive"
               className="h-9"
-              confirmText={`Xóa hẳn toàn bộ lịch sử sao của ${student.fullName}? Tổng sao, cấp và avatar được tính lại. Sao thuộc lớp đã đóng được giữ. Không hoàn tác được.`}
+              confirmText={`Xóa hẳn toàn bộ lịch sử sao của ${student.fullName}? Tổng sao được tính lại. Sao thuộc lớp đã đóng được giữ. Không hoàn tác được.`}
               action={deleteStarLogsAction}
               input={{ studentId }}
               successMessage="Đã xóa lịch sử sao."

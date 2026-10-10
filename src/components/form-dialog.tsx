@@ -33,24 +33,6 @@ export function showWarnings(data: unknown) {
   if (Array.isArray(notices)) for (const n of notices) toast.info(String(n), { duration: 8_000 });
   const warnings = (data as { warnings?: unknown } | null)?.warnings;
   if (Array.isArray(warnings)) for (const w of warnings) toast.warning(String(w), { duration: 10_000 });
-  showLevelChanges(data);
-}
-
-type LevelChangeNotice = { fullName: string; direction: "up" | "down"; fromLevel: string; toLevel: string; avatarSwitchedTo: string | null };
-
-/** Thông báo cho GV khi học viên lên cấp (chúc mừng) hoặc tụt cấp (kèm avatar bị tự đổi). */
-export function showLevelChanges(data: unknown) {
-  const changes = (data as { levelChanges?: unknown } | null)?.levelChanges;
-  if (!Array.isArray(changes)) return;
-  for (const c of changes as LevelChangeNotice[]) {
-    const avatar = c.avatarSwitchedTo ? ` Avatar đang dùng bị khóa nên đã tự đổi sang "${c.avatarSwitchedTo}".` : "";
-    if (c.direction === "up" && c.fromLevel !== c.toLevel) {
-      toast.success(`Chúc mừng! ${c.fullName} đã lên cấp ${c.toLevel}.`, { duration: 10_000 });
-    } else {
-      const level = c.fromLevel !== c.toLevel ? `${c.fullName} tụt từ cấp ${c.fromLevel} xuống ${c.toLevel}.` : `${c.fullName}:`;
-      toast.warning(`${level}${avatar}`, { duration: 12_000 });
-    }
-  }
 }
 
 /** 2000000 → "2,000,000" (bỏ mọi ký tự không phải chữ số và số 0 thừa ở đầu). */

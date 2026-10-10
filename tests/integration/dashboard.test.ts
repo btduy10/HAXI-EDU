@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/db";
-import { attendances, levels, sessions, starLogs } from "@/db/schema";
+import { attendances, sessions, starLogs } from "@/db/schema";
 import { dashboardCharts } from "@/server/services/dashboard";
 import { type Fixture, resetDb, seedFixture } from "./helpers";
 
@@ -11,10 +11,6 @@ const now = new Date("2026-01-21T05:00:00Z");
 beforeEach(async () => {
   await resetDb();
   f = await seedFixture();
-  await db.insert(levels).values([
-    { levelNo: 1, name: "Tân binh", minStars: 0, frameColor: "#b08d57" },
-    { levelNo: 2, name: "Kỹ sư tập sự", minStars: 20, frameColor: "#cd7f32" },
-  ]);
   const base = { startTime: "08:00", endTime: "09:30", status: "done" as const };
   const [a1, a2, b1, old] = await db
     .insert(sessions)
@@ -54,8 +50,6 @@ describe("số liệu biểu đồ trang Tổng quan", () => {
     expect(data.starsByWeek.at(-1)).toEqual({ weekStart: "2026-01-19", stars: 6 }); // -2 + 3 + 5
     expect(data.starsByWeek.at(-2)).toEqual({ weekStart: "2026-01-12", stars: 25 });
     expect(data.starsByWeek.slice(0, 6).every((w) => w.stars === 0)).toBe(true);
-    // A1 có 23 sao → cấp 2; 5 học viên còn lại ở cấp 1.
-    expect(data.levels.map((l) => l.students)).toEqual([5, 1]);
   });
 
   it("GV chỉ thấy số liệu các lớp của mình", async () => {
@@ -63,7 +57,6 @@ describe("số liệu biểu đồ trang Tổng quan", () => {
     expect(data.attendance).toEqual({ present: 1, late: 1, left_early: 0, excused: 1, absent: 1 });
     expect(data.classRates.map((c) => c.code)).toEqual(["A"]);
     expect(data.starsByWeek.at(-1)!.stars).toBe(1);
-    expect(data.levels.map((l) => l.students)).toEqual([1, 1]); // chỉ 2 học viên lớp A
 
     const other = await dashboardCharts(f.actorB, now);
     expect(other.classRates.map((c) => c.code)).toEqual(["B"]);
@@ -75,6 +68,5 @@ describe("số liệu biểu đồ trang Tổng quan", () => {
     expect(data.attendance).toEqual({ present: 0, late: 0, left_early: 0, excused: 0, absent: 0 });
     expect(data.classRates).toEqual([]);
     expect(data.starsByWeek.every((w) => w.stars === 0)).toBe(true);
-    expect(data.levels.every((l) => l.students === 0)).toBe(true);
   });
 });

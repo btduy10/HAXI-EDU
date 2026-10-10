@@ -4,7 +4,7 @@ import { db } from "@/db";
 import { attendances, classes, courses, enrollments, makeupAssignments, sessions } from "@/db/schema";
 import { isAbsence, makeupState } from "@/domain/makeup";
 import { type Actor, allowedClassIds } from "../guard";
-import { assertStudentAccess, progressOf } from "./stars";
+import { assertStudentAccess, starTotalsOf } from "./stars";
 import { listStudentsPage } from "./students";
 
 const madeUpIn = alias(makeupAssignments, "made_up_in");
@@ -98,15 +98,9 @@ export async function getStudentLearningHistory(actor: Actor, studentId: string)
   };
 }
 
-/** Danh sách học viên theo trang kèm tổng sao tích lũy và cấp của từng em. */
+/** Danh sách học viên theo trang kèm tổng sao tích lũy của từng em. */
 export async function listStudentsPageWithStars(actor: Actor, search: string | undefined, page: number) {
   const result = await listStudentsPage(actor, search, page);
-  const progress = await progressOf(db, result.rows.map((s) => s.id));
-  return {
-    ...result,
-    rows: result.rows.map((s) => {
-      const mine = progress.get(s.id);
-      return { ...s, stars: mine?.total ?? 0, levelNo: mine?.level.levelNo ?? null, levelName: mine?.level.name ?? null };
-    }),
-  };
+  const totals = await starTotalsOf(db, result.rows.map((s) => s.id));
+  return { ...result, rows: result.rows.map((s) => ({ ...s, stars: totals.get(s.id) ?? 0 })) };
 }

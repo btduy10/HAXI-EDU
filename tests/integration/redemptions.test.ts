@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/db";
-import { giftRedemptions, gifts, levels, rewardTiers, sessions, starLogs } from "@/db/schema";
+import { giftRedemptions, gifts, rewardTiers, sessions, starLogs } from "@/db/schema";
 import { DEFAULT_PERMISSIONS, type RolePermissions } from "@/lib/permissions";
 import type { Actor } from "@/server/guard";
 import * as redemptions from "@/server/services/redemptions";
@@ -24,10 +24,6 @@ const withRewards = (actor: Actor): Actor => {
 beforeEach(async () => {
   await resetDb();
   f = await seedFixture();
-  await db.insert(levels).values([
-    { levelNo: 1, name: "Tân binh", minStars: 0, frameColor: "#b08d57" },
-    { levelNo: 2, name: "Kỹ sư tập sự", minStars: 20, frameColor: "#cd7f32" },
-  ]);
   const [sticker, kit] = await db
     .insert(gifts)
     .values([
@@ -49,7 +45,7 @@ beforeEach(async () => {
 });
 
 describe("đổi quà bằng sao", () => {
-  it("trừ sao còn lại theo mốc quà, trừ tồn kho; tổng tích lũy và cấp bậc giữ nguyên", async () => {
+  it("trừ sao còn lại theo mốc quà, trừ tồn kho; tổng tích lũy giữ nguyên", async () => {
     const teacher = withRewards(f.actorA);
     const before = await redemptions.getRedemptionInfo(teacher, a1());
     expect(before).toMatchObject({ total: 25, spent: 0, balance: 25, canRedeem: true });
@@ -60,8 +56,8 @@ describe("đổi quà bằng sao", () => {
     await redemptions.redeemGift(teacher, { studentId: a1(), tierId: tier10 });
     expect(await redemptions.getRedemptionInfo(teacher, a1())).toMatchObject({ total: 25, spent: 20, balance: 5 });
     expect((await db.select().from(gifts).where(eq(gifts.id, giftId)))[0]!.stock).toBe(0);
-    // Cấp bậc tính theo tổng tích lũy nên không tụt sau khi đổi quà.
-    expect((await stars.progressOf(db, [a1()])).get(a1())).toMatchObject({ total: 25, level: { levelNo: 2 } });
+    // Tổng tích lũy không giảm sau khi đổi quà.
+    expect((await stars.starTotalsOf(db, [a1()])).get(a1())).toBe(25);
 
     // Không đủ sao còn lại.
     await db.update(gifts).set({ stock: 5 }).where(eq(gifts.id, giftId));

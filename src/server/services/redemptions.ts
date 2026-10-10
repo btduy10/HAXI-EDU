@@ -8,7 +8,7 @@ import { assertStudentAccess } from "./stars";
 import { tiersFor } from "./summaries";
 
 // Đổi quà trong khóa học: học viên đủ "sao còn lại" theo Mốc quà thì đổi được, bất cứ lúc nào.
-// Sao còn lại = tổng sao tích lũy − số sao đã dùng đổi quà. Tổng tích lũy (và cấp bậc, avatar) không giảm khi đổi quà.
+// Sao còn lại = tổng sao tích lũy − số sao đã dùng đổi quà. Tổng tích lũy không giảm khi đổi quà.
 
 /** Số sao đã dùng đổi quà của một học viên. */
 async function spentOf(tx: DbOrTx, studentId: string): Promise<number> {

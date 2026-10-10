@@ -388,6 +388,8 @@ export const starLogs = pgTable(
   ],
 );
 
+// Cấp bậc và avatar (levels, avatars, student_avatar_gifts, students.current_avatar_id): tính năng đã gỡ khỏi ứng dụng,
+// không còn mã nào đọc hay ghi. Các bảng được giữ lại để không mất dữ liệu cũ; chỉ xóa bằng một migration riêng khi chủ hệ thống đồng ý.
 export const levels = pgTable("levels", {
   id: id(),
   levelNo: integer("level_no").notNull().unique(),

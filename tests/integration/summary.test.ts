@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import ExcelJS from "exceljs";
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/db";
-import { auditLogs, classes, courseSummaries, enrollments, gifts, levels, rewardTiers, sessions, starCriteria, starLogs } from "@/db/schema";
+import { auditLogs, classes, courseSummaries, enrollments, gifts, rewardTiers, sessions, starCriteria, starLogs } from "@/db/schema";
 import { renderExport } from "@/server/export";
 import { getSettings } from "@/server/settings";
 import * as attendance from "@/server/services/attendance";
@@ -27,7 +27,6 @@ const a2 = () => f.students[1]!.id;
 beforeEach(async () => {
   await resetDb();
   f = await seedFixture();
-  await db.insert(levels).values({ levelNo: 1, name: "Tân binh", minStars: 0, frameColor: "#b08d57" });
   const [criteria] = await db.insert(starCriteria).values({ name: "+3", stars: 3, type: "reward" }).returning();
   plus3 = criteria!.id;
   const base = { classId: f.classA.id, startTime: "08:00", endTime: "09:30", teacherId: f.teacherA.id };
@@ -60,8 +59,8 @@ describe("báo cáo lớp", () => {
       ["A1", 1, 6, 2, 100],
       ["A2", 2, 3, 2, 50],
     ]);
-    // Tổng toàn thời gian của A1 (dùng cho cấp bậc) khác tổng theo lớp (dùng xếp hạng, tặng quà).
-    expect((await stars.progressOf(db, [a1()])).get(a1())!.total).toBe(26);
+    // Tổng toàn thời gian của A1 khác tổng theo lớp (dùng xếp hạng, tặng quà).
+    expect((await stars.starTotalsOf(db, [a1()])).get(a1())).toBe(26);
   });
 
   it("GV chỉ xem được số liệu lớp mình; không xuất được tổng kết", async () => {
