@@ -247,6 +247,102 @@ test("Lớp chỉ hiển thị trên Thời khóa biểu: tạo ở Lớp học,
   }
 });
 
+test("Ghi danh: tổng quan theo buổi trong tuần, mỗi lớp 8 hàng, bấm hàng trống để thêm học viên, lớp đủ sĩ số không thêm được", async ({ page }) => {
+  await login(page, "admin", NEW_PASSWORD);
+  await page.getByLabel("Mã xác thực").fill(totp(loadAdminSecret()));
+  await page.getByRole("button", { name: "Xác nhận" }).click();
+  await expect(page).toHaveURL(/\/admin\/dashboard$/);
+
+  // Lớp riêng cho test: tối đa 2 học viên, học Tối Thứ 2 và Sáng Thứ 7 (chỉ có lịch mẫu, không sinh buổi).
+  const day = today();
+  const db = sql();
+  const [base] = await db`select course_id from classes where code = 'RB-CB01'`;
+  const [cls] = await db`
+    insert into classes (code, name, course_id, start_date, end_date, max_size)
+    values ('GD-E2E', 'Lớp thử ghi danh', ${base!.course_id}, ${shift(day, -7)}, ${shift(day, 30)}, 2)
+    returning id`;
+  const rosterClassId = cls!.id as string;
+  await db`
+    insert into schedule_templates (class_id, weekday, time_slot_id)
+    select ${rosterClassId}, d.weekday, s.id
+    from (values (6, 'Ca sáng'), (1, 'Ca tối')) as d(weekday, slot)
+    join time_slots s on s.name = d.slot and s.frame = 1`;
+
+  try {
+    await page.goto("/admin/enrollments");
+    await expect(page.getByRole("heading", { name: "Ghi danh", exact: true })).toBeVisible();
+    // Lớp học 2 buổi/tuần hiện ở cả hai buổi, buổi Tối đứng trước buổi Sáng cuối tuần.
+    const blocks = page.locator('[data-roster="GD-E2E"]');
+    await expect(blocks).toHaveCount(2);
+    await expect(blocks.nth(0).getByRole("heading")).toHaveText("Tối Thứ 2");
+    await expect(blocks.nth(1).getByRole("heading")).toHaveText("Sáng Thứ 7");
+    // Lớp đã đóng và lớp chỉ hiển thị trên Thời khóa biểu không có trong bảng.
+    await expect(page.locator('[data-roster="RB-NC01"]')).toHaveCount(0);
+    await expect(page.locator('[data-roster="MP-E2E"]')).toHaveCount(0);
+
+    const block = blocks.nth(0);
+    await expect(block.getByRole("columnheader")).toHaveText(["STT", "Họ tên HS", "Lớp"]);
+    await expect(block.locator("tbody tr")).toHaveCount(8);
+    await expect(block.getByRole("button", { name: /Thêm học viên/ })).toHaveCount(8);
+    await expect(block.getByText("0/2")).toBeVisible();
+    await expectNoHorizontalScroll(page);
+
+    // Bấm một hàng trống → chọn học viên → hàng đó có tên và khối.
+    const enroll = async (expectRow: number) => {
+      await block.getByRole("button", { name: /Thêm học viên/ }).first().click();
+      await expect(page.getByRole("dialog")).toContainText("Ghi danh vào GD-E2E");
+      const option = page.locator("#f-studentId option").nth(1);
+      const [, fullName] = ((await option.textContent()) ?? "").split(" – ");
+      await page.locator("#f-studentId").selectOption({ index: 1 });
+      await expect(page.locator("#f-joinedAt")).toHaveValue(day);
+      await page.getByRole("button", { name: "Lưu" }).click();
+      await expect(page.getByText("Đã ghi danh.")).toBeVisible();
+      await expect(block.locator("tbody tr").nth(expectRow)).toContainText(fullName!);
+      await expect(page.getByText("Đã ghi danh.")).toHaveCount(0);
+      return fullName!;
+    };
+    const first = await enroll(0);
+    await expect(block.getByText("1/2")).toBeVisible();
+    await expect(block.getByRole("button", { name: /Thêm học viên/ })).toHaveCount(7);
+    // Cùng lớp ở buổi kia cũng có học viên này; em đã ghi danh không còn trong danh sách chọn.
+    await expect(blocks.nth(1).locator("tbody tr").first()).toContainText(first);
+    const [grade] = await db`select s.school_grade from students s join enrollments e on e.student_id = s.id where e.class_id = ${rosterClassId}`;
+    if (grade!.school_grade) await expect(block.locator("tbody tr").first().locator("td").last()).toHaveText(String(grade!.school_grade));
+    const second = await enroll(1);
+    expect(second).not.toBe(first);
+
+    // Đủ sĩ số tối đa: vẫn 8 hàng nhưng hàng trống không bấm được nữa.
+    await expect(block.getByText("2/2")).toBeVisible();
+    await expect(block.locator("tbody tr")).toHaveCount(8);
+    await expect(blocks.getByRole("button", { name: /Thêm học viên/ })).toHaveCount(0);
+    await expectNoHorizontalScroll(page);
+
+    // Bấm tên lớp mở danh sách ghi danh chi tiết như cũ, có đường quay lại tổng quan.
+    await block.getByRole("link", { name: /GD-E2E/ }).click();
+    await expect(page).toHaveURL(new RegExp(`classId=${rosterClassId}`));
+    await expect(page.getByRole("button", { name: "Cho rời lớp" })).toHaveCount(2);
+    await page.getByRole("link", { name: /Tổng quan ghi danh/ }).click();
+    await expect(page).toHaveURL(/\/admin\/enrollments$/);
+    await expect(blocks).toHaveCount(2);
+
+    // Màn hình rộng: các khung xếp nhiều cột, không tràn ngang.
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.goto("/admin/enrollments");
+    const all = page.locator("[data-roster]");
+    await expect(all.nth(1)).toBeVisible();
+    const [a, b] = [(await all.nth(0).boundingBox())!, (await all.nth(1).boundingBox())!];
+    expect(b.y).toBe(a.y);
+    expect(b.x).toBeGreaterThan(a.x);
+    await expectNoHorizontalScroll(page);
+    await page.setViewportSize({ width: 360, height: 740 });
+  } finally {
+    // Dọn lớp thử để không ảnh hưởng số liệu học phí, báo cáo ở các test sau.
+    await db`delete from enrollments where class_id = ${rosterClassId}`;
+    await db`delete from classes where id = ${rosterClassId}`;
+    await db.end();
+  }
+});
+
 test("Học phí: đặt học phí lớp, thu hai lần, theo dõi trạng thái, mở phiếu thu và giấy báo", async ({ page }) => {
   await login(page, "admin", NEW_PASSWORD);
   await page.getByLabel("Mã xác thực").fill(totp(loadAdminSecret()));

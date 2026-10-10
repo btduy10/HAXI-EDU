@@ -8,15 +8,18 @@ import {
   courses,
   enrollments,
   rooms,
+  scheduleTemplates,
   sessions,
   starLogs,
   students,
   syllabusLessons,
   teacherRates,
   teachers,
+  timeSlots,
   timesheetEntries,
   tuitionReceipts,
 } from "@/db/schema";
+import { rosterSessionLabel, rosterSessionOrder } from "@/domain/roster";
 import type { classInput, classTeacherInput, classTeacherUpdate, enrollInput, leaveInput } from "@/lib/validation/entities";
 import { audit } from "../audit";
 import { AppError, notFound, translateDbError } from "../errors";
@@ -179,6 +182,57 @@ export async function unassignTeacher(actor: Actor, id: string) {
     await tx.delete(classTeachers).where(eq(classTeachers.id, id));
     await audit(tx, { userId: actor.userId, action: "delete", tableName: "class_teachers", recordId: id, oldValue: before });
   });
+}
+
+/**
+ * Tổng quan Ghi danh theo buổi học trong tuần: mỗi dòng lịch mẫu (thứ + ca) của một lớp đang mở là một khung,
+ * kèm học viên đang học của lớp (chỉ họ tên và khối). Lớp học nhiều buổi/tuần xuất hiện ở từng buổi.
+ * Chỉ các lớp trong phạm vi của người dùng; không gồm lớp đã đóng và lớp chỉ hiển thị trên Thời khóa biểu.
+ */
+export async function weeklyRoster(actor: Actor) {
+  assertCan(actor, "enrollments", "view");
+  const open = (await listClasses(actor)).filter((c) => c.status === "open");
+  if (open.length === 0) return { blocks: [], unscheduled: [] };
+  const ids = open.map((c) => c.id);
+  const [slots, active] = await Promise.all([
+    // Nhiều khung giờ của cùng một ca trong cùng một thứ vẫn là một buổi.
+    db
+      .selectDistinct({ classId: scheduleTemplates.classId, weekday: scheduleTemplates.weekday, slotName: timeSlots.name })
+      .from(scheduleTemplates)
+      .innerJoin(timeSlots, eq(timeSlots.id, scheduleTemplates.timeSlotId))
+      .where(inArray(scheduleTemplates.classId, ids)),
+    db
+      .select({ classId: enrollments.classId, id: students.id, fullName: students.fullName, schoolGrade: students.schoolGrade })
+      .from(enrollments)
+      .innerJoin(students, eq(students.id, enrollments.studentId))
+      .where(and(inArray(enrollments.classId, ids), eq(enrollments.status, "active")))
+      // Theo ngày vào lớp: học viên mới thêm nằm ở hàng trống kế tiếp.
+      .orderBy(asc(enrollments.joinedAt), asc(enrollments.createdAt), asc(students.fullName)),
+  ]);
+  const studentsOf = (classId: string) => active.filter((s) => s.classId === classId).map((s) => ({ id: s.id, fullName: s.fullName, schoolGrade: s.schoolGrade }));
+  const classOf = new Map(open.map((c) => [c.id, c]));
+  const blocks = slots
+    .map((slot) => {
+      const cls = classOf.get(slot.classId)!;
+      return {
+        key: `${slot.classId}|${slot.weekday}|${slot.slotName}`,
+        label: rosterSessionLabel(slot.slotName, slot.weekday),
+        order: rosterSessionOrder(slot.slotName, slot.weekday),
+        classId: cls.id,
+        classCode: cls.code,
+        className: cls.name,
+        startDate: cls.startDate,
+        maxSize: cls.maxSize,
+        students: studentsOf(cls.id),
+      };
+    })
+    .sort((a, b) => a.order - b.order || a.classCode.localeCompare(b.classCode, "vi"));
+  const scheduled = new Set(slots.map((s) => s.classId));
+  return {
+    blocks,
+    /** Lớp đang mở chưa có lịch mẫu nên chưa thuộc buổi nào. */
+    unscheduled: open.filter((c) => !scheduled.has(c.id)).map((c) => ({ id: c.id, code: c.code, name: c.name })),
+  };
 }
 
 /** Toàn bộ lịch sử ghi danh của lớp. */

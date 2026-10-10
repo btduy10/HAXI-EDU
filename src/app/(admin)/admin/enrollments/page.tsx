@@ -1,10 +1,14 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { ConfirmButton, FormDialogButton } from "@/components/action-buttons";
 import { AutoSubmitSelect } from "@/components/auto-submit-select";
+import { BackLink } from "@/components/back-link";
+import { AddStudentButton, RosterEnroll } from "@/components/roster-enroll";
 import { Badge } from "@/components/ui/badge";
+import { ROSTER_ROWS } from "@/domain/roster";
 import { LABELS, formatDate, todayIso } from "@/lib/format";
 import { deleteEnrollmentAction, enrollStudentAction, leaveEnrollmentAction } from "@/server/actions/admin";
-import { listClasses, listEnrollments } from "@/server/services/classes";
+import { listClasses, listEnrollments, weeklyRoster } from "@/server/services/classes";
 import { listStudents } from "@/server/services/students";
 import { requireMenu } from "@/server/session";
 
@@ -18,16 +22,23 @@ export default async function EnrollmentsPage({ searchParams }: PageProps<"/admi
   // Chỉ nhận classId có trong danh sách lớp (tránh truy vấn với giá trị tùy ý).
   const current = classes.find((c) => c.id === requested) ?? null;
 
-  const [enrollments, students] = current
-    ? await Promise.all([listEnrollments(actor, current.id), can("add") ? listStudents(actor) : []])
-    : [[], []];
+  // Chưa chọn lớp: tổng quan các lớp đang học theo buổi trong tuần. Đã chọn lớp: danh sách ghi danh chi tiết của lớp đó.
+  const [enrollments, students, roster] = await Promise.all([
+    current ? listEnrollments(actor, current.id) : [],
+    can("add") ? listStudents(actor) : [],
+    current ? null : weeklyRoster(actor),
+  ]);
   const activeIds = new Set(enrollments.filter((e) => e.status === "active").map((e) => e.studentId));
-  const candidates = students.filter((s) => s.status !== "left" && !activeIds.has(s.id));
+  const enrollable = students.filter((s) => s.status !== "left");
+  const candidates = enrollable.filter((s) => !activeIds.has(s.id));
   const today = todayIso();
 
   return (
     <div className="grid gap-4">
-      <h1 className="text-xl font-semibold sm:text-2xl">Ghi danh</h1>
+      <div className="grid gap-2">
+        {current && <BackLink href="/admin/enrollments">Tổng quan ghi danh</BackLink>}
+        <h1 className="text-xl font-semibold sm:text-2xl">Ghi danh</h1>
+      </div>
       <form>
         {/* Chọn lớp là hiện danh sách ngay. Màn hình rộng: ô chọn chỉ chiếm nửa chiều ngang. */}
         <label className="grid gap-1.5 text-sm font-medium sm:w-1/2">
@@ -120,6 +131,98 @@ export default async function EnrollmentsPage({ searchParams }: PageProps<"/admi
             </ul>
           )}
         </section>
+      )}
+
+      {roster && (
+        <RosterEnroll
+          students={enrollable.map((s) => ({ value: s.id, label: `${s.code} – ${s.fullName}` }))}
+          activeByClass={Object.fromEntries(roster.blocks.map((b) => [b.classId, b.students.map((s) => s.id)]))}
+          today={today}
+        >
+          <p className="text-sm text-muted-foreground">
+            Các lớp đang học theo buổi trong tuần (theo lịch mẫu của lớp). Bấm tên lớp để xem lịch sử ghi danh, cho rời lớp.
+            {can("add") && " Bấm một hàng trống để thêm học viên vào lớp."}
+          </p>
+          {roster.blocks.length === 0 ? (
+            <p className="rounded-2xl border border-dashed p-6 text-center text-sm text-muted-foreground">Chưa có lớp đang mở nào có lịch mẫu.</p>
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+              {roster.blocks.map((block) => {
+                const rows = Math.max(ROSTER_ROWS, block.students.length);
+                const hasRoom = block.students.length < block.maxSize;
+                return (
+                  <section key={block.key} data-roster={block.classCode} className="glass-solid min-w-0 overflow-hidden rounded-2xl border text-sm">
+                    <header className="grid gap-0.5 border-b bg-muted/60 px-3 py-2">
+                      <div className="flex items-baseline justify-between gap-2">
+                        <h2 className="font-semibold">{block.label}</h2>
+                        <span className="text-muted-foreground tabular-nums" aria-label={`Sĩ số ${block.students.length} trên ${block.maxSize}`}>
+                          {block.students.length}/{block.maxSize}
+                        </span>
+                      </div>
+                      <Link
+                        href={`/admin/enrollments?classId=${block.classId}`}
+                        className="w-fit max-w-full truncate rounded text-primary underline-offset-2 outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/50"
+                      >
+                        {block.classCode} – {block.className}
+                      </Link>
+                    </header>
+                    <table className="w-full table-fixed">
+                      <thead>
+                        <tr className="text-xs text-muted-foreground">
+                          <th className="w-10 px-1 py-1.5 text-center font-medium">STT</th>
+                          <th className="px-2 py-1.5 text-left font-medium">Họ tên HS</th>
+                          <th className="w-12 px-1 py-1.5 text-center font-medium">Lớp</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {Array.from({ length: rows }, (_, index) => {
+                          const student = block.students[index];
+                          return (
+                            <tr key={index} className="h-10 border-t md:h-8">
+                              <td className="px-1 text-center text-muted-foreground tabular-nums">{index + 1}</td>
+                              {student ? (
+                                <>
+                                  <td className="truncate px-2" title={student.fullName}>
+                                    {student.fullName}
+                                  </td>
+                                  <td className="px-1 text-center tabular-nums">{student.schoolGrade ?? ""}</td>
+                                </>
+                              ) : (
+                                <td colSpan={2} className="px-1">
+                                  {hasRoom && can("add") && (
+                                    <AddStudentButton
+                                      classId={block.classId}
+                                      classCode={block.classCode}
+                                      startDate={block.startDate}
+                                      label={`Thêm học viên vào ${block.classCode}, ${block.label}, hàng ${index + 1}`}
+                                    />
+                                  )}
+                                </td>
+                              )}
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </section>
+                );
+              })}
+            </div>
+          )}
+          {roster.unscheduled.length > 0 && (
+            <p className="text-sm text-muted-foreground">
+              Lớp đang mở chưa có lịch mẫu (chưa thuộc buổi nào):{" "}
+              {roster.unscheduled.map((c, index) => (
+                <span key={c.id}>
+                  {index > 0 && ", "}
+                  <Link href={`/admin/enrollments?classId=${c.id}`} className="text-primary underline-offset-2 hover:underline">
+                    {c.code} – {c.name}
+                  </Link>
+                </span>
+              ))}
+            </p>
+          )}
+        </RosterEnroll>
       )}
     </div>
   );
