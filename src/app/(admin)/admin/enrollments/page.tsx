@@ -155,7 +155,7 @@ export default async function EnrollmentsPage({ searchParams }: PageProps<"/admi
                   <section
                     key={block.key}
                     data-roster={block.classCode}
-                    // Mỗi buổi một màu: viền trên và nền tiêu đề; các lớp cùng buổi dùng chung màu.
+                    // Màu theo giáo viên: viền trên và nền tiêu đề; các buổi của cùng một giáo viên cùng tông, đậm nhạt khác nhau.
                     style={{ borderTopColor: block.shade.accent }}
                     className="glass-solid min-w-0 overflow-hidden rounded-2xl border border-t-4 text-sm"
                   >

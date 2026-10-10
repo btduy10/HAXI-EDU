@@ -1,7 +1,8 @@
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/db";
-import { classes, enrollments, scheduleTemplates, sessions, students, teachers, timeSlots } from "@/db/schema";
+import { classes, classTeachers, enrollments, scheduleTemplates, sessions, students, teachers, timeSlots } from "@/db/schema";
+import { ROSTER_DARKEST, ROSTER_LIGHTEST, ROSTER_NO_TEACHER_SHADE } from "@/domain/roster";
 import { DEFAULT_PERMISSIONS, type RolePermissions } from "@/lib/permissions";
 import type { Actor } from "@/server/guard";
 import * as classSvc from "@/server/services/classes";
@@ -84,6 +85,36 @@ describe("tổng quan Ghi danh theo buổi trong tuần", () => {
     await hold({ classId: f.classA.id, date: "2026-01-18", startTime: "09:00", endTime: "10:30", timeSlotId: null });
     await hold({ classId: f.classB.id, date: "2026-01-18", startTime: "14:00", endTime: "15:30", timeSlotId: null });
     expect(await titles()).toEqual(["Tối Thứ 7|B", "Tối Thứ 7|A", "Sáng Chủ nhật|A", "Chiều Chủ nhật|B"]);
+  });
+
+  it("màu khung theo giáo viên: các buổi của cùng một người cùng tông, đậm nhạt khác nhau; chưa có giáo viên thì xám", async () => {
+    const tone = (color: string) => color.slice(6, -1).split(" ").map(Number);
+    const headers = async () => (await roster()).blocks.map((b) => tone(b.shade.header));
+    // Tối Thứ 2 (GV B) · Tối Thứ 5 (GV A) · Sáng Thứ 7 (GV A): GV A xếp trước theo mã nên nhận tông vàng, GV B tông xanh dương.
+    const [monday, thursday, saturday] = await headers();
+    expect([monday![2], thursday![2], saturday![2]]).toEqual([255, 75, 75]);
+    // Hai buổi của GV A: buổi đầu nhạt nhất, buổi sau đậm nhất; GV B chỉ một buổi nên ở mức giữa.
+    expect([thursday![0], saturday![0], monday![0]]).toEqual([ROSTER_LIGHTEST, ROSTER_DARKEST, 0.855]);
+
+    // Dạy thay: buổi mang màu của người thực dạy (GV B giờ có hai buổi, GV A còn một).
+    await hold({ classId: f.classA.id, date: "2026-01-17", teacherId: f.teacherA.id, substituteTeacherId: f.teacherB.id });
+    await hold({ classId: f.classA.id, date: "2026-01-15", teacherId: f.teacherA.id });
+    expect(await titles()).toEqual(["Tối Thứ 2|B", "Tối Thứ 5|A", "Tối Thứ 7|A"]);
+    expect(await headers()).toEqual([
+      [ROSTER_LIGHTEST, expect.any(Number), 255],
+      [0.855, expect.any(Number), 75],
+      [ROSTER_DARKEST, expect.any(Number), 255],
+    ]);
+
+    // Ba buổi của cùng một giáo viên xếp xen kẽ: nhạt nhất, đậm nhất, rồi mức giữa.
+    await hold({ classId: f.classA.id, date: "2026-01-18", teacherId: f.teacherB.id });
+    const ofB = (await headers()).filter(([, , hue]) => hue === 255).map(([lightness]) => lightness);
+    expect(ofB).toEqual([ROSTER_LIGHTEST, ROSTER_DARKEST, 0.855]);
+    await db.delete(sessions).where(eq(sessions.date, "2026-01-18"));
+
+    // Buổi chưa có giáo viên (lớp không có GV chính, lịch mẫu không ghi giáo viên): xám trung tính.
+    await db.delete(classTeachers).where(eq(classTeachers.classId, f.classB.id));
+    expect((await roster()).blocks[0]!.shade).toEqual(ROSTER_NO_TEACHER_SHADE);
   });
 
   it("học viên mới vào lớp nằm ở hàng kế tiếp; em đã rời lớp không còn trong bảng", async () => {

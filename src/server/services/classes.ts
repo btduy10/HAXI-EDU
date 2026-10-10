@@ -20,7 +20,7 @@ import {
   timesheetEntries,
   tuitionReceipts,
 } from "@/db/schema";
-import { rosterSessionLabel, rosterSessionOrder, rosterSessionShade, shiftOfTime } from "@/domain/roster";
+import { ROSTER_NO_TEACHER_SHADE, rosterSessionLabel, rosterSessionOrder, rosterTeacherShade, shiftOfTime } from "@/domain/roster";
 import { addDays, isoWeekday, startOfWeek } from "@/lib/dates";
 import { todayIso } from "@/lib/format";
 import type { classInput, classTeacherInput, classTeacherUpdate, enrollInput, leaveInput } from "@/lib/validation/entities";
@@ -202,7 +202,7 @@ export async function weeklyRoster(actor: Actor, today: string = todayIso()) {
   if (open.length === 0) return { blocks: [], unscheduled: [] };
   const ids = open.map((c) => c.id);
   const weekStart = startOfWeek(today);
-  const [held, templates, mains, active] = await Promise.all([
+  const [held, templates, mains, active, teacherOrder] = await Promise.all([
     db
       .select({
         classId: sessions.classId,
@@ -210,8 +210,10 @@ export async function weeklyRoster(actor: Actor, today: string = todayIso()) {
         slotName: timeSlots.name,
         startTime: sessions.startTime,
         endTime: sessions.endTime,
+        teacherId: teachers.id,
         teacherShort: teachers.shortName,
         teacherName: teachers.fullName,
+        substituteId: substituteTeacher.id,
         substituteShort: substituteTeacher.shortName,
         substituteName: substituteTeacher.fullName,
       })
@@ -234,6 +236,7 @@ export async function weeklyRoster(actor: Actor, today: string = todayIso()) {
         slotName: timeSlots.name,
         startTime: sql<string>`coalesce(${scheduleTemplates.startTime}, ${timeSlots.defaultStart})`,
         endTime: sql<string>`coalesce(${scheduleTemplates.endTime}, ${timeSlots.defaultEnd})`,
+        teacherId: teachers.id,
         teacherShort: teachers.shortName,
         teacherName: teachers.fullName,
       })
@@ -242,7 +245,7 @@ export async function weeklyRoster(actor: Actor, today: string = todayIso()) {
       .leftJoin(teachers, eq(teachers.id, scheduleTemplates.teacherId))
       .where(inArray(scheduleTemplates.classId, ids)),
     db
-      .select({ classId: classTeachers.classId, teacherShort: teachers.shortName, teacherName: teachers.fullName })
+      .select({ classId: classTeachers.classId, teacherId: teachers.id, teacherShort: teachers.shortName, teacherName: teachers.fullName })
       .from(classTeachers)
       .innerJoin(teachers, eq(teachers.id, classTeachers.teacherId))
       .where(and(inArray(classTeachers.classId, ids), eq(classTeachers.role, "main")))
@@ -254,14 +257,17 @@ export async function weeklyRoster(actor: Actor, today: string = todayIso()) {
       .where(and(inArray(enrollments.classId, ids), eq(enrollments.status, "active")))
       // Theo ngày vào lớp: học viên mới thêm nằm ở hàng trống kế tiếp.
       .orderBy(asc(enrollments.joinedAt), asc(enrollments.createdAt), asc(students.fullName)),
+    // Thứ tự giáo viên để chọn tông màu: như Thời khóa biểu (giáo viên đang dạy xếp theo mã), người đã nghỉ xếp sau.
+    db.select({ id: teachers.id, status: teachers.status }).from(teachers).orderBy(asc(teachers.code)),
   ]);
 
   // Tên giáo viên hiển thị: tên viết tắt nếu có, không thì họ tên.
-  const shown = (short: string | null, full: string | null) => short || full || null;
-  const mainOf = new Map<string, string | null>();
-  for (const m of mains) if (!mainOf.has(m.classId)) mainOf.set(m.classId, shown(m.teacherShort, m.teacherName));
+  type Teacher = { id: string; name: string };
+  const shown = (id: string | null, short: string | null, full: string | null): Teacher | null => (id ? { id, name: short || full || "" } : null);
+  const mainOf = new Map<string, Teacher | null>();
+  for (const m of mains) if (!mainOf.has(m.classId)) mainOf.set(m.classId, shown(m.teacherId, m.teacherShort, m.teacherName));
 
-  type Slot = { classId: string; weekday: number; slotName: string; startTime: string; endTime: string; teacher: string | null };
+  type Slot = { classId: string; weekday: number; slotName: string; startTime: string; endTime: string; teacher: Teacher | null };
   const fromTimetable: Slot[] = held.map((h) => ({
     classId: h.classId,
     weekday: isoWeekday(h.date),
@@ -269,12 +275,12 @@ export async function weeklyRoster(actor: Actor, today: string = todayIso()) {
     startTime: h.startTime,
     endTime: h.endTime,
     // Người thực dạy: giáo viên dạy thay nếu có.
-    teacher: shown(h.substituteShort, h.substituteName) ?? shown(h.teacherShort, h.teacherName),
+    teacher: shown(h.substituteId, h.substituteShort, h.substituteName) ?? shown(h.teacherId, h.teacherShort, h.teacherName),
   }));
   const onTimetable = new Set(fromTimetable.map((slot) => slot.classId));
   const fromTemplates: Slot[] = templates
     .filter((t) => !onTimetable.has(t.classId))
-    .map((t) => ({ ...t, teacher: shown(t.teacherShort, t.teacherName) ?? mainOf.get(t.classId) ?? null }));
+    .map((t) => ({ ...t, teacher: shown(t.teacherId, t.teacherShort, t.teacherName) ?? mainOf.get(t.classId) ?? null }));
 
   // Nhiều khung giờ của cùng một ca trong cùng một ngày là một buổi: giờ từ khung sớm nhất tới khung muộn nhất.
   const merged = new Map<string, Slot>();
@@ -290,17 +296,17 @@ export async function weeklyRoster(actor: Actor, today: string = todayIso()) {
 
   const studentsOf = (classId: string) => active.filter((s) => s.classId === classId).map((s) => ({ id: s.id, fullName: s.fullName, schoolGrade: s.schoolGrade }));
   const classOf = new Map(open.map((c) => [c.id, c]));
-  const blocks = [...merged.entries()]
+  const placed = [...merged.entries()]
     .map(([key, slot]) => {
       const cls = classOf.get(slot.classId)!;
       return {
         key,
         label: rosterSessionLabel(slot.slotName, slot.weekday),
         order: rosterSessionOrder(slot.slotName, slot.weekday),
-        shade: rosterSessionShade(slot.slotName, slot.weekday),
         startTime: slot.startTime,
         endTime: slot.endTime,
-        teacherName: slot.teacher,
+        teacherId: slot.teacher?.id ?? null,
+        teacherName: slot.teacher?.name || null,
         classId: cls.id,
         classCode: cls.code,
         className: cls.name,
@@ -311,6 +317,22 @@ export async function weeklyRoster(actor: Actor, today: string = todayIso()) {
     })
     // Cùng một buổi: lớp học sớm hơn đứng trước.
     .sort((a, b) => a.order - b.order || a.startTime.localeCompare(b.startTime) || a.classCode.localeCompare(b.classCode, "vi"));
+
+  // Màu khung: mỗi giáo viên một tông; các buổi của cùng một người xen kẽ nhạt – đậm theo thứ tự trong tuần
+  // (buổi chẵn lấy nửa nhạt, buổi lẻ lấy nửa đậm) để hai buổi kề nhau luôn khác rõ.
+  const ordered = [...teacherOrder.filter((t) => t.status === "active"), ...teacherOrder.filter((t) => t.status !== "active")];
+  const toneOf = new Map(ordered.map((t, index) => [t.id, index]));
+  const perTeacher = new Map<string, number>();
+  for (const block of placed) if (block.teacherId) perTeacher.set(block.teacherId, (perTeacher.get(block.teacherId) ?? 0) + 1);
+  const seen = new Map<string, number>();
+  const blocks = placed.map((block) => {
+    if (!block.teacherId) return { ...block, shade: ROSTER_NO_TEACHER_SHADE };
+    const position = seen.get(block.teacherId) ?? 0;
+    seen.set(block.teacherId, position + 1);
+    const count = perTeacher.get(block.teacherId)!;
+    const level = position % 2 === 0 ? position / 2 : Math.ceil(count / 2) + (position - 1) / 2;
+    return { ...block, shade: rosterTeacherShade(toneOf.get(block.teacherId) ?? 0, level, count) };
+  });
   const scheduled = new Set(blocks.map((block) => block.classId));
   return {
     blocks,

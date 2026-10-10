@@ -286,10 +286,12 @@ test("Ghi danh: tổng quan theo buổi trong tuần (buổi - giờ, tên lớp
 
     const block = blocks.nth(0);
     await expect(block.getByRole("columnheader")).toHaveText(["STT", "Họ tên HS", "Lớp"]);
-    // Cả hàng tiêu đề canh giữa; mỗi buổi một màu nền tiêu đề riêng.
+    // Cả hàng tiêu đề canh giữa.
     for (const name of ["STT", "Họ tên HS", "Lớp"]) await expect(block.getByRole("columnheader", { name })).toHaveCSS("text-align", "center");
-    const headerColor = (index: number) => blocks.nth(index).locator("header").evaluate((el) => getComputedStyle(el).backgroundColor);
-    expect(await headerColor(0)).not.toBe(await headerColor(1));
+    // Màu khung theo giáo viên: lớp thử chưa có giáo viên nên hai buổi cùng màu xám; lớp có giáo viên mang màu của giáo viên.
+    const headerColor = (roster: typeof block) => roster.locator("header").evaluate((el) => getComputedStyle(el).backgroundColor);
+    expect(await headerColor(blocks.nth(1))).toBe(await headerColor(block));
+    expect(await headerColor(page.locator('[data-roster="RB-CB01"]').first())).not.toBe(await headerColor(block));
     await expect(block.locator("tbody tr")).toHaveCount(8);
     // Lớp tối đa 2 học viên: hai chỗ trống được đánh số, các hàng còn lại để trống; không còn dấu +.
     const addButtons = block.getByRole("button", { name: /Thêm \d+ học viên/ });
